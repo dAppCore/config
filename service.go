@@ -5,7 +5,7 @@ import (
 
 	coreerr "forge.lthn.ai/core/go-log"
 	"forge.lthn.ai/core/go-io"
-	core "forge.lthn.ai/core/go/pkg/framework/core"
+	core "forge.lthn.ai/core/go/pkg/core"
 )
 
 // Service wraps Config as a framework service with lifecycle support.

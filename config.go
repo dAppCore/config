@@ -19,7 +19,7 @@ import (
 
 	coreerr "forge.lthn.ai/core/go-log"
 	coreio "forge.lthn.ai/core/go-io"
-	core "forge.lthn.ai/core/go/pkg/framework/core"
+	core "forge.lthn.ai/core/go/pkg/core"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
