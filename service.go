@@ -68,6 +68,14 @@ func (s *Service) Set(key string, v any) error {
 	return s.config.Set(key, v)
 }
 
+// Commit persists any configuration changes to disk.
+func (s *Service) Commit() error {
+	if s.config == nil {
+		return coreerr.E("config.Service.Commit", "config not loaded", nil)
+	}
+	return s.config.Commit()
+}
+
 // LoadFile merges a configuration file into the central configuration.
 func (s *Service) LoadFile(m io.Medium, path string) error {
 	if s.config == nil {

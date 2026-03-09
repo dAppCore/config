@@ -12,6 +12,8 @@ package config
 
 import (
 	"fmt"
+	"iter"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +30,8 @@ import (
 // It uses viper as the underlying configuration engine.
 type Config struct {
 	mu     sync.RWMutex
-	v      *viper.Viper
+	v      *viper.Viper // Full configuration (file + env + defaults)
+	f      *viper.Viper // File-backed configuration only (for persistence)
 	medium coreio.Medium
 	path   string
 }
@@ -63,6 +66,7 @@ func WithEnvPrefix(prefix string) Option {
 func New(opts ...Option) (*Config, error) {
 	c := &Config{
 		v: viper.New(),
+		f: viper.New(),
 	}
 
 	// Configure viper defaults
@@ -105,20 +109,27 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	content, err := m.Read(path)
 	if err != nil {
-		return coreerr.E("config.LoadFile", "failed to read config file: "+path, err)
+		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to read config file: %s", path), err)
 	}
 
 	ext := filepath.Ext(path)
+	configType := "yaml"
 	if ext == "" && filepath.Base(path) == ".env" {
-		c.v.SetConfigType("env")
+		configType = "env"
 	} else if ext != "" {
-		c.v.SetConfigType(strings.TrimPrefix(ext, "."))
-	} else {
-		c.v.SetConfigType("yaml")
+		configType = strings.TrimPrefix(ext, ".")
 	}
 
+	// Load into file-backed viper
+	c.f.SetConfigType(configType)
+	if err := c.f.MergeConfig(strings.NewReader(content)); err != nil {
+		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to parse config file (f): %s", path), err)
+	}
+
+	// Load into full viper
+	c.v.SetConfigType(configType)
 	if err := c.v.MergeConfig(strings.NewReader(content)); err != nil {
-		return coreerr.E("config.LoadFile", "failed to parse config file: "+path, err)
+		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to parse config file (v): %s", path), err)
 	}
 
 	return nil
@@ -132,37 +143,51 @@ func (c *Config) Get(key string, out any) error {
 	defer c.mu.RUnlock()
 
 	if key == "" {
-		return c.v.Unmarshal(out)
+		if err := c.v.Unmarshal(out); err != nil {
+			return coreerr.E("config.Get", "failed to unmarshal full config", err)
+		}
+		return nil
 	}
 
 	if !c.v.IsSet(key) {
 		return coreerr.E("config.Get", fmt.Sprintf("key not found: %s", key), nil)
 	}
 
-	return c.v.UnmarshalKey(key, out)
+	if err := c.v.UnmarshalKey(key, out); err != nil {
+		return coreerr.E("config.Get", fmt.Sprintf("failed to unmarshal key: %s", key), err)
+	}
+	return nil
 }
 
-// Set stores a configuration value by dot-notation key and persists to disk.
+// Set stores a configuration value in memory.
+// Call Commit() to persist changes to disk.
 func (c *Config) Set(key string, v any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.f.Set(key, v)
 	c.v.Set(key, v)
-
-	// Persist to disk
-	if err := Save(c.medium, c.path, c.v.AllSettings()); err != nil {
-		return coreerr.E("config.Set", "failed to save config", err)
-	}
-
 	return nil
 }
 
-// All returns a deep copy of all configuration values.
-func (c *Config) All() map[string]any {
+// Commit persists any changes made via Set() to the configuration file on disk.
+// This will only save the configuration that was loaded from the file or explicitly Set(),
+// preventing environment variable leakage.
+func (c *Config) Commit() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := Save(c.medium, c.path, c.f.AllSettings()); err != nil {
+		return coreerr.E("config.Commit", "failed to save config", err)
+	}
+	return nil
+}
+
+// All returns an iterator over all configuration values (including environment variables).
+func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
-	return c.v.AllSettings()
+	return maps.All(c.v.AllSettings())
 }
 
 // Path returns the path to the configuration file.

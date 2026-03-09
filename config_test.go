@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"testing"
 
@@ -44,6 +45,9 @@ func TestConfig_Set_Good(t *testing.T) {
 	err = cfg.Set("dev.editor", "vim")
 	assert.NoError(t, err)
 
+	err = cfg.Commit()
+	assert.NoError(t, err)
+
 	// Verify the value was saved to the medium
 	content, readErr := m.Read("/tmp/test/config.yaml")
 	assert.NoError(t, readErr)
@@ -80,7 +84,7 @@ func TestConfig_All_Good(t *testing.T) {
 	_ = cfg.Set("key1", "val1")
 	_ = cfg.Set("key2", "val2")
 
-	all := cfg.All()
+	all := maps.Collect(cfg.All())
 	assert.Equal(t, "val1", all["key1"])
 	assert.Equal(t, "val2", all["key2"])
 }
