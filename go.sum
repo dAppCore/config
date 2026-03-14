@@ -1,5 +1,7 @@
-forge.lthn.ai/core/go-io v0.0.3 h1:TlhYpGTyjPgAlbEHyYrVSeUChZPhJXcLZ7D/8IbFqfI=
-forge.lthn.ai/core/go-io v0.0.3/go.mod h1:ZlU9OQpsvNFNmTJoaHbFIkisZyc0eCq0p8znVWQLRf0=
+forge.lthn.ai/core/go v0.3.0 h1:mOG97ApMprwx9Ked62FdWVwXTGSF6JO6m0DrVpoH2Q4=
+forge.lthn.ai/core/go v0.3.0/go.mod h1:gE6c8h+PJ2287qNhVUJ5SOe1kopEwHEquvinstpuyJc=
+forge.lthn.ai/core/go-io v0.0.5 h1:oSyngKTkB1gR5fEWYKXftTg9FxwnpddSiCq2dlwfImE=
+forge.lthn.ai/core/go-io v0.0.5/go.mod h1:ZlU9OQpsvNFNmTJoaHbFIkisZyc0eCq0p8znVWQLRf0=
 forge.lthn.ai/core/go-log v0.0.1 h1:x/E6EfF9vixzqiLHQOl2KT25HyBcMc9qiBkomqVlpPg=
 forge.lthn.ai/core/go-log v0.0.1/go.mod h1:r14MXKOD3LF/sI8XUJQhRk/SZHBE7jAFVuCfgkXoZPw=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
@@ -11,6 +13,7 @@ github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8
 github.com/go-viper/mapstructure/v2 v2.5.0 h1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPEgAXnvj1Ro=
 github.com/go-viper/mapstructure/v2 v2.5.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
