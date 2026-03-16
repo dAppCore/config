@@ -5,12 +5,12 @@ import (
 	"os"
 	"testing"
 
-	"forge.lthn.ai/core/go-io"
+	coreio "forge.lthn.ai/core/go-io"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestConfig_Get_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
@@ -25,7 +25,7 @@ func TestConfig_Get_Good(t *testing.T) {
 }
 
 func TestConfig_Get_Bad(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
@@ -37,7 +37,7 @@ func TestConfig_Get_Bad(t *testing.T) {
 }
 
 func TestConfig_Set_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
@@ -61,7 +61,7 @@ func TestConfig_Set_Good(t *testing.T) {
 }
 
 func TestConfig_Set_Nested_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
@@ -76,7 +76,7 @@ func TestConfig_Set_Nested_Good(t *testing.T) {
 }
 
 func TestConfig_All_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
@@ -90,7 +90,7 @@ func TestConfig_All_Good(t *testing.T) {
 }
 
 func TestConfig_Path_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/custom/path/config.yaml"))
 	assert.NoError(t, err)
@@ -99,7 +99,7 @@ func TestConfig_Path_Good(t *testing.T) {
 }
 
 func TestConfig_Load_Existing_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "app:\n  name: existing\n"
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
@@ -115,7 +115,7 @@ func TestConfig_Env_Good(t *testing.T) {
 	// Set environment variable
 	t.Setenv("CORE_CONFIG_DEV_EDITOR", "nano")
 
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
 
@@ -127,7 +127,7 @@ func TestConfig_Env_Good(t *testing.T) {
 
 func TestConfig_Env_Overrides_File_Good(t *testing.T) {
 	// Set file config
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "dev:\n  editor: vim\n"
 
 	// Set environment override
@@ -143,7 +143,7 @@ func TestConfig_Env_Overrides_File_Good(t *testing.T) {
 }
 
 func TestConfig_Assign_Types_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "count: 42\nenabled: true\nratio: 3.14\n"
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
@@ -166,7 +166,7 @@ func TestConfig_Assign_Types_Good(t *testing.T) {
 }
 
 func TestConfig_Assign_Any_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
 	assert.NoError(t, err)
@@ -180,7 +180,7 @@ func TestConfig_Assign_Any_Good(t *testing.T) {
 }
 
 func TestConfig_DefaultPath_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m))
 	assert.NoError(t, err)
@@ -199,7 +199,7 @@ func TestLoadEnv_Good(t *testing.T) {
 }
 
 func TestLoad_Bad(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	_, err := Load(m, "/nonexistent/file.yaml")
 	assert.Error(t, err)
@@ -207,7 +207,7 @@ func TestLoad_Bad(t *testing.T) {
 }
 
 func TestLoad_InvalidYAML_Bad(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "invalid: yaml: content: [[[["
 
 	_, err := Load(m, "/tmp/test/config.yaml")
@@ -216,7 +216,7 @@ func TestLoad_InvalidYAML_Bad(t *testing.T) {
 }
 
 func TestSave_Good(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 
 	data := map[string]any{
 		"key": "value",
@@ -231,7 +231,7 @@ func TestSave_Good(t *testing.T) {
 }
 
 func TestConfig_LoadFile_Env(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	m.Files["/.env"] = "FOO=bar\nBAZ=qux"
 
 	cfg, err := New(WithMedium(m), WithPath("/config.yaml"))
@@ -249,7 +249,7 @@ func TestConfig_LoadFile_Env(t *testing.T) {
 func TestConfig_WithEnvPrefix(t *testing.T) {
 	t.Setenv("MYAPP_SETTING", "secret")
 
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	cfg, err := New(WithMedium(m), WithEnvPrefix("MYAPP"))
 	assert.NoError(t, err)
 
@@ -260,7 +260,7 @@ func TestConfig_WithEnvPrefix(t *testing.T) {
 }
 
 func TestConfig_Get_EmptyKey(t *testing.T) {
-	m := io.NewMockMedium()
+	m := coreio.NewMockMedium()
 	m.Files["/config.yaml"] = "app:\n  name: test\nversion: 1"
 
 	cfg, err := New(WithMedium(m), WithPath("/config.yaml"))

@@ -3,8 +3,8 @@ package config
 import (
 	"context"
 
+	coreio "forge.lthn.ai/core/go-io"
 	coreerr "forge.lthn.ai/core/go-log"
-	"forge.lthn.ai/core/go-io"
 	core "forge.lthn.ai/core/go/pkg/core"
 )
 
@@ -19,7 +19,7 @@ type ServiceOptions struct {
 	// Path overrides the default config file path.
 	Path string
 	// Medium overrides the default storage medium.
-	Medium io.Medium
+	Medium coreio.Medium
 }
 
 // NewConfigService creates a new config service factory for the Core framework.
@@ -45,7 +45,7 @@ func (s *Service) OnStartup(_ context.Context) error {
 
 	cfg, err := New(configOpts...)
 	if err != nil {
-		return err
+		return coreerr.E("config.Service.OnStartup", "failed to create config", err)
 	}
 
 	s.config = cfg
@@ -77,7 +77,7 @@ func (s *Service) Commit() error {
 }
 
 // LoadFile merges a configuration file into the central configuration.
-func (s *Service) LoadFile(m io.Medium, path string) error {
+func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.LoadFile", "config not loaded", nil)
 	}
