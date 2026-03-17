@@ -11,7 +11,6 @@
 package config
 
 import (
-	"fmt"
 	"iter"
 	"maps"
 	"os"
@@ -109,7 +108,7 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	content, err := m.Read(path)
 	if err != nil {
-		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to read config file: %s", path), err)
+		return coreerr.E("config.LoadFile", "failed to read config file: "+path, err)
 	}
 
 	ext := filepath.Ext(path)
@@ -123,13 +122,13 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 	// Load into file-backed viper
 	c.f.SetConfigType(configType)
 	if err := c.f.MergeConfig(strings.NewReader(content)); err != nil {
-		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to parse config file (f): %s", path), err)
+		return coreerr.E("config.LoadFile", "failed to parse config file (f): "+path, err)
 	}
 
 	// Load into full viper
 	c.v.SetConfigType(configType)
 	if err := c.v.MergeConfig(strings.NewReader(content)); err != nil {
-		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to parse config file (v): %s", path), err)
+		return coreerr.E("config.LoadFile", "failed to parse config file (v): "+path, err)
 	}
 
 	return nil
@@ -150,11 +149,11 @@ func (c *Config) Get(key string, out any) error {
 	}
 
 	if !c.v.IsSet(key) {
-		return coreerr.E("config.Get", fmt.Sprintf("key not found: %s", key), nil)
+		return coreerr.E("config.Get", "key not found: "+key, nil)
 	}
 
 	if err := c.v.UnmarshalKey(key, out); err != nil {
-		return coreerr.E("config.Get", fmt.Sprintf("failed to unmarshal key: %s", key), err)
+		return coreerr.E("config.Get", "failed to unmarshal key: "+key, err)
 	}
 	return nil
 }
