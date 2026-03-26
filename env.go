@@ -3,7 +3,8 @@ package config
 import (
 	"iter"
 	"os"
-	"strings"
+
+	core "dappco.re/go/core"
 )
 
 // Env returns an iterator over environment variables with the given prefix,
@@ -15,11 +16,11 @@ import (
 func Env(prefix string) iter.Seq2[string, any] {
 	return func(yield func(string, any) bool) {
 		for _, env := range os.Environ() {
-			if !strings.HasPrefix(env, prefix) {
+			if !core.HasPrefix(env, prefix) {
 				continue
 			}
 
-			parts := strings.SplitN(env, "=", 2)
+			parts := core.SplitN(env, "=", 2)
 			if len(parts) != 2 {
 				continue
 			}
@@ -28,9 +29,9 @@ func Env(prefix string) iter.Seq2[string, any] {
 			value := parts[1]
 
 			// Strip prefix and convert to dot notation
-			key := strings.TrimPrefix(name, prefix)
-			key = strings.ToLower(key)
-			key = strings.ReplaceAll(key, "_", ".")
+			key := core.TrimPrefix(name, prefix)
+			key = core.Lower(key)
+			key = core.Replace(key, "_", ".")
 
 			if !yield(key, value) {
 				return
