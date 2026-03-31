@@ -286,6 +286,17 @@ func TestConfig_LoadFile_Unsupported_Bad(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported config file type")
 }
 
+func TestConfig_LoadFile_Unsupported_NoRead_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.txt"))
+	assert.NoError(t, err)
+
+	err = cfg.LoadFile(m, "/tmp/test/config.txt")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported config file type")
+}
+
 func TestSave_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 
