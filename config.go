@@ -253,6 +253,13 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 // Save writes configuration data to a YAML file at the given path.
 // It ensures the parent directory exists before writing.
 func Save(m coreio.Medium, path string, data map[string]any) error {
+	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+	case "", ".yaml", ".yml":
+		// These paths are safe to treat as YAML destinations.
+	default:
+		return coreerr.E("config.Save", "unsupported config file type: "+path, nil)
+	}
+
 	out, err := yaml.Marshal(data)
 	if err != nil {
 		return coreerr.E("config.Save", "failed to marshal config", err)

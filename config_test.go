@@ -312,6 +312,28 @@ func TestSave_Good(t *testing.T) {
 	assert.Contains(t, content, "key: value")
 }
 
+func TestSave_UnsupportedPath_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	err := Save(m, "/tmp/test/config.json", map[string]any{"key": "value"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported config file type")
+}
+
+func TestConfig_Commit_UnsupportedPath_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.json"))
+	assert.NoError(t, err)
+
+	err = cfg.Set("key", "value")
+	assert.NoError(t, err)
+
+	err = cfg.Commit()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported config file type")
+}
+
 func TestConfig_LoadFile_Env(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/.env"] = "FOO=bar\nBAZ=qux"
