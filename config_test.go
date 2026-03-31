@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"maps"
 	"os"
 	"testing"
@@ -278,4 +279,57 @@ func TestConfig_Get_EmptyKey(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "test", full.App.Name)
 	assert.Equal(t, 1, full.Version)
+}
+
+func ExampleConfig_Get() {
+	m := coreio.NewMockMedium()
+
+	cfg, _ := New(WithMedium(m), WithPath("/tmp/example/config.yaml"))
+	_ = cfg.Set("dev.editor", "vim")
+
+	var editor string
+	_ = cfg.Get("dev.editor", &editor)
+
+	fmt.Println(editor)
+	// Output: vim
+}
+
+func ExampleConfig_Commit() {
+	m := coreio.NewMockMedium()
+
+	cfg, _ := New(WithMedium(m), WithPath("/tmp/example/config.yaml"))
+	_ = cfg.Set("app.name", "core")
+	_ = cfg.Commit()
+
+	content, _ := m.Read("/tmp/example/config.yaml")
+	fmt.Print(content)
+	// Output:
+	// app:
+	//     name: core
+}
+
+func ExampleEnv() {
+	t := "EXAMPLE_FOO_BAR"
+	_ = os.Setenv(t, "baz")
+	defer os.Unsetenv(t)
+
+	for key, value := range Env("EXAMPLE_") {
+		fmt.Printf("%s=%s\n", key, value)
+	}
+
+	// Output: foo.bar=baz
+}
+
+func ExampleConfig_LoadFile() {
+	m := coreio.NewMockMedium()
+	m.Files["/.env"] = "FOO=bar\n"
+
+	cfg, _ := New(WithMedium(m), WithPath("/config.yaml"))
+	_ = cfg.LoadFile(m, "/.env")
+
+	var foo string
+	_ = cfg.Get("foo", &foo)
+
+	fmt.Println(foo)
+	// Output: bar
 }

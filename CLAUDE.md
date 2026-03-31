@@ -34,7 +34,7 @@ This prevents environment variables from leaking into saved config files. When i
 
 **Service wrapper**: `Service` in `service.go` wraps `Config` with framework lifecycle (`core.Startable`). Both `Config` and `Service` satisfy `core.Config`, enforced by compile-time assertions.
 
-**Storage abstraction**: All file I/O goes through `io.Medium` (from `go-io`). Tests use `io.NewMockMedium()` with an in-memory `Files` map — never touch the real filesystem.
+**Storage abstraction**: All file I/O goes through `coreio.Medium` (from `go-io`). Tests use `coreio.NewMockMedium()` with an in-memory `Files` map — never touch the real filesystem.
 
 ## Conventions
 
