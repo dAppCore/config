@@ -101,8 +101,28 @@ func New(opts ...Option) (*Config, error) {
 	return c, nil
 }
 
+func configTypeForPath(path string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == "" && filepath.Base(path) == ".env" {
+		return "env", nil
+	}
+
+	switch ext {
+	case ".yaml", ".yml":
+		return "yaml", nil
+	case ".json":
+		return "json", nil
+	case ".toml":
+		return "toml", nil
+	case ".env":
+		return "env", nil
+	default:
+		return "", coreerr.E("config.configTypeForPath", "unsupported config file type: "+path, nil)
+	}
+}
+
 // LoadFile reads a configuration file from the given medium and path and merges it into the current config.
-// It supports YAML and environment files (.env).
+// It supports YAML, JSON, TOML, and dotenv files (.env).
 func (c *Config) LoadFile(m coreio.Medium, path string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -112,12 +132,9 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to read config file: %s", path), err)
 	}
 
-	ext := filepath.Ext(path)
-	configType := "yaml"
-	if ext == "" && filepath.Base(path) == ".env" {
-		configType = "env"
-	} else if ext != "" {
-		configType = strings.TrimPrefix(ext, ".")
+	configType, err := configTypeForPath(path)
+	if err != nil {
+		return coreerr.E("config.LoadFile", "failed to determine config file type: "+path, err)
 	}
 
 	// Load into file-backed viper

@@ -216,6 +216,44 @@ func TestLoad_InvalidYAML_Bad(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to parse config file")
 }
 
+func TestConfig_LoadFile_JSON_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.json"] = `{"app":{"name":"core"}}`
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.json"))
+	assert.NoError(t, err)
+
+	var name string
+	err = cfg.Get("app.name", &name)
+	assert.NoError(t, err)
+	assert.Equal(t, "core", name)
+}
+
+func TestConfig_LoadFile_TOML_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.toml"] = "app = { name = \"core\" }\n"
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.toml"))
+	assert.NoError(t, err)
+
+	var name string
+	err = cfg.Get("app.name", &name)
+	assert.NoError(t, err)
+	assert.Equal(t, "core", name)
+}
+
+func TestConfig_LoadFile_Unsupported_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.txt"))
+	assert.NoError(t, err)
+
+	m.Files["/tmp/test/config.txt"] = "app.name=core"
+	err = cfg.LoadFile(m, "/tmp/test/config.txt")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported config file type")
+}
+
 func TestSave_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 
