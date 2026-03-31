@@ -1,6 +1,6 @@
 // Package config provides layered configuration management for the Core framework.
 //
-// Configuration values are resolved in priority order: defaults -> file -> env -> flags.
+// Configuration values are resolved in priority order: defaults -> file -> env -> Set().
 // Values are stored in a YAML file at ~/.core/config.yaml by default.
 //
 // Keys use dot notation for nested access:

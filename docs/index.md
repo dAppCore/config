@@ -5,7 +5,7 @@ description: Layered configuration management for the Core framework with file, 
 
 # config
 
-`forge.lthn.ai/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, flags -- so that the same codebase works identically across local development, CI, and production without code changes.
+`forge.lthn.ai/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
 
 ## Module Path
 
