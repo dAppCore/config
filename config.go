@@ -106,6 +106,9 @@ func configTypeForPath(path string) (string, error) {
 	if ext == "" && filepath.Base(path) == ".env" {
 		return "env", nil
 	}
+	if ext == "" {
+		return "yaml", nil
+	}
 
 	switch ext {
 	case ".yaml", ".yml":
@@ -236,6 +239,13 @@ func (c *Config) Path() string {
 // Returns the parsed data as a map, or an error if the file cannot be read or parsed.
 // Deprecated: Use Config.LoadFile instead.
 func Load(m coreio.Medium, path string) (map[string]any, error) {
+	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+	case "", ".yaml", ".yml":
+		// These paths are safe to treat as YAML sources.
+	default:
+		return nil, coreerr.E("config.Load", "unsupported config file type: "+path, nil)
+	}
+
 	content, err := m.Read(path)
 	if err != nil {
 		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)

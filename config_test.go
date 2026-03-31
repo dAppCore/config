@@ -239,6 +239,15 @@ func TestLoad_Bad(t *testing.T) {
 	assert.Contains(t, err.Error(), "failed to read config file")
 }
 
+func TestLoad_UnsupportedPath_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.json"] = `{"app":{"name":"core"}}`
+
+	_, err := Load(m, "/tmp/test/config.json")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported config file type")
+}
+
 func TestLoad_InvalidYAML_Bad(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "invalid: yaml: content: [[[["
@@ -253,6 +262,19 @@ func TestConfig_LoadFile_JSON_Good(t *testing.T) {
 	m.Files["/tmp/test/config.json"] = `{"app":{"name":"core"}}`
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.json"))
+	assert.NoError(t, err)
+
+	var name string
+	err = cfg.Get("app.name", &name)
+	assert.NoError(t, err)
+	assert.Equal(t, "core", name)
+}
+
+func TestConfig_LoadFile_Extensionless_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config"] = "app:\n  name: core\n"
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config"))
 	assert.NoError(t, err)
 
 	var name string
@@ -308,6 +330,17 @@ func TestSave_Good(t *testing.T) {
 	assert.NoError(t, err)
 
 	content, readErr := m.Read("/tmp/test/config.yaml")
+	assert.NoError(t, readErr)
+	assert.Contains(t, content, "key: value")
+}
+
+func TestSave_Extensionless_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	err := Save(m, "/tmp/test/config", map[string]any{"key": "value"})
+	assert.NoError(t, err)
+
+	content, readErr := m.Read("/tmp/test/config")
 	assert.NoError(t, readErr)
 	assert.Contains(t, content, "key: value")
 }
