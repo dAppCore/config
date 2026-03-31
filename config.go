@@ -56,7 +56,7 @@ func WithPath(path string) Option {
 // WithEnvPrefix sets the prefix for environment variables.
 func WithEnvPrefix(prefix string) Option {
 	return func(c *Config) {
-		c.full.SetEnvPrefix(prefix)
+		c.full.SetEnvPrefix(strings.TrimSuffix(prefix, "_"))
 	}
 }
 

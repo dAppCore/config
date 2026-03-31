@@ -396,6 +396,19 @@ func TestConfig_WithEnvPrefix(t *testing.T) {
 	assert.Equal(t, "secret", setting)
 }
 
+func TestConfig_WithEnvPrefix_TrailingUnderscore_Good(t *testing.T) {
+	t.Setenv("MYAPP_SETTING", "secret")
+
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithMedium(m), WithEnvPrefix("MYAPP_"))
+	assert.NoError(t, err)
+
+	var setting string
+	err = cfg.Get("setting", &setting)
+	assert.NoError(t, err)
+	assert.Equal(t, "secret", setting)
+}
+
 func TestConfig_Get_EmptyKey(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/config.yaml"] = "app:\n  name: test\nversion: 1"
