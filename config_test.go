@@ -90,6 +90,23 @@ func TestConfig_All_Good(t *testing.T) {
 	assert.Equal(t, "val2", all["key2"])
 }
 
+func TestConfig_All_Order_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
+	assert.NoError(t, err)
+
+	_ = cfg.Set("zulu", "last")
+	_ = cfg.Set("alpha", "first")
+
+	var keys []string
+	for key, _ := range cfg.All() {
+		keys = append(keys, key)
+	}
+
+	assert.Equal(t, []string{"alpha", "zulu"}, keys)
+}
+
 func TestConfig_Path_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 
@@ -197,6 +214,21 @@ func TestLoadEnv_Good(t *testing.T) {
 	result := LoadEnv("CORE_CONFIG_")
 	assert.Equal(t, "baz", result["foo.bar"])
 	assert.Equal(t, "value", result["simple"])
+}
+
+func TestLoadEnv_PrefixNormalisation_Good(t *testing.T) {
+	t.Setenv("MYAPP_SETTING", "secret")
+	t.Setenv("MYAPP_ALPHA", "first")
+
+	keys := make([]string, 0, 2)
+	values := make([]string, 0, 2)
+	for key, value := range Env("MYAPP") {
+		keys = append(keys, key)
+		values = append(values, value.(string))
+	}
+
+	assert.Equal(t, []string{"alpha", "setting"}, keys)
+	assert.Equal(t, []string{"first", "secret"}, values)
 }
 
 func TestLoad_Bad(t *testing.T) {

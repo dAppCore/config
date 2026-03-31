@@ -13,9 +13,9 @@ package config
 import (
 	"fmt"
 	"iter"
-	"maps"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -200,11 +200,26 @@ func (c *Config) Commit() error {
 	return nil
 }
 
-// All returns an iterator over all configuration values (including environment variables).
+// All returns an iterator over all configuration values in lexical key order
+// (including environment variables).
 func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return maps.All(c.v.AllSettings())
+
+	settings := c.v.AllSettings()
+	keys := make([]string, 0, len(settings))
+	for key := range settings {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return func(yield func(string, any) bool) {
+		for _, key := range keys {
+			if !yield(key, settings[key]) {
+				return
+			}
+		}
+	}
 }
 
 // Path returns the path to the configuration file.
