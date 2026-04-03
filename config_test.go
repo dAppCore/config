@@ -1,12 +1,14 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
 	"testing"
 
 	coreio "forge.lthn.ai/core/go-io"
+	core "forge.lthn.ai/core/go/pkg/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -405,6 +407,26 @@ func TestConfig_WithEnvPrefix_TrailingUnderscore_Good(t *testing.T) {
 
 	var setting string
 	err = cfg.Get("setting", &setting)
+	assert.NoError(t, err)
+	assert.Equal(t, "secret", setting)
+}
+
+func TestService_OnStartup_WithEnvPrefix_Good(t *testing.T) {
+	t.Setenv("MYAPP_SETTING", "secret")
+
+	m := coreio.NewMockMedium()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(nil, ServiceOptions{
+			EnvPrefix: "MYAPP",
+			Medium:    m,
+		}),
+	}
+
+	err := svc.OnStartup(context.Background())
+	assert.NoError(t, err)
+
+	var setting string
+	err = svc.Get("setting", &setting)
 	assert.NoError(t, err)
 	assert.Equal(t, "secret", setting)
 }

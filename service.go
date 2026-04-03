@@ -18,6 +18,8 @@ type Service struct {
 type ServiceOptions struct {
 	// Path overrides the default config file path.
 	Path string
+	// EnvPrefix overrides the default environment variable prefix.
+	EnvPrefix string
 	// Medium overrides the default storage medium.
 	Medium coreio.Medium
 }
@@ -38,6 +40,9 @@ func (s *Service) OnStartup(_ context.Context) error {
 	var configOpts []Option
 	if opts.Path != "" {
 		configOpts = append(configOpts, WithPath(opts.Path))
+	}
+	if opts.EnvPrefix != "" {
+		configOpts = append(configOpts, WithEnvPrefix(opts.EnvPrefix))
 	}
 	if opts.Medium != nil {
 		configOpts = append(configOpts, WithMedium(opts.Medium))
