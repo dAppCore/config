@@ -11,7 +11,6 @@
 package config
 
 import (
-	"fmt"
 	"iter"
 	"os"
 	"path/filepath"
@@ -137,7 +136,7 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	content, err := m.Read(path)
 	if err != nil {
-		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to read config file: %s", path), err)
+		return coreerr.E("config.LoadFile", "failed to read config file: "+path, err)
 	}
 
 	parsed := viper.New()
