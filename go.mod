@@ -3,9 +3,9 @@ module dappco.re/go/core/config
 go 1.26.0
 
 require (
-	forge.lthn.ai/core/go v0.3.2
-	forge.lthn.ai/core/go-io v0.1.5
-	forge.lthn.ai/core/go-log v0.0.4
+	dappco.re/go/core v0.8.0-alpha.1
+	dappco.re/go/core/io v0.4.0
+	dappco.re/go/core/log v0.1.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
