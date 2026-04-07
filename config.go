@@ -19,9 +19,8 @@ import (
 	"strings"
 	"sync"
 
-	coreio "forge.lthn.ai/core/go-io"
-	coreerr "forge.lthn.ai/core/go-log"
-	core "forge.lthn.ai/core/go/pkg/core"
+	coreio "dappco.re/go/core/io"
+	coreerr "dappco.re/go/core/log"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -287,5 +286,3 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 	return nil
 }
 
-// Ensure Config implements core.Config at compile time.
-var _ core.Config = (*Config)(nil)

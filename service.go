@@ -3,9 +3,9 @@ package config
 import (
 	"context"
 
-	coreio "forge.lthn.ai/core/go-io"
-	coreerr "forge.lthn.ai/core/go-log"
-	core "forge.lthn.ai/core/go/pkg/core"
+	coreio "dappco.re/go/core/io"
+	coreerr "dappco.re/go/core/log"
+	core "dappco.re/go/core"
 )
 
 // Service wraps Config as a framework service with lifecycle support.
@@ -34,8 +34,8 @@ func NewConfigService(c *core.Core) (any, error) {
 }
 
 // OnStartup loads the configuration file during application startup.
-func (s *Service) OnStartup(_ context.Context) error {
-	opts := s.Opts()
+func (s *Service) OnStartup(_ context.Context) core.Result {
+	opts := s.Options()
 
 	var configOpts []Option
 	if opts.Path != "" {
@@ -50,11 +50,11 @@ func (s *Service) OnStartup(_ context.Context) error {
 
 	cfg, err := New(configOpts...)
 	if err != nil {
-		return coreerr.E("config.Service.OnStartup", "failed to create config", err)
+		return core.Result{Value: coreerr.E("config.Service.OnStartup", "failed to create config", err), OK: false}
 	}
 
 	s.config = cfg
-	return nil
+	return core.Result{OK: true}
 }
 
 // Get retrieves a configuration value by key.
@@ -89,8 +89,5 @@ func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	return s.config.LoadFile(m, path)
 }
 
-// Ensure Service implements core.Config and Startable at compile time.
-var (
-	_ core.Config    = (*Service)(nil)
-	_ core.Startable = (*Service)(nil)
-)
+// Ensure Service implements core.Startable at compile time.
+var _ core.Startable = (*Service)(nil)

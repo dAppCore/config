@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	coreio "forge.lthn.ai/core/go-io"
-	core "forge.lthn.ai/core/go/pkg/core"
+	coreio "dappco.re/go/core/io"
+	core "dappco.re/go/core"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -422,11 +422,11 @@ func TestService_OnStartup_WithEnvPrefix_Good(t *testing.T) {
 		}),
 	}
 
-	err := svc.OnStartup(context.Background())
-	assert.NoError(t, err)
+	r := svc.OnStartup(context.Background())
+	assert.True(t, r.OK)
 
 	var setting string
-	err = svc.Get("setting", &setting)
+	err := svc.Get("setting", &setting)
 	assert.NoError(t, err)
 	assert.Equal(t, "secret", setting)
 }
