@@ -1,4 +1,4 @@
-module forge.lthn.ai/core/config
+module dappco.re/go/core/config
 
 go 1.26.0
 
