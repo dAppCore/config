@@ -1,16 +1,16 @@
 ---
-title: go-config
+title: config
 description: Layered configuration management for the Core framework with file, environment, and in-memory resolution.
 ---
 
-# go-config
+# config
 
-`forge.lthn.ai/core/go-config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, flags -- so that the same codebase works identically across local development, CI, and production without code changes.
+`forge.lthn.ai/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
 
 ## Module Path
 
 ```
-forge.lthn.ai/core/go-config
+forge.lthn.ai/core/config
 ```
 
 Requires **Go 1.26+**.
@@ -24,7 +24,7 @@ package main
 
 import (
     "fmt"
-    config "forge.lthn.ai/core/go-config"
+    config "forge.lthn.ai/core/config"
 )
 
 func main() {
@@ -48,7 +48,7 @@ func main() {
 
 ```go
 import (
-    config "forge.lthn.ai/core/go-config"
+    config "forge.lthn.ai/core/config"
     "forge.lthn.ai/core/go/pkg/core"
 )
 

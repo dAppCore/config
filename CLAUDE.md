@@ -7,10 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This project uses the Core CLI (`core` binary), not `go` directly.
 
 ```bash
-core go test                          # run all tests
-core go test --run TestConfig_Get_Good  # run a single test
-core go cov                           # test with coverage
-core go cov --open                    # coverage + open HTML report
+go test ./...                                    # run all tests
+go test -run TestConfig_Get_Good ./...           # run a single test
+go test -cover ./...                             # test with coverage
 
 core go qa                            # format, vet, lint, test
 core go qa full                       # adds race detector, vuln scan, security audit
@@ -34,7 +33,7 @@ This prevents environment variables from leaking into saved config files. When i
 
 **Service wrapper**: `Service` in `service.go` wraps `Config` with framework lifecycle (`core.Startable`). Both `Config` and `Service` satisfy `core.Config`, enforced by compile-time assertions.
 
-**Storage abstraction**: All file I/O goes through `io.Medium` (from `go-io`). Tests use `io.NewMockMedium()` with an in-memory `Files` map — never touch the real filesystem.
+**Storage abstraction**: All file I/O goes through `coreio.Medium` (from `go-io`). Tests use `coreio.NewMockMedium()` with an in-memory `Files` map — never touch the real filesystem.
 
 ## Conventions
 

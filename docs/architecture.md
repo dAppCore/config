@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: Internal design of go-config -- dual-viper layering, the Medium abstraction, and the framework service wrapper.
+description: Internal design of config -- dual-viper layering, the Medium abstraction, and the framework service wrapper.
 ---
 
 # Architecture
@@ -19,8 +19,8 @@ description: Internal design of go-config -- dual-viper layering, the Medium abs
 ```go
 type Config struct {
     mu     sync.RWMutex
-    v      *viper.Viper   // full configuration (file + env + defaults)
-    f      *viper.Viper   // file-backed configuration only (for persistence)
+    full   *viper.Viper   // full configuration (file + env + defaults)
+    file   *viper.Viper   // file-backed configuration only (for persistence)
     medium coreio.Medium
     path   string
 }
@@ -28,10 +28,10 @@ type Config struct {
 
 `Config` is the central type. It holds **two** Viper instances:
 
-- **`v`** (full) -- contains everything: file values, environment bindings, and explicit `Set()` calls. All reads go through `v`.
-- **`f`** (file) -- contains only values that originated from the config file or were explicitly set via `Set()`. All writes (`Commit()`) go through `f`.
+- **`full`** -- contains everything: file values, environment bindings, and explicit `Set()` calls. All reads go through `full`.
+- **`file`** -- contains only values that originated from the config file or were explicitly set via `Set()`. All writes (`Commit()`) go through `file`.
 
-This dual-instance design is the key architectural decision. It solves the environment leakage problem: Viper merges environment variables into its settings map, which means a naive `SaveConfig()` would serialise env vars into the YAML file. By maintaining `f` as a clean copy, `Commit()` only persists what should be persisted.
+This dual-instance design is the key architectural decision. It solves the environment leakage problem: Viper merges environment variables into its settings map, which means a naive `SaveConfig()` would serialise env vars into the YAML file. By maintaining `file` as a clean copy, `Commit()` only persists what should be persisted.
 
 ### Option
 
@@ -91,19 +91,19 @@ func LoadEnv(prefix string) map[string]any  // deprecated
 ```
 New(opts...)
   |
-  +-- create two viper instances (v, f)
-  +-- set env prefix on v ("CORE_CONFIG_" default)
+  +-- create two viper instances (full, file)
+  +-- set env prefix on full ("CORE_CONFIG_" default)
   +-- set env key replacer ("." <-> "_")
   +-- apply functional options
   +-- default medium to io.Local if nil
   +-- default path to ~/.core/config.yaml if empty
-  +-- enable v.AutomaticEnv()
+  +-- enable full.AutomaticEnv()
   +-- if config file exists:
         LoadFile(medium, path)
           +-- medium.Read(path)
           +-- detect config type from extension
-          +-- f.MergeConfig(content)
-          +-- v.MergeConfig(content)
+          +-- file.MergeConfig(content)
+          +-- full.MergeConfig(content)
 ```
 
 ### Read (`Get`)
@@ -113,15 +113,15 @@ Get(key, &out)
   |
   +-- RLock
   +-- if key == "":
-  |     v.Unmarshal(out)     // full config into a struct
+  |     full.Unmarshal(out)  // full config into a struct
   +-- else:
-  |     v.IsSet(key)?
-  |       yes -> v.UnmarshalKey(key, out)
+  |     full.IsSet(key)?
+  |       yes -> full.UnmarshalKey(key, out)
   |       no  -> error "key not found"
   +-- RUnlock
 ```
 
-Because `v` has `AutomaticEnv()` enabled, `v.IsSet(key)` returns true if the key exists in the file **or** as a `CORE_CONFIG_*` environment variable.
+Because `full` has `AutomaticEnv()` enabled, `full.IsSet(key)` returns true if the key exists in the file **or** as a `CORE_CONFIG_*` environment variable.
 
 ### Write (`Set` + `Commit`)
 
@@ -129,32 +129,32 @@ Because `v` has `AutomaticEnv()` enabled, `v.IsSet(key)` returns true if the key
 Set(key, value)
   |
   +-- Lock
-  +-- f.Set(key, value)   // track for persistence
-  +-- v.Set(key, value)   // make visible to Get()
+  +-- file.Set(key, value)  // track for persistence
+  +-- full.Set(key, value)   // make visible to Get()
   +-- Unlock
 
 Commit()
   |
   +-- Lock
-  +-- Save(medium, path, f.AllSettings())
+  +-- Save(medium, path, file.AllSettings())
   |     +-- yaml.Marshal(data)
   |     +-- medium.EnsureDir(dir)
   |     +-- medium.Write(path, content)
   +-- Unlock
 ```
 
-Note that `Commit()` serialises `f.AllSettings()`, not `v.AllSettings()`. This is intentional -- it prevents environment variable values from being written to the config file.
+Note that `Commit()` serialises `file.AllSettings()`, not `full.AllSettings()`. This is intentional -- it prevents environment variable values from being written to the config file.
 
 ### File Loading (`LoadFile`)
 
-`LoadFile` supports both YAML and `.env` files. The config type is inferred from the file extension:
+`LoadFile` supports YAML, JSON, TOML, and `.env` files. The config type is inferred from the file extension:
 
 - `.yaml`, `.yml` -- YAML
 - `.json` -- JSON
 - `.toml` -- TOML
 - `.env` (no extension, basename `.env`) -- dotenv format
 
-Content is merged (not replaced) into both `v` and `f` via `MergeConfig`, so multiple files can be layered.
+Content is merged (not replaced) into both `full` and `file` via `MergeConfig`, so multiple files can be layered.
 
 ## Concurrency
 

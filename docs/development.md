@@ -1,6 +1,6 @@
 ---
 title: Development
-description: How to build, test, and contribute to go-config.
+description: How to build, test, and contribute to config.
 ---
 
 # Development
@@ -14,7 +14,7 @@ description: How to build, test, and contribute to go-config.
 ## Running Tests
 
 ```bash
-cd /path/to/go-config
+cd /path/to/config
 
 # All tests
 core go test
@@ -75,7 +75,7 @@ core go lint
 ## Project Structure
 
 ```
-go-config/
+config/
     .core/
         build.yaml       # Build configuration (targets, flags)
         release.yaml     # Release configuration (changelog rules)
@@ -114,7 +114,7 @@ If you add a new interface method upstream in `core/go`, the compiler will tell 
 
 - Use conventional commits: `type(scope): description`
 - Include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` when pair-programming with Claude
-- Push via SSH: `ssh://git@forge.lthn.ai:2223/core/go-config.git`
+- Push via SSH: `ssh://git@forge.lthn.ai:2223/core/config.git`
 
 ## Licence
 

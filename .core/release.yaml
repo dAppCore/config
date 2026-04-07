@@ -1,8 +1,8 @@
 version: 1
 
 project:
-  name: go-config
-  repository: core/go-config
+  name: config
+  repository: core/config
 
 publishers: []
 
