@@ -1,36 +1,45 @@
 // Package config provides layered configuration management for the Core framework.
-//
-// Configuration values are resolved in priority order: defaults -> file -> env -> Set().
-// Values are stored in a YAML file at ~/.core/config.yaml by default.
-//
-// Keys use dot notation for nested access:
-//
-//	cfg.Set("dev.editor", "vim")
-//	var editor string
-//	cfg.Get("dev.editor", &editor)
 package config
 
 import (
+	"fmt"
 	"iter"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"gopkg.in/yaml.v3"
 
 	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 )
 
-// Config implements the core.Config interface with layered resolution.
-// It uses viper as the underlying configuration engine.
+// Config provides runtime configuration with dual-viper storage.
+//
+// full stores values used for reads (file + env + explicit sets).
+// file stores only values intended for persistence (file + explicit sets).
 type Config struct {
-	mu     sync.RWMutex
-	full   *viper.Viper // Full configuration (file + env + defaults)
-	file   *viper.Viper // File-backed configuration only (for persistence)
+	mu sync.RWMutex
+	// full merges file data, environment variables, and local overrides.
+	full *viper.Viper
+	// file merges file data and local overrides only (no env).
+	file   *viper.Viper
 	medium coreio.Medium
 	path   string
+	env    string
+
+	// Watch state.
+	watchMu     sync.Mutex
+	watcher     *fsnotify.Watcher
+	watcherStop chan struct{}
+	watcherDone chan struct{}
+	watchTimer  *time.Timer
+	watchers    []func(key string, value any)
 }
 
 // Option is a functional option for configuring a Config instance.
@@ -51,47 +60,66 @@ func WithPath(path string) Option {
 }
 
 // WithEnvPrefix sets the prefix for environment variables.
+//
+// The prefix may include a trailing underscore; it is normalised for
+// downstream viper configuration.
 func WithEnvPrefix(prefix string) Option {
 	return func(c *Config) {
-		c.full.SetEnvPrefix(core.TrimSuffix(prefix, "_"))
+		if prefix == "" {
+			return
+		}
+		c.env = strings.TrimSuffix(prefix, "_")
 	}
 }
 
-// New creates a new Config instance with the given options.
-// If no medium is provided, it defaults to io.Local.
-// If no path is provided, it defaults to ~/.core/config.yaml.
+// New creates a new Config and loads values from the configured path if present.
+//
+// If no medium is provided, defaults to io.Local.
+// If no path is provided, defaults to $DIR_HOME/.core/config.yaml.
 func New(opts ...Option) (*Config, error) {
+	return newConfig(true, opts...)
+}
+
+func defaultConfigPath() (string, error) {
+	home := core.Env("DIR_HOME")
+	if home == "" {
+		return "", coreerr.E("config.New", "failed to resolve home directory", nil)
+	}
+	return core.Path(home, ".core", "config.yaml"), nil
+}
+
+func newConfig(loadFile bool, opts ...Option) (*Config, error) {
 	c := &Config{
 		full: viper.New(),
 		file: viper.New(),
+		env:  "CORE_CONFIG",
 	}
-
-	// Configure viper defaults
-	c.full.SetEnvPrefix("CORE_CONFIG")
-	c.full.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	for _, opt := range opts {
 		opt(c)
 	}
 
+	if c.env == "" {
+		c.env = "CORE_CONFIG"
+	}
 	if c.medium == nil {
 		c.medium = coreio.Local
 	}
-
 	if c.path == "" {
-		home := core.Env("DIR_HOME")
-		if home == "" {
-			return nil, coreerr.E("config.New", "failed to determine home directory", nil)
+		var err error
+		c.path, err = defaultConfigPath()
+		if err != nil {
+			return nil, err
 		}
-		c.path = core.Path(home, ".core", "config.yaml")
 	}
 
+	c.full.SetEnvPrefix(c.env)
+	c.full.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	c.full.AutomaticEnv()
 
-	// Load existing config file if it exists
-	if c.medium.Exists(c.path) {
+	if loadFile && c.medium.Exists(c.path) {
 		if err := c.LoadFile(c.medium, c.path); err != nil {
-			return nil, coreerr.E("config.New", "failed to load config file", err)
+			return nil, err
 		}
 	}
 
@@ -122,7 +150,8 @@ func configTypeForPath(path string) (string, error) {
 }
 
 // LoadFile reads a configuration file from the given medium and path and merges it into the current config.
-// It supports YAML, JSON, TOML, and dotenv files (.env).
+//
+// Supports YAML, JSON, TOML, and dotenv files.
 func (c *Config) LoadFile(m coreio.Medium, path string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -145,7 +174,6 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	settings := parsed.AllSettings()
 
-	// Keep the persisted and runtime views aligned with the same parsed data.
 	if err := c.file.MergeConfigMap(settings); err != nil {
 		return coreerr.E("config.LoadFile", "failed to merge config into file settings", err)
 	}
@@ -158,8 +186,8 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 }
 
 // Get retrieves a configuration value by dot-notation key and stores it in out.
-// If key is empty, it unmarshals the entire configuration into out.
-// The out parameter must be a pointer to the target type.
+//
+// If key is empty, unmarshal the full configuration into out.
 func (c *Config) Get(key string, out any) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -192,9 +220,8 @@ func (c *Config) Set(key string, v any) error {
 	return nil
 }
 
-// Commit persists any changes made via Set() to the configuration file on disk.
-// This will only save the configuration that was loaded from the file or explicitly Set(),
-// preventing environment variable leakage.
+// Commit persists in-memory updates to disk.
+// Environment variables are never written.
 func (c *Config) Commit() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -205,8 +232,99 @@ func (c *Config) Commit() error {
 	return nil
 }
 
-// All returns an iterator over all configuration values in lexical key order
-// (including environment variables).
+// MergeFrom overlays source values onto the receiver.
+// Existing keys in the receiver are not overwritten.
+func (c *Config) MergeFrom(source *Config) {
+	if source == nil {
+		return
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	source.mu.RLock()
+	sourceFull := cloneSettings(source.full.AllSettings())
+	sourceFile := cloneSettings(source.file.AllSettings())
+	source.mu.RUnlock()
+
+	mergeMissingMaps(c.full.AllSettings(), sourceFull)
+	mergeMissingMaps(c.file.AllSettings(), sourceFile)
+}
+
+// Load reads a YAML or `.env` config file.
+//
+// Returns the parsed data as a map, or an error if the file cannot be read or parsed.
+//
+// Deprecated: Use Config.LoadFile instead.
+func Load(m coreio.Medium, path string) (map[string]any, error) {
+	configType, err := yamlConfigTypeForPath(path)
+	if err != nil {
+		return nil, coreerr.E("config.Load", err.Error(), nil)
+	}
+
+	content, err := m.Read(path)
+	if err != nil {
+		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
+	}
+
+	v := viper.New()
+	v.SetConfigType(configType)
+	if err := v.ReadConfig(core.NewReader(content)); err != nil {
+		return nil, coreerr.E("config.Load", "failed to parse config file: "+path, err)
+	}
+
+	return v.AllSettings(), nil
+}
+
+// yamlConfigTypeForPath restricts Load to YAML and `.env` sources.
+//
+// The full multi-format parser lives in configTypeForPath for use by LoadFile.
+func yamlConfigTypeForPath(path string) (string, error) {
+	ext := core.Lower(core.PathExt(path))
+	if ext == "" && core.PathBase(path) == ".env" {
+		return "env", nil
+	}
+	if ext == "" {
+		return "yaml", nil
+	}
+
+	switch ext {
+	case ".yaml", ".yml":
+		return "yaml", nil
+	case ".env":
+		return "env", nil
+	default:
+		return "", coreerr.E("config.yamlConfigTypeForPath", "unsupported config file type: "+path, nil)
+	}
+}
+
+// Save writes configuration data to a YAML file at the given path.
+// It ensures the parent directory exists before writing.
+func Save(m coreio.Medium, path string, data map[string]any) error {
+	switch ext := core.Lower(core.PathExt(path)); ext {
+	case "", ".yaml", ".yml":
+	default:
+		return coreerr.E("config.Save", "unsupported config file type: "+path, nil)
+	}
+
+	out, err := yaml.Marshal(data)
+	if err != nil {
+		return coreerr.E("config.Save", "failed to marshal config", err)
+	}
+
+	dir := core.PathDir(path)
+	if err := m.EnsureDir(dir); err != nil {
+		return coreerr.E("config.Save", "failed to create config directory: "+dir, err)
+	}
+
+	if err := m.Write(path, string(out)); err != nil {
+		return coreerr.E("config.Save", "failed to write config file: "+path, err)
+	}
+
+	return nil
+}
+
+// All returns an iterator over all configuration values in lexical key order.
 func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -232,55 +350,122 @@ func (c *Config) Path() string {
 	return c.path
 }
 
-// Load reads a YAML configuration file from the given medium and path.
-// Returns the parsed data as a map, or an error if the file cannot be read or parsed.
-// Deprecated: Use Config.LoadFile instead.
-func Load(m coreio.Medium, path string) (map[string]any, error) {
-	switch ext := core.Lower(core.PathExt(path)); ext {
-	case "", ".yaml", ".yml":
-		// These paths are safe to treat as YAML sources.
-	default:
-		return nil, coreerr.E("config.Load", "unsupported config file type: "+path, nil)
+func cloneSettings(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return map[string]any{}
 	}
-
-	content, err := m.Read(path)
-	if err != nil {
-		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
+	copyAll := make(map[string]any, len(input))
+	for k, v := range input {
+		copyAll[k] = cloneValue(v)
 	}
-
-	v := viper.New()
-	v.SetConfigType("yaml")
-	if err := v.ReadConfig(core.NewReader(content)); err != nil {
-		return nil, coreerr.E("config.Load", "failed to parse config file: "+path, err)
-	}
-
-	return v.AllSettings(), nil
+	return copyAll
 }
 
-// Save writes configuration data to a YAML file at the given path.
-// It ensures the parent directory exists before writing.
-func Save(m coreio.Medium, path string, data map[string]any) error {
-	switch ext := core.Lower(core.PathExt(path)); ext {
-	case "", ".yaml", ".yml":
-		// These paths are safe to treat as YAML destinations.
+func cloneValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneSettings(typed)
+	case []any:
+		vals := make([]any, len(typed))
+		for i, v := range typed {
+			vals[i] = cloneValue(v)
+		}
+		return vals
 	default:
-		return coreerr.E("config.Save", "unsupported config file type: "+path, nil)
+		return value
 	}
-
-	out, err := yaml.Marshal(data)
-	if err != nil {
-		return coreerr.E("config.Save", "failed to marshal config", err)
-	}
-
-	dir := core.PathDir(path)
-	if err := m.EnsureDir(dir); err != nil {
-		return coreerr.E("config.Save", "failed to create config directory: "+dir, err)
-	}
-
-	if err := m.Write(path, string(out)); err != nil {
-		return coreerr.E("config.Save", "failed to write config file: "+path, err)
-	}
-
-	return nil
 }
 
+func mergeMissingMaps(target map[string]any, source map[string]any) {
+	for key, value := range source {
+		existing, ok := target[key]
+		if !ok {
+			target[key] = value
+			continue
+		}
+
+		srcMap, srcIsMap := toStringMap(value)
+		tgtMap, tgtIsMap := toStringMap(existing)
+		if srcIsMap && tgtIsMap {
+			mergeMissingMaps(tgtMap, srcMap)
+		}
+	}
+}
+
+func toStringMap(v any) (map[string]any, bool) {
+	m, ok := v.(map[string]any)
+	return m, ok
+}
+
+func flattenForDiff(prefix string, data any, out map[string]any) {
+	switch typed := data.(type) {
+	case map[string]any:
+		if len(typed) == 0 && prefix != "" {
+			out[prefix] = map[string]any{}
+			return
+		}
+		for key, value := range typed {
+			next := key
+			if prefix != "" {
+				next = fmt.Sprintf("%s.%s", prefix, key)
+			}
+			flattenForDiff(next, value, out)
+		}
+	case []any:
+		out[prefix] = cloneValue(typed)
+	default:
+		out[prefix] = typed
+	}
+}
+
+func changedKeys(old map[string]any, latest map[string]any) map[string]any {
+	result := make(map[string]any)
+	all := make(map[string]struct{}, len(old)+len(latest))
+	for key := range old {
+		all[key] = struct{}{}
+	}
+	for key := range latest {
+		all[key] = struct{}{}
+	}
+
+	for key := range all {
+		oldVal, oldOK := old[key]
+		newVal, newOK := latest[key]
+
+		if !oldOK {
+			result[key] = newVal
+			continue
+		}
+		if !newOK {
+			result[key] = nil
+			continue
+		}
+		if !reflect.DeepEqual(oldVal, newVal) {
+			result[key] = newVal
+		}
+	}
+
+	return result
+}
+
+func (c *Config) emitChanges(changed map[string]any) {
+	if len(changed) == 0 {
+		return
+	}
+
+	keys := make([]string, 0, len(changed))
+	for key := range changed {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	c.watchMu.Lock()
+	callbacks := append([]func(string, any){}, c.watchers...)
+	c.watchMu.Unlock()
+
+	for _, key := range keys {
+		for _, fn := range callbacks {
+			fn(key, changed[key])
+		}
+	}
+}
