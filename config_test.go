@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	coreio "dappco.re/go/core/io"
 	core "dappco.re/go/core"
+	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -205,7 +205,7 @@ func TestConfig_DefaultPath_Good(t *testing.T) {
 	cfg, err := New(WithMedium(m))
 	assert.NoError(t, err)
 
-	home, _ := os.UserHomeDir()
+	home := core.Env("DIR_HOME")
 	assert.Equal(t, home+"/.core/config.yaml", cfg.Path())
 }
 

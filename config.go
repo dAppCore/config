@@ -163,7 +163,7 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	content, err := m.Read(path)
 	if err != nil {
-		return coreerr.E("config.LoadFile", "failed to read config file: "+path, err)
+		return core.E("config.LoadFile", "failed to read config file: "+path, err)
 	}
 
 	parsed := viper.New()
@@ -264,7 +264,7 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 
 	content, err := m.Read(path)
 	if err != nil {
-		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
+		return nil, core.E("config.Load", "failed to read config file: "+path, err)
 	}
 
 	v := viper.New()
@@ -309,16 +309,16 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 
 	out, err := yaml.Marshal(data)
 	if err != nil {
-		return coreerr.E("config.Save", "failed to marshal config", err)
+		return core.E("config.Save", "failed to marshal config", err)
 	}
 
 	dir := core.PathDir(path)
 	if err := m.EnsureDir(dir); err != nil {
-		return coreerr.E("config.Save", "failed to create config directory: "+dir, err)
+		return core.E("config.Save", "failed to create config directory: "+dir, err)
 	}
 
 	if err := m.Write(path, string(out)); err != nil {
-		return coreerr.E("config.Save", "failed to write config file: "+path, err)
+		return core.E("config.Save", "failed to write config file: "+path, err)
 	}
 
 	return nil

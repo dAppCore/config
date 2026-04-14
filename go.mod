@@ -6,6 +6,7 @@ require (
 	dappco.re/go/core v0.8.0-alpha.1
 	dappco.re/go/core/io v0.4.1
 	dappco.re/go/core/log v0.1.2
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -13,7 +14,6 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
