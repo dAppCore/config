@@ -61,12 +61,18 @@ app, _ := core.New(
 
 ## Package Layout
 
-| File            | Purpose                                                        |
-|-----------------|----------------------------------------------------------------|
-| `config.go`     | Core `Config` struct -- layered Get/Set, file load, commit     |
-| `env.go`        | Environment variable iteration and prefix-based loading        |
-| `service.go`    | Framework service wrapper with lifecycle (`Startable`) support |
-| `config_test.go`| Tests following the `_Good` / `_Bad` / `_Ugly` convention     |
+| File           | Purpose                                                        |
+|----------------|----------------------------------------------------------------|
+| `config.go`    | Core `Config` struct -- layered Get/Set, file load, commit     |
+| `conclave.go`  | Conclave-scoped config (`ForConclave`, `SetConclaveRootFunc`)  |
+| `discover.go`  | `.core/` directory walk (`Discover`, `CoreDirs`, `FindManifest`) |
+| `env.go`       | Environment variable iteration and prefix-based loading        |
+| `feature.go`   | Feature flags (`Feature`, `SetFeatureSource`, env overrides)   |
+| `manifest.go`  | Known file constants + typed manifests (`BuildManifest`, ...)  |
+| `service.go`   | Framework service wrapper with lifecycle (`Startable`) support |
+| `watch.go`     | Filesystem watcher with 100ms debounce + `OnChange` callbacks  |
+| `xdg.go`       | Platform-aware XDG paths (`Config`, `Data`, `Cache`, `Runtime`) |
+| `*_test.go`    | Tests following the `_Good` / `_Bad` / `_Ugly` convention     |
 
 ## Dependencies
 

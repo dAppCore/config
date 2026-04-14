@@ -119,3 +119,60 @@ func TestService_Get_Bad(t *testing.T) {
 	err := svc.Get("anything", &v)
 	assert.Error(t, err)
 }
+
+func TestService_NewConfigService_Good(t *testing.T) {
+	// The documented usage must compile and succeed: the factory is a
+	// core.WithService value and produces a retrievable *Service.
+	c := core.New(core.WithService(NewConfigService))
+	svc, ok := core.ServiceFor[*Service](c, "config")
+	assert.True(t, ok)
+	assert.NotNil(t, svc)
+}
+
+func TestService_NewConfigServiceWith_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/custom/config.yaml"] = "app:\n  name: custom\n"
+
+	c := core.New(core.WithService(NewConfigServiceWith(ServiceOptions{
+		Path:   "/tmp/custom/config.yaml",
+		Medium: m,
+	})))
+
+	svc, ok := core.ServiceFor[*Service](c, "config")
+	assert.True(t, ok)
+
+	// OnStartup has not run yet; trigger it via the Core's service lifecycle.
+	startables := c.Startables()
+	assert.True(t, startables.OK)
+	for _, s := range startables.Value.([]*core.Service) {
+		assert.True(t, s.OnStart().OK)
+	}
+
+	var name string
+	assert.NoError(t, svc.Get("app.name", &name))
+	assert.Equal(t, "custom", name)
+}
+
+func TestService_NewConfigService_Bad(t *testing.T) {
+	// With a broken medium path (unsupported file type) OnStartup must fail
+	// gracefully and return a non-OK Result rather than panicking.
+	m := coreio.NewMockMedium()
+	m.Files["/broken.txt"] = "ignored"
+	c := core.New(core.WithService(NewConfigServiceWith(ServiceOptions{
+		Path:   "/broken.txt",
+		Medium: m,
+	})))
+	svc, ok := core.ServiceFor[*Service](c, "config")
+	assert.True(t, ok)
+
+	startables := c.Startables()
+	assert.True(t, startables.OK)
+	var gotFailure bool
+	for _, s := range startables.Value.([]*core.Service) {
+		if !s.OnStart().OK {
+			gotFailure = true
+		}
+	}
+	assert.True(t, gotFailure)
+	assert.Nil(t, svc.Config())
+}

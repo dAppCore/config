@@ -28,14 +28,35 @@ type ServiceOptions struct {
 }
 
 // NewConfigService creates a new config service factory for the Core framework.
-// Register it with core.WithService(config.NewConfigService).
+// Register it with core.WithService(config.NewConfigService). The returned
+// Result carries the *Service instance so core.WithService can auto-discover
+// the "config" service name from the package path and wire it into the
+// lifecycle and IPC bus.
 //
 //	c := core.New(core.WithService(config.NewConfigService))
-func NewConfigService(c *core.Core) (any, error) {
+//	svc, _ := core.ServiceFor[*config.Service](c, "config")
+func NewConfigService(c *core.Core) core.Result {
 	svc := &Service{
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{}),
 	}
-	return svc, nil
+	return core.Result{Value: svc, OK: true}
+}
+
+// NewConfigServiceWith returns a service factory pre-populated with the given
+// options. Use this when the default path / medium / env prefix aren't right
+// for the host application.
+//
+//	c := core.New(core.WithService(config.NewConfigServiceWith(config.ServiceOptions{
+//	    Path: "/etc/myapp/config.yaml",
+//	    EnvPrefix: "MYAPP",
+//	})))
+func NewConfigServiceWith(opts ServiceOptions) func(*core.Core) core.Result {
+	return func(c *core.Core) core.Result {
+		svc := &Service{
+			ServiceRuntime: core.NewServiceRuntime(c, opts),
+		}
+		return core.Result{Value: svc, OK: true}
+	}
 }
 
 // OnStartup loads the configuration file during application startup
