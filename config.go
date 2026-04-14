@@ -358,9 +358,15 @@ func (c *Config) Medium() coreio.Medium {
 	return c.medium
 }
 
-// MergeFrom overlays source values onto the receiver.
-// Existing keys in the receiver are NOT overwritten.
-// Used by Discover() to merge closer (project) configs over further (global) ones.
+// MergeFrom overlays source values onto the receiver at the leaf level.
+// Existing keys in the receiver are NOT overwritten — including keys sourced
+// from environment variables via AutomaticEnv. Used by Discover() to merge
+// closer (project) configs over further (global) ones without shadowing the
+// "env overrides everything" rule from §5.3 of the .core/ convention spec.
+//
+// Inherited values land in the defaults layer only — Commit() never persists
+// them into this Config's own file, so a project Commit cannot leak secrets
+// discovered from ~/.core/config.yaml into the project config.
 //
 //	base := config.New()
 //	base.MergeFrom(projectConfig)   // closest wins
@@ -370,16 +376,31 @@ func (c *Config) MergeFrom(source *Config) {
 		return
 	}
 	source.mu.RLock()
-	sourceSettings := source.file.AllSettings()
+	// file keys are the source's own persistable values. full keys also
+	// include values previously inherited from other MergeFrom calls — we
+	// need both so inheritance chains (discover → conclave) keep working.
+	leaf := map[string]any{}
+	for _, key := range source.file.AllKeys() {
+		leaf[key] = source.file.Get(key)
+	}
+	for _, key := range source.full.AllKeys() {
+		if _, ok := leaf[key]; ok {
+			continue
+		}
+		leaf[key] = source.full.Get(key)
+	}
 	source.mu.RUnlock()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for key, value := range sourceSettings {
-		if !c.full.IsSet(key) {
-			c.file.Set(key, value)
-			c.full.Set(key, value)
+	for key, value := range leaf {
+		if c.full.IsSet(key) {
+			continue
 		}
+		// full viper uses SetDefault so AutomaticEnv still wins on Get, but
+		// file viper is left untouched — inherited values must not be written
+		// back when Commit() flushes this Config to disk.
+		c.full.SetDefault(key, value)
 	}
 }
 

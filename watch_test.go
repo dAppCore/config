@@ -73,3 +73,81 @@ func TestWatch_Watch_Ugly(t *testing.T) {
 	cfg.StopWatch()
 	cfg.StopWatch()
 }
+
+func TestWatch_ReloadKeys_Good(t *testing.T) {
+	// When a file is reloaded via the watcher, OnChange must fire once per
+	// changed key with the new value — not a single empty-key signal.
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "config.yaml")
+	assert.NoError(t, coreio.Local.Write(path, "dev:\n  editor: vim\napp:\n  name: alpha\n"))
+
+	cfg, err := New(WithMedium(coreio.Local), WithPath(path))
+	assert.NoError(t, err)
+
+	var mu sync.Mutex
+	seen := map[string]any{}
+	cfg.OnChange(func(key string, value any) {
+		mu.Lock()
+		defer mu.Unlock()
+		seen[key] = value
+	})
+
+	assert.NoError(t, cfg.Watch())
+	t.Cleanup(cfg.StopWatch)
+
+	// Change editor and name, plus add a new key.
+	assert.NoError(t, coreio.Local.Write(path, "dev:\n  editor: nano\napp:\n  name: beta\n  version: \"1\"\n"))
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		got := len(seen)
+		mu.Unlock()
+		if got >= 3 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, "nano", seen["dev.editor"])
+	assert.Equal(t, "beta", seen["app.name"])
+	assert.Equal(t, "1", seen["app.version"])
+}
+
+func TestWatch_DiffSnapshots_Good(t *testing.T) {
+	// diffSnapshots is the core of reload notifications — feed it the two
+	// snapshots a watcher would produce and verify the per-key changes.
+	before := map[string]any{
+		"dev.editor": "vim",
+		"app.name":   "alpha",
+		"gone":       true,
+	}
+	after := map[string]any{
+		"dev.editor": "nano",   // changed
+		"app.name":   "alpha",  // unchanged
+		"app.new":    "arrived", // added
+	}
+
+	changes := diffSnapshots(before, after)
+	// Sorted lexically: app.new, dev.editor, gone
+	assert.Len(t, changes, 3)
+	assert.Equal(t, "app.new", changes[0].Key)
+	assert.Equal(t, "arrived", changes[0].Value)
+	assert.Equal(t, "dev.editor", changes[1].Key)
+	assert.Equal(t, "nano", changes[1].Value)
+	assert.Equal(t, "vim", changes[1].Previous)
+	assert.Equal(t, "gone", changes[2].Key)
+	assert.Nil(t, changes[2].Value)
+	assert.Equal(t, true, changes[2].Previous)
+}
+
+func TestWatch_DiffSnapshots_Ugly(t *testing.T) {
+	// Nested map values should compare structurally, not by pointer identity.
+	nested := map[string]any{"features": map[string]any{"dark-mode": true}}
+	same := map[string]any{"features": map[string]any{"dark-mode": true}}
+
+	changes := diffSnapshots(nested, same)
+	assert.Empty(t, changes)
+}

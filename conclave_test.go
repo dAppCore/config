@@ -1,12 +1,18 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
 	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
 )
+
+// osGetwd / osChdir wrap os.Getwd and os.Chdir so test helpers can stay
+// explicit about their side-effects without spreading raw os calls around.
+func osGetwd() (string, error) { return os.Getwd() }
+func osChdir(dir string) error { return os.Chdir(dir) }
 
 func TestConclave_ForConclave_Good(t *testing.T) {
 	tmp := t.TempDir()
@@ -43,6 +49,51 @@ func TestConclave_ForConclave_Ugly(t *testing.T) {
 	cfg, err := ForConclave("test-conclave")
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
+}
+
+func TestConclave_ForConclave_InheritsProject_Good(t *testing.T) {
+	// A Conclave inherits gaps from the project .core/ directory walked up
+	// from the current working directory. The Conclave's own .core/ still
+	// wins for keys it declares.
+	projectDir := t.TempDir()
+	conclaveDir := t.TempDir()
+
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(projectDir, ".core")))
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(projectDir, ".git")))
+	assert.NoError(t, coreio.Local.Write(
+		filepath.Join(projectDir, ".core", "config.yaml"),
+		"dev:\n  editor: vim\napp:\n  name: project\n",
+	))
+
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(conclaveDir, ".core")))
+	assert.NoError(t, coreio.Local.Write(
+		filepath.Join(conclaveDir, ".core", "config.yaml"),
+		"app:\n  name: conclave\n",
+	))
+
+	SetConclaveRootFunc(func(_ string) (string, error) {
+		return conclaveDir, nil
+	})
+	t.Cleanup(func() { SetConclaveRootFunc(nil) })
+
+	// Switch cwd so Discover picks up the project layer.
+	prev, err := osGetwd()
+	assert.NoError(t, err)
+	assert.NoError(t, osChdir(projectDir))
+	t.Cleanup(func() { _ = osChdir(prev) })
+
+	cfg, err := ForConclave("alpha", WithMedium(coreio.Local))
+	assert.NoError(t, err)
+
+	// Conclave wins on app.name.
+	var name string
+	assert.NoError(t, cfg.Get("app.name", &name))
+	assert.Equal(t, "conclave", name)
+
+	// Project fills the gap on dev.editor.
+	var editor string
+	assert.NoError(t, cfg.Get("dev.editor", &editor))
+	assert.Equal(t, "vim", editor)
 }
 
 func TestConclave_SetConclaveRootFunc_Good(t *testing.T) {

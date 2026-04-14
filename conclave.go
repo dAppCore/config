@@ -36,8 +36,12 @@ func SetConclaveRootFunc(fn ConclaveRootFunc) {
 }
 
 // ForConclave returns a Config scoped to the named Conclave. The returned
-// config inherits from the parent (project then global) and overrides with
-// values found in the Conclave's own .core/ directory.
+// config inherits from the parent (project walking up from cwd, then the
+// user-global ~/.core/) and overrides with values found in the Conclave's own
+// `.core/` directory. Resolution precedence from highest to lowest:
+//  1. Conclave `{root}/.core/config.yaml`
+//  2. Project `.core/config.yaml` (and ancestors up to repo boundary)
+//  3. User-global `~/.core/config.yaml`
 //
 //	alpha, _ := config.ForConclave("workspace-alpha")
 //	alpha.Get("theme", &theme)
@@ -54,9 +58,13 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 	conclaveOpts := append([]Option{}, opts...)
 	conclaveOpts = append(conclaveOpts, WithPath(filepath.Join(root, ".core", "config.yaml")))
 
-	base, err := DiscoverFrom(root, opts...)
+	// Project + global inheritance is discovered from the current working dir,
+	// not the conclave root — the conclave usually sits outside the project
+	// tree (e.g. under XDG config/conclaves/). Discover() handles ~/.core/ as
+	// the final fallback layer.
+	base, err := Discover(opts...)
 	if err != nil {
-		return nil, coreerr.E("config.ForConclave", "failed to discover conclave config: "+name, err)
+		return nil, coreerr.E("config.ForConclave", "failed to discover base config: "+name, err)
 	}
 
 	conclaveCfg, err := New(conclaveOpts...)
