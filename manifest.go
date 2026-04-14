@@ -20,6 +20,8 @@ const (
 	FileManifest  = "manifest.yaml"  // go-scm — package identity + signature
 	FileWorkspace = "workspace.yaml" // core — project dependencies
 	FileRepos     = "repos.yaml"     // go-scm — multi-repo registry
+	FileIDE       = "ide.yaml"       // ide — editor integration, LSP, formatters
+	FilePHP       = "php.yaml"       // core dev — PHP/Laravel settings
 	FileAgent     = "agent.yaml"     // core agent — daemon config (user-level)
 	FileZone      = "zone.yaml"      // lethernet — network zone (user-level)
 
@@ -40,6 +42,8 @@ var KnownFiles = []string{
 	FileManifest,
 	FileWorkspace,
 	FileRepos,
+	FileIDE,
+	FilePHP,
 }
 
 // ViewManifest defines the structure of .core/view.yaml.

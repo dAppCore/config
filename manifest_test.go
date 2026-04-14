@@ -118,7 +118,16 @@ func TestManifest_KnownFiles_Good(t *testing.T) {
 	assert.Contains(t, KnownFiles, FileView)
 	assert.Contains(t, KnownFiles, FileManifest)
 	assert.Contains(t, KnownFiles, FileWorkspace)
+	assert.Contains(t, KnownFiles, FileRepos)
+	assert.Contains(t, KnownFiles, FileIDE)
+	assert.Contains(t, KnownFiles, FilePHP)
 	assert.Equal(t, ".core", Directory)
+
+	// User-level files have constants but are not part of project discovery.
+	assert.Equal(t, "agent.yaml", FileAgent)
+	assert.Equal(t, "zone.yaml", FileZone)
+	assert.Equal(t, "ide.yaml", FileIDE)
+	assert.Equal(t, "php.yaml", FilePHP)
 
 	seen := map[string]struct{}{}
 	for _, name := range KnownFiles {

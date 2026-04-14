@@ -85,7 +85,7 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 	s.config = cfg
 
 	if c := s.Core(); c != nil {
-		s.config.core = c
+		s.config.AttachCore(c)
 		s.registerActions(c)
 		s.registerCommands(c)
 	}

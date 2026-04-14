@@ -100,6 +100,18 @@ func WithCore(c *core.Core) Option {
 	}
 }
 
+// AttachCore wires the Config to a Core instance after construction. Use this
+// when New() ran before Core was available (e.g. from a service lifecycle).
+// Thread-safe; safe to call concurrently with Set()/Commit().
+//
+//	cfg, _ := config.New(...)
+//	cfg.AttachCore(c)       // ConfigChanged broadcasts from here on.
+func (c *Config) AttachCore(core *core.Core) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.core = core
+}
+
 // New creates a new Config instance with the given options.
 // If no medium is provided, it defaults to io.Local.
 // If no path is provided, it defaults to ~/.core/config.yaml.
@@ -276,30 +288,60 @@ func (c *Config) Commit() error {
 	return nil
 }
 
-// All returns an iterator over all configuration values in lexical key order
-// (including environment variables).
+// All returns an iterator over every configuration value in lexical key order.
+// Keys are flat dot-notation (e.g. "dev.editor", "app.name"). The iterator
+// includes values sourced from file, Set() calls, and environment-variable
+// overrides mapped via the configured env prefix (so CORE_CONFIG_DEV_EDITOR
+// shows up as "dev.editor").
 //
 //	for key, value := range cfg.All() {
-//	    fmt.Println(key, value)
+//	    fmt.Println(key, value)   // "dev.editor" "vim"
 //	}
 func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	settings := c.full.AllSettings()
-	keys := make([]string, 0, len(settings))
-	for key := range settings {
-		keys = append(keys, key)
+	// AllKeys() gives flat dot-notation for every key viper knows about,
+	// covering file values, explicit Set() calls, and registered env overrides.
+	keys := append([]string(nil), c.full.AllKeys()...)
+
+	// Surface env-prefixed variables that were never declared in the file so
+	// the iterator truly reflects the merged reality rather than only the
+	// persisted surface.
+	prefix := envPrefixOf(c.full)
+	if prefix != "" {
+		for envKey := range Env(prefix) {
+			if !contains(keys, envKey) {
+				keys = append(keys, envKey)
+			}
+		}
 	}
+
 	sort.Strings(keys)
 
 	return func(yield func(string, any) bool) {
 		for _, key := range keys {
-			if !yield(key, settings[key]) {
+			if !yield(key, c.full.Get(key)) {
 				return
 			}
 		}
 	}
+}
+
+// envPrefixOf returns the environment-variable prefix registered with viper
+// in the form required by Env() (trailing underscore, uppercase). Empty
+// when no prefix is active.
+func envPrefixOf(v *viper.Viper) string {
+	// Viper stores the prefix verbatim (without trailing underscore) via
+	// SetEnvPrefix. We probe via its canonical environment-key transform.
+	canonical := v.GetEnvPrefix()
+	if canonical == "" {
+		return ""
+	}
+	if !strings.HasSuffix(canonical, "_") {
+		canonical += "_"
+	}
+	return canonical
 }
 
 // Path returns the path to the configuration file.

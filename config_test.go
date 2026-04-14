@@ -109,6 +109,64 @@ func TestConfig_All_Order_Good(t *testing.T) {
 	assert.Equal(t, []string{"alpha", "zulu"}, keys)
 }
 
+func TestConfig_All_Nested_Good(t *testing.T) {
+	// Nested keys surface via flat dot-notation — callers iterate a single
+	// map instead of recursing through map[string]any trees.
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.yaml"] = "app:\n  name: core\n  version: \"1.0\"\ndev:\n  editor: vim\n"
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
+	assert.NoError(t, err)
+
+	all := maps.Collect(cfg.All())
+	assert.Equal(t, "core", all["app.name"])
+	assert.Equal(t, "1.0", all["app.version"])
+	assert.Equal(t, "vim", all["dev.editor"])
+}
+
+func TestConfig_All_IncludesEnv_Good(t *testing.T) {
+	// Env-prefixed vars that never appear in the file still surface via All()
+	// so consumers iterate the merged reality, not just the persisted surface.
+	t.Setenv("CORE_CONFIG_RUNTIME_TOKEN", "secret")
+
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.yaml"] = "app:\n  name: core\n"
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
+	assert.NoError(t, err)
+
+	all := maps.Collect(cfg.All())
+	assert.Equal(t, "core", all["app.name"])
+	assert.Equal(t, "secret", all["runtime.token"])
+}
+
+func TestConfig_All_EnvOverridesFile_Good(t *testing.T) {
+	// When file and env both define a key, All() reflects the env override
+	// (same precedence as Get()).
+	t.Setenv("CORE_CONFIG_DEV_EDITOR", "nano")
+
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.yaml"] = "dev:\n  editor: vim\n"
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
+	assert.NoError(t, err)
+
+	all := maps.Collect(cfg.All())
+	assert.Equal(t, "nano", all["dev.editor"])
+}
+
+func TestConfig_All_CustomPrefix_Good(t *testing.T) {
+	// A custom env prefix (via WithEnvPrefix) still populates All().
+	t.Setenv("MYAPP_FEATURE_BETA", "true")
+
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"), WithEnvPrefix("MYAPP"))
+	assert.NoError(t, err)
+
+	all := maps.Collect(cfg.All())
+	assert.Equal(t, "true", all["feature.beta"])
+}
+
 func TestConfig_Path_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 
