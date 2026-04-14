@@ -111,6 +111,44 @@ func TestConclave_SetConclaveRootFunc_Good(t *testing.T) {
 	assert.Equal(t, "/custom/a", root)
 }
 
+func TestConclave_Isolation_Good(t *testing.T) {
+	// RFC §12.3: "Writes are isolated to the Conclave's .core/ directory.
+	// alpha.Set("theme", "dark"), beta.Get("theme", &t) // unchanged"
+	//
+	// Two conclaves under different roots must not share state: a Set in
+	// alpha is invisible to beta, and each Commit writes only to its own
+	// .core/config.yaml.
+	tmp := t.TempDir()
+	SetConclaveRootFunc(func(name string) (string, error) {
+		return filepath.Join(tmp, name), nil
+	})
+	t.Cleanup(func() { SetConclaveRootFunc(nil) })
+
+	alpha, err := ForConclave("workspace-alpha", WithMedium(coreio.Local))
+	assert.NoError(t, err)
+	beta, err := ForConclave("workspace-beta", WithMedium(coreio.Local))
+	assert.NoError(t, err)
+
+	assert.NoError(t, alpha.Set("theme", "dark"))
+	assert.NoError(t, alpha.Commit())
+
+	// beta was created before alpha's Set — its in-memory view is untouched.
+	var betaTheme string
+	err = beta.Get("theme", &betaTheme)
+	assert.Error(t, err, "beta must not see alpha's writes")
+
+	// Alpha's on-disk config contains theme; beta's root has no config file yet.
+	alphaFile := filepath.Join(tmp, "workspace-alpha", ".core", "config.yaml")
+	betaFile := filepath.Join(tmp, "workspace-beta", ".core", "config.yaml")
+
+	body, err := coreio.Local.Read(alphaFile)
+	assert.NoError(t, err)
+	assert.Contains(t, body, "theme")
+	assert.Contains(t, body, "dark")
+
+	assert.False(t, coreio.Local.Exists(betaFile), "beta conclave must not have received alpha's write")
+}
+
 func assertResolverError() error {
 	return &assertErr{msg: "resolver failed"}
 }

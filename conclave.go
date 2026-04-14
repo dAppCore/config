@@ -1,9 +1,9 @@
 package config
 
 import (
-	"path/filepath"
 	"sync"
 
+	core "dappco.re/go/core"
 	coreerr "dappco.re/go/core/log"
 )
 
@@ -56,7 +56,7 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 	}
 
 	conclaveOpts := append([]Option{}, opts...)
-	conclaveOpts = append(conclaveOpts, WithPath(filepath.Join(root, ".core", "config.yaml")))
+	conclaveOpts = append(conclaveOpts, WithPath(core.Path(root, ".core", "config.yaml")))
 
 	// Project + global inheritance is discovered from the current working dir,
 	// not the conclave root — the conclave usually sits outside the project
@@ -78,5 +78,5 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 }
 
 func defaultConclaveRoot(name string) (string, error) {
-	return filepath.Join(XDG().Config(), "conclaves", name), nil
+	return core.Path(XDG().Config(), "conclaves", name), nil
 }

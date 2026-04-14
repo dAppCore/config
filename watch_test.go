@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -114,6 +115,65 @@ func TestWatch_ReloadKeys_Good(t *testing.T) {
 	assert.Equal(t, "nano", seen["dev.editor"])
 	assert.Equal(t, "beta", seen["app.name"])
 	assert.Equal(t, "1", seen["app.version"])
+}
+
+func TestWatch_AtomicSave_Good(t *testing.T) {
+	// Atomic-save editors (vim, VSCode, most IDE auto-formatters) replace a
+	// file via rename: write new inode, rename over the old path, unlink the
+	// original. fsnotify tracks the original inode and silently stops firing
+	// after the first rename — the watcher re-Adds the path to survive this.
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "config.yaml")
+	assert.NoError(t, coreio.Local.Write(path, "key: first\n"))
+
+	cfg, err := New(WithMedium(coreio.Local), WithPath(path))
+	assert.NoError(t, err)
+
+	var mu sync.Mutex
+	fires := 0
+	cfg.OnChange(func(_ string, _ any) {
+		mu.Lock()
+		fires++
+		mu.Unlock()
+	})
+
+	assert.NoError(t, cfg.Watch())
+	t.Cleanup(cfg.StopWatch)
+
+	// Simulate an atomic save: write to sidecar, rename over target.
+	sidecar := filepath.Join(tmp, "config.yaml.swp")
+	assert.NoError(t, coreio.Local.Write(sidecar, "key: second\n"))
+	assert.NoError(t, os.Rename(sidecar, path))
+
+	// Wait for the first rename-driven reload to land.
+	waitFor(t, &mu, func() int { return fires }, 1)
+
+	// Second atomic save: watcher must still be live.
+	sidecar2 := filepath.Join(tmp, "config.yaml.swp2")
+	assert.NoError(t, coreio.Local.Write(sidecar2, "key: third\n"))
+	assert.NoError(t, os.Rename(sidecar2, path))
+
+	waitFor(t, &mu, func() int { return fires }, 2)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.GreaterOrEqual(t, fires, 2, "watcher must survive the second atomic save")
+}
+
+// waitFor polls the provided getter until it reaches target or 2s elapse.
+// Used by watch tests where fsnotify latency is platform-dependent.
+func waitFor(t *testing.T, mu *sync.Mutex, get func() int, target int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		got := get()
+		mu.Unlock()
+		if got >= target {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
 }
 
 func TestWatch_DiffSnapshots_Good(t *testing.T) {

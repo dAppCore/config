@@ -11,11 +11,8 @@
 package config
 
 import (
-	"fmt"
 	"iter"
-	"os"
-	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -25,6 +22,10 @@ import (
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
+
+// envKeyReplacer maps dot-notation keys to underscore-joined env names so
+// CORE_CONFIG_DEV_EDITOR resolves to "dev.editor" in viper.
+var envKeyReplacer = strings.NewReplacer(".", "_")
 
 // ConfigChanged is broadcast on every Set() and Commit() call so other services
 // can react to runtime config updates without polling.
@@ -86,7 +87,7 @@ func WithPath(path string) Option {
 //	config.New(config.WithEnvPrefix("CORE_CONFIG"))  // CORE_CONFIG_DEV_EDITOR → dev.editor
 func WithEnvPrefix(prefix string) Option {
 	return func(c *Config) {
-		c.full.SetEnvPrefix(strings.TrimSuffix(prefix, "_"))
+		c.full.SetEnvPrefix(core.TrimSuffix(prefix, "_"))
 	}
 }
 
@@ -147,7 +148,7 @@ func New(opts ...Option) (*Config, error) {
 
 	// Configure viper defaults
 	c.full.SetEnvPrefix("CORE_CONFIG")
-	c.full.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	c.full.SetEnvKeyReplacer(envKeyReplacer)
 
 	for _, opt := range opts {
 		opt(c)
@@ -158,11 +159,11 @@ func New(opts ...Option) (*Config, error) {
 	}
 
 	if c.path == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, coreerr.E("config.New", "failed to determine home directory", err)
+		home := core.Env("DIR_HOME")
+		if home == "" {
+			return nil, coreerr.E("config.New", "failed to determine home directory", nil)
 		}
-		c.path = filepath.Join(home, ".core", "config.yaml")
+		c.path = core.Path(home, ".core", "config.yaml")
 	}
 
 	c.full.AutomaticEnv()
@@ -178,8 +179,8 @@ func New(opts ...Option) (*Config, error) {
 }
 
 func configTypeForPath(path string) (string, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == "" && filepath.Base(path) == ".env" {
+	ext := core.Lower(core.PathExt(path))
+	if ext == "" && core.PathBase(path) == ".env" {
 		return "env", nil
 	}
 	if ext == "" {
@@ -215,13 +216,13 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	content, err := m.Read(path)
 	if err != nil {
-		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to read config file: %s", path), err)
+		return coreerr.E("config.LoadFile", core.Sprintf("failed to read config file: %s", path), err)
 	}
 
 	parsed := viper.New()
 	parsed.SetConfigType(configType)
-	if err := parsed.MergeConfig(strings.NewReader(content)); err != nil {
-		return coreerr.E("config.LoadFile", fmt.Sprintf("failed to parse config file: %s", path), err)
+	if err := parsed.MergeConfig(core.NewReader(content)); err != nil {
+		return coreerr.E("config.LoadFile", core.Sprintf("failed to parse config file: %s", path), err)
 	}
 
 	settings := parsed.AllSettings()
@@ -256,11 +257,11 @@ func (c *Config) Get(key string, out any) error {
 	}
 
 	if !c.full.IsSet(key) {
-		return coreerr.E("config.Get", fmt.Sprintf("key not found: %s", key), nil)
+		return coreerr.E("config.Get", core.Sprintf("key not found: %s", key), nil)
 	}
 
 	if err := c.full.UnmarshalKey(key, out); err != nil {
-		return coreerr.E("config.Get", fmt.Sprintf("failed to unmarshal key: %s", key), err)
+		return coreerr.E("config.Get", core.Sprintf("failed to unmarshal key: %s", key), err)
 	}
 	return nil
 }
@@ -349,7 +350,7 @@ func (c *Config) All() iter.Seq2[string, any] {
 		}
 	}
 
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	return func(yield func(string, any) bool) {
 		for _, key := range keys {
@@ -370,7 +371,7 @@ func envPrefixOf(v *viper.Viper) string {
 	if canonical == "" {
 		return ""
 	}
-	if !strings.HasSuffix(canonical, "_") {
+	if !core.HasSuffix(canonical, "_") {
 		canonical += "_"
 	}
 	return canonical
@@ -461,7 +462,7 @@ func (c *Config) OnChange(fn func(key string, value any)) {
 //
 // Deprecated: Use Config.LoadFile instead.
 func Load(m coreio.Medium, path string) (map[string]any, error) {
-	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+	switch ext := core.Lower(core.PathExt(path)); ext {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML sources.
 	default:
@@ -475,7 +476,7 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 
 	v := viper.New()
 	v.SetConfigType("yaml")
-	if err := v.ReadConfig(strings.NewReader(content)); err != nil {
+	if err := v.ReadConfig(core.NewReader(content)); err != nil {
 		return nil, coreerr.E("config.Load", "failed to parse config file: "+path, err)
 	}
 
@@ -487,7 +488,7 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 //
 //	config.Save(io.Local, "~/.core/config.yaml", map[string]any{"dev": map[string]any{"editor": "vim"}})
 func Save(m coreio.Medium, path string, data map[string]any) error {
-	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+	switch ext := core.Lower(core.PathExt(path)); ext {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML destinations.
 	default:
@@ -499,7 +500,7 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 		return coreerr.E("config.Save", "failed to marshal config", err)
 	}
 
-	dir := filepath.Dir(path)
+	dir := core.PathDir(path)
 	if err := m.EnsureDir(dir); err != nil {
 		return coreerr.E("config.Save", "failed to create config directory: "+dir, err)
 	}

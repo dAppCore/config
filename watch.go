@@ -2,7 +2,7 @@ package config
 
 import (
 	"reflect"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -85,8 +85,19 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 			if !ok {
 				return
 			}
-			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) == 0 {
+			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove) == 0 {
 				continue
+			}
+			// Atomic-save editors (vim, VSCode) rename/replace the file on save.
+			// fsnotify tracks the old inode, so the watch silently dies — re-Add
+			// the watch on the same path so subsequent saves still fire events.
+			if ev.Op&(fsnotify.Rename|fsnotify.Remove) != 0 {
+				c.mu.RLock()
+				path := c.path
+				c.mu.RUnlock()
+				// Best-effort: the new file may not exist yet during an atomic
+				// swap window. Add silently retries on the next event cycle.
+				_ = fw.w.Add(path)
 			}
 			if timer != nil {
 				timer.Stop()
@@ -185,9 +196,10 @@ func diffSnapshots(before, after map[string]any) []configChange {
 	return changes
 }
 
-// sortStrings wraps sort.Strings so the diff helpers can stay dependency-thin.
+// sortStrings sorts keys lexically via slices.Sort so the diff helpers stay
+// dependency-thin without pulling in the banned sort package.
 func sortStrings(keys []string) {
-	sort.Strings(keys)
+	slices.Sort(keys)
 }
 
 // equalAny compares two any values, including map[string]any and []any shapes

@@ -2,9 +2,9 @@ package config
 
 import (
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
+
+	core "dappco.re/go/core"
 )
 
 // XDGPaths resolves platform-aware directories following the XDG Base Directory
@@ -42,28 +42,28 @@ func XDGWithPrefix(prefix string) *XDGPaths {
 //
 //	path := config.XDG().Config()  // ~/.config/core
 func (x *XDGPaths) Config() string {
-	return filepath.Join(xdgOrDefault("XDG_CONFIG_HOME", defaultConfigHome()), x.prefix)
+	return core.Path(xdgOrDefault("XDG_CONFIG_HOME", defaultConfigHome()), x.prefix)
 }
 
 // Data returns the persistent data directory suffixed with the prefix.
 //
 //	path := config.XDG().Data()  // ~/.local/share/core
 func (x *XDGPaths) Data() string {
-	return filepath.Join(xdgOrDefault("XDG_DATA_HOME", defaultDataHome()), x.prefix)
+	return core.Path(xdgOrDefault("XDG_DATA_HOME", defaultDataHome()), x.prefix)
 }
 
 // Cache returns the cache directory (safe to delete) suffixed with the prefix.
 //
 //	path := config.XDG().Cache()  // ~/.cache/core
 func (x *XDGPaths) Cache() string {
-	return filepath.Join(xdgOrDefault("XDG_CACHE_HOME", defaultCacheHome()), x.prefix)
+	return core.Path(xdgOrDefault("XDG_CACHE_HOME", defaultCacheHome()), x.prefix)
 }
 
 // Runtime returns the ephemeral runtime directory suffixed with the prefix.
 //
 //	path := config.XDG().Runtime()  // /run/user/1000/core on Linux
 func (x *XDGPaths) Runtime() string {
-	return filepath.Join(xdgOrDefault("XDG_RUNTIME_DIR", defaultRuntimeDir()), x.prefix)
+	return core.Path(xdgOrDefault("XDG_RUNTIME_DIR", defaultRuntimeDir()), x.prefix)
 }
 
 // Prefix returns the application prefix used by this resolver.
@@ -73,6 +73,10 @@ func (x *XDGPaths) Prefix() string {
 	return x.prefix
 }
 
+// xdgOrDefault reads an XDG_* environment variable, falling back to the
+// provided platform default when the variable is unset or empty. os.Getenv
+// is intentional — XDG variables are set by the user's shell and must be
+// read live rather than the DIR_* snapshot captured at core init.
 func xdgOrDefault(envVar, fallback string) string {
 	if v := os.Getenv(envVar); v != "" {
 		return v
@@ -81,64 +85,64 @@ func xdgOrDefault(envVar, fallback string) string {
 }
 
 func home() string {
-	if h, err := os.UserHomeDir(); err == nil {
+	if h := core.Env("DIR_HOME"); h != "" {
 		return h
 	}
 	return "."
 }
 
 func defaultConfigHome() string {
-	switch runtime.GOOS {
+	switch core.Env("OS") {
 	case "darwin":
-		return filepath.Join(home(), "Library", "Application Support")
+		return core.Path(home(), "Library", "Application Support")
 	case "windows":
 		if v := os.Getenv("APPDATA"); v != "" {
 			return v
 		}
-		return filepath.Join(home(), "AppData", "Roaming")
+		return core.Path(home(), "AppData", "Roaming")
 	default:
-		return filepath.Join(home(), ".config")
+		return core.Path(home(), ".config")
 	}
 }
 
 func defaultDataHome() string {
-	switch runtime.GOOS {
+	switch core.Env("OS") {
 	case "darwin":
-		return filepath.Join(home(), "Library", "Application Support")
+		return core.Path(home(), "Library", "Application Support")
 	case "windows":
 		if v := os.Getenv("LOCALAPPDATA"); v != "" {
 			return v
 		}
-		return filepath.Join(home(), "AppData", "Local")
+		return core.Path(home(), "AppData", "Local")
 	default:
-		return filepath.Join(home(), ".local", "share")
+		return core.Path(home(), ".local", "share")
 	}
 }
 
 func defaultCacheHome() string {
-	switch runtime.GOOS {
+	switch core.Env("OS") {
 	case "darwin":
-		return filepath.Join(home(), "Library", "Caches")
+		return core.Path(home(), "Library", "Caches")
 	case "windows":
 		if v := os.Getenv("LOCALAPPDATA"); v != "" {
-			return filepath.Join(v, "cache")
+			return core.Path(v, "cache")
 		}
-		return filepath.Join(home(), "AppData", "Local", "cache")
+		return core.Path(home(), "AppData", "Local", "cache")
 	default:
-		return filepath.Join(home(), ".cache")
+		return core.Path(home(), ".cache")
 	}
 }
 
 func defaultRuntimeDir() string {
-	switch runtime.GOOS {
+	switch core.Env("OS") {
 	case "darwin":
-		return filepath.Join(home(), "Library", "Caches")
+		return core.Path(home(), "Library", "Caches")
 	case "windows":
 		if v := os.Getenv("LOCALAPPDATA"); v != "" {
-			return filepath.Join(v, "temp")
+			return core.Path(v, "temp")
 		}
-		return filepath.Join(home(), "AppData", "Local", "temp")
+		return core.Path(home(), "AppData", "Local", "temp")
 	default:
-		return filepath.Join("/run/user", strconv.Itoa(os.Getuid()))
+		return core.Path("/run/user", strconv.Itoa(os.Getuid()))
 	}
 }

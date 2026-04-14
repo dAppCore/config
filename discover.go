@@ -2,8 +2,8 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 
+	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
 )
@@ -16,6 +16,8 @@ import (
 //	cfg, err := config.Discover()
 //	cfg.Get("build.target", &target)  // merged from all .core/ dirs
 func Discover(opts ...Option) (*Config, error) {
+	// os.Getwd is deliberate: core.Env("DIR_CWD") is captured once at init,
+	// but callers (including tests) chdir at runtime and need the live CWD.
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, coreerr.E("config.Discover", "failed to read working directory", err)
@@ -58,26 +60,26 @@ func discoverPaths(medium coreio.Medium, start string) []string {
 	var paths []string
 	dir := start
 	for {
-		coreDir := filepath.Join(dir, ".core")
-		candidate := filepath.Join(coreDir, "config.yaml")
+		coreDir := core.Path(dir, ".core")
+		candidate := core.Path(coreDir, "config.yaml")
 		if medium.Exists(candidate) {
 			paths = append(paths, candidate)
 		}
 
 		// Repository boundary: stop once a .git sits next to the .core dir.
-		if medium.Exists(filepath.Join(dir, ".git")) {
+		if medium.Exists(core.Path(dir, ".git")) {
 			break
 		}
 
-		parent := filepath.Dir(dir)
+		parent := core.PathDir(dir)
 		if parent == dir {
 			break
 		}
 		dir = parent
 	}
 
-	if home, err := os.UserHomeDir(); err == nil {
-		global := filepath.Join(home, ".core", "config.yaml")
+	if home := core.Env("DIR_HOME"); home != "" {
+		global := core.Path(home, ".core", "config.yaml")
 		if medium.Exists(global) && !contains(paths, global) {
 			paths = append(paths, global)
 		}
@@ -108,21 +110,21 @@ func CoreDirs(medium coreio.Medium, start string) []string {
 	var dirs []string
 	dir := start
 	for {
-		coreDir := filepath.Join(dir, ".core")
+		coreDir := core.Path(dir, ".core")
 		if medium.Exists(coreDir) {
 			dirs = append(dirs, coreDir)
 		}
-		if medium.Exists(filepath.Join(dir, ".git")) {
+		if medium.Exists(core.Path(dir, ".git")) {
 			break
 		}
-		parent := filepath.Dir(dir)
+		parent := core.PathDir(dir)
 		if parent == dir {
 			break
 		}
 		dir = parent
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		global := filepath.Join(home, ".core")
+	if home := core.Env("DIR_HOME"); home != "" {
+		global := core.Path(home, ".core")
 		if medium.Exists(global) && !contains(dirs, global) {
 			dirs = append(dirs, global)
 		}
@@ -141,7 +143,7 @@ func FindManifest(medium coreio.Medium, start string, name string) string {
 		medium = coreio.Local
 	}
 	for _, dir := range CoreDirs(medium, start) {
-		candidate := filepath.Join(dir, name)
+		candidate := core.Path(dir, name)
 		if medium.Exists(candidate) {
 			return candidate
 		}
