@@ -39,12 +39,15 @@ func SetConclaveRootFunc(fn ConclaveRootFunc) {
 // config inherits from the parent (project walking up from cwd, then the
 // user-global ~/.core/) and overrides with values found in the Conclave's own
 // `.core/` directory. Resolution precedence from highest to lowest:
+//
 //  1. Conclave `{root}/.core/config.yaml`
+//
 //  2. Project `.core/config.yaml` (and ancestors up to repo boundary)
+//
 //  3. User-global `~/.core/config.yaml`
 //
-//	alpha, _ := config.ForConclave("workspace-alpha")
-//	alpha.Get("theme", &theme)
+//     alpha, _ := config.ForConclave("workspace-alpha")
+//     alpha.Get("theme", &theme)
 func ForConclave(name string, opts ...Option) (*Config, error) {
 	conclaveMu.RLock()
 	resolver := conclaveRoot

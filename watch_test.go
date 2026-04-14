@@ -185,8 +185,8 @@ func TestWatch_DiffSnapshots_Good(t *testing.T) {
 		"gone":       true,
 	}
 	after := map[string]any{
-		"dev.editor": "nano",   // changed
-		"app.name":   "alpha",  // unchanged
+		"dev.editor": "nano",    // changed
+		"app.name":   "alpha",   // unchanged
 		"app.new":    "arrived", // added
 	}
 

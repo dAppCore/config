@@ -197,3 +197,51 @@ func TestConfig_WithDefaults_FileWins_Good(t *testing.T) {
 	assert.NoError(t, cfg.Get("dev.editor", &editor))
 	assert.Equal(t, "nano", editor)
 }
+
+func TestConfig_AttachCore_Good(t *testing.T) {
+	// AttachCore wires a Core instance in after construction. Subsequent Set()
+	// calls must broadcast ConfigChanged, even though the Config was created
+	// without WithCore.
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithMedium(m), WithPath("/attach.yaml"))
+	assert.NoError(t, err)
+
+	c := core.New()
+	var mu sync.Mutex
+	var events []ConfigChanged
+	c.RegisterAction(func(_ *core.Core, msg core.Message) core.Result {
+		if cc, ok := msg.(ConfigChanged); ok {
+			mu.Lock()
+			events = append(events, cc)
+			mu.Unlock()
+		}
+		return core.Result{}
+	})
+
+	// Before AttachCore, Set() does not broadcast.
+	assert.NoError(t, cfg.Set("before.attach", "silent"))
+	mu.Lock()
+	assert.Empty(t, events)
+	mu.Unlock()
+
+	cfg.AttachCore(c)
+
+	// After AttachCore, Set() broadcasts.
+	assert.NoError(t, cfg.Set("after.attach", "noisy"))
+	mu.Lock()
+	defer mu.Unlock()
+	assert.GreaterOrEqual(t, len(events), 1)
+	assert.Equal(t, "after.attach", events[0].Key)
+	assert.Equal(t, "noisy", events[0].Value)
+}
+
+func TestConfig_AttachCore_Ugly(t *testing.T) {
+	// AttachCore is safe to call with nil — it simply leaves the Config in
+	// pre-attach state with no panics on subsequent Set() calls.
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithMedium(m), WithPath("/attach.yaml"))
+	assert.NoError(t, err)
+
+	cfg.AttachCore(nil)
+	assert.NoError(t, cfg.Set("quiet", "ok"))
+}

@@ -89,12 +89,12 @@ type ViewPermissions struct {
 //	var build config.BuildManifest
 //	_ = config.LoadManifest(io.Local, ".core/build.yaml", &build)
 type BuildManifest struct {
-	Name    string        `yaml:"name"`
-	Output  string        `yaml:"output"`
-	Targets []BuildTarget `yaml:"targets"`
-	Flags   []string      `yaml:"flags"`
-	LDFlags string        `yaml:"ldflags"`
-	CGO     bool          `yaml:"cgo"`
+	Name    string            `yaml:"name"`
+	Output  string            `yaml:"output"`
+	Targets []BuildTarget     `yaml:"targets"`
+	Flags   []string          `yaml:"flags"`
+	LDFlags string            `yaml:"ldflags"`
+	CGO     bool              `yaml:"cgo"`
 	Env     map[string]string `yaml:"env"`
 }
 

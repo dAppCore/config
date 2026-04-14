@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	coreio "dappco.re/go/core/io"
 	core "dappco.re/go/core"
+	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -102,7 +102,7 @@ func TestConfig_All_Order_Good(t *testing.T) {
 	_ = cfg.Set("alpha", "first")
 
 	var keys []string
-	for key, _ := range cfg.All() {
+	for key := range cfg.All() {
 		keys = append(keys, key)
 	}
 
@@ -427,7 +427,7 @@ func TestConfig_Commit_UnsupportedPath_Bad(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported config file type")
 }
 
-func TestConfig_LoadFile_Env(t *testing.T) {
+func TestConfig_LoadFile_Env_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/.env"] = "FOO=bar\nBAZ=qux"
 
@@ -443,7 +443,7 @@ func TestConfig_LoadFile_Env(t *testing.T) {
 	assert.Equal(t, "bar", foo)
 }
 
-func TestConfig_WithEnvPrefix(t *testing.T) {
+func TestConfig_WithEnvPrefix_Good(t *testing.T) {
 	t.Setenv("MYAPP_SETTING", "secret")
 
 	m := coreio.NewMockMedium()
@@ -489,7 +489,7 @@ func TestService_OnStartup_WithEnvPrefix_Good(t *testing.T) {
 	assert.Equal(t, "secret", setting)
 }
 
-func TestConfig_Get_EmptyKey(t *testing.T) {
+func TestConfig_Get_EmptyKey_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/config.yaml"] = "app:\n  name: test\nversion: 1"
 
