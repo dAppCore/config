@@ -61,3 +61,69 @@ func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	assert.True(t, view.Permissions.Clipboard)
 	assert.True(t, view.Permissions.Filesystem)
 }
+
+func TestManifest_LoadManifest_Test_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/test.yaml"] = "version: 1\ncommands:\n  - name: unit\n    run: vendor/bin/pest --parallel\n  - name: types\n    run: vendor/bin/phpstan analyse\nenv:\n  APP_ENV: testing\n  DB_CONNECTION: sqlite\n"
+
+	var test TestManifest
+	err := LoadManifest(m, "/.core/test.yaml", &test)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, test.Version)
+	assert.Len(t, test.Commands, 2)
+	assert.Equal(t, "unit", test.Commands[0].Name)
+	assert.Equal(t, "vendor/bin/pest --parallel", test.Commands[0].Run)
+	assert.Equal(t, "testing", test.Env["APP_ENV"])
+}
+
+func TestManifest_LoadManifest_Run_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/run.yaml"] = "version: 1\nservices:\n  - name: database\n    image: postgres:16\n    port: 5432\n    env:\n      POSTGRES_DB: core_dev\ndev:\n  command: php artisan serve\n  port: 8000\n  watch:\n    - app/\n    - resources/\nenv:\n  APP_ENV: local\n"
+
+	var run RunManifest
+	err := LoadManifest(m, "/.core/run.yaml", &run)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, run.Version)
+	assert.Len(t, run.Services, 1)
+	assert.Equal(t, "database", run.Services[0].Name)
+	assert.Equal(t, 5432, run.Services[0].Port)
+	assert.Equal(t, "core_dev", run.Services[0].Env["POSTGRES_DB"])
+	assert.Equal(t, "php artisan serve", run.Dev.Command)
+	assert.Equal(t, 8000, run.Dev.Port)
+	assert.Contains(t, run.Dev.Watch, "app/")
+}
+
+func TestManifest_LoadManifest_Release_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/release.yaml"] = "archive:\n  format: tar.gz\n  include:\n    - LICENSE.txt\n    - README.md\nchecksums: true\ngithub:\n  draft: false\n  prerelease: false\nchangelog:\n  include:\n    - feat\n    - fix\n"
+
+	var rel ReleaseManifest
+	err := LoadManifest(m, "/.core/release.yaml", &rel)
+	assert.NoError(t, err)
+	assert.Equal(t, "tar.gz", rel.Archive.Format)
+	assert.Contains(t, rel.Archive.Include, "LICENSE.txt")
+	assert.True(t, rel.Checksums)
+	assert.False(t, rel.GitHub.Draft)
+	assert.Contains(t, rel.Changelog.Include, "feat")
+}
+
+func TestManifest_KnownFiles_Good(t *testing.T) {
+	// The constants are single-source-of-truth names; KnownFiles must contain
+	// every canonical project-level file and not duplicate any.
+	assert.Contains(t, KnownFiles, FileConfig)
+	assert.Contains(t, KnownFiles, FileBuild)
+	assert.Contains(t, KnownFiles, FileTest)
+	assert.Contains(t, KnownFiles, FileRun)
+	assert.Contains(t, KnownFiles, FileRelease)
+	assert.Contains(t, KnownFiles, FileView)
+	assert.Contains(t, KnownFiles, FileManifest)
+	assert.Contains(t, KnownFiles, FileWorkspace)
+	assert.Equal(t, ".core", Directory)
+
+	seen := map[string]struct{}{}
+	for _, name := range KnownFiles {
+		_, dup := seen[name]
+		assert.False(t, dup, "duplicate known file: %s", name)
+		seen[name] = struct{}{}
+	}
+}

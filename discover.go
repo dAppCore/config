@@ -94,3 +94,57 @@ func contains(list []string, value string) bool {
 	}
 	return false
 }
+
+// CoreDirs walks upward from start and returns every .core/ directory found,
+// closest first. The walk stops at the filesystem root or when a .git sits at
+// the same level as a .core. The user-global ~/.core/ is appended last.
+//
+//	dirs := config.CoreDirs(io.Local, cwd)
+//	for _, dir := range dirs { /* check for build.yaml, test.yaml, ... */ }
+func CoreDirs(medium coreio.Medium, start string) []string {
+	if medium == nil {
+		medium = coreio.Local
+	}
+	var dirs []string
+	dir := start
+	for {
+		coreDir := filepath.Join(dir, ".core")
+		if medium.Exists(coreDir) {
+			dirs = append(dirs, coreDir)
+		}
+		if medium.Exists(filepath.Join(dir, ".git")) {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		global := filepath.Join(home, ".core")
+		if medium.Exists(global) && !contains(dirs, global) {
+			dirs = append(dirs, global)
+		}
+	}
+	return dirs
+}
+
+// FindManifest searches .core/ directories walking up from start for the first
+// existing file with the given name (e.g. config.FileBuild). Returns the full
+// path or an empty string if none is found.
+//
+//	path := config.FindManifest(io.Local, cwd, config.FileBuild)
+//	if path != "" { config.LoadManifest(io.Local, path, &build) }
+func FindManifest(medium coreio.Medium, start string, name string) string {
+	if medium == nil {
+		medium = coreio.Local
+	}
+	for _, dir := range CoreDirs(medium, start) {
+		candidate := filepath.Join(dir, name)
+		if medium.Exists(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}

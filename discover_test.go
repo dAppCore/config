@@ -50,3 +50,47 @@ func TestDiscover_DiscoverFrom_Ugly(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 }
+
+func TestDiscover_CoreDirs_Good(t *testing.T) {
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	sub := filepath.Join(repo, "service")
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(repo, ".core")))
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(sub, ".core")))
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(repo, ".git")))
+
+	dirs := CoreDirs(coreio.Local, sub)
+	// Closest first: sub/.core, then repo/.core. Walk stops at repo (.git boundary).
+	assert.GreaterOrEqual(t, len(dirs), 2)
+	assert.Equal(t, filepath.Join(sub, ".core"), dirs[0])
+	assert.Equal(t, filepath.Join(repo, ".core"), dirs[1])
+}
+
+func TestDiscover_CoreDirs_Bad(t *testing.T) {
+	// A directory tree with no .core anywhere just returns the home layer (if any).
+	tmp := t.TempDir()
+	dirs := CoreDirs(coreio.Local, tmp)
+	for _, dir := range dirs {
+		assert.NotContains(t, dir, tmp)
+	}
+}
+
+func TestDiscover_FindManifest_Good(t *testing.T) {
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	sub := filepath.Join(repo, "service")
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(repo, ".core")))
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(sub, ".core")))
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(repo, ".git")))
+	// Only the repo-level .core/ has build.yaml.
+	assert.NoError(t, coreio.Local.Write(filepath.Join(repo, ".core", "build.yaml"), "name: core\n"))
+
+	path := FindManifest(coreio.Local, sub, FileBuild)
+	assert.Equal(t, filepath.Join(repo, ".core", "build.yaml"), path)
+}
+
+func TestDiscover_FindManifest_Ugly(t *testing.T) {
+	// Missing file returns empty string, not an error.
+	tmp := t.TempDir()
+	assert.Empty(t, FindManifest(coreio.Local, tmp, FileBuild))
+}
