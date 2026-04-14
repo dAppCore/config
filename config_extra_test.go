@@ -102,3 +102,98 @@ func TestConfig_Medium_Good(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Same(t, m, cfg.Medium())
 }
+
+func TestConfig_WithDefaults_Good(t *testing.T) {
+	// WithDefaults seeds the lowest-precedence layer: unset keys resolve to
+	// the default; keys supplied by file/env/Set still win.
+	m := coreio.NewMockMedium()
+	cfg, err := New(
+		WithMedium(m),
+		WithPath("/defaults.yaml"),
+		WithDefaults(map[string]any{
+			"dev.editor":  "vim",
+			"app.version": "0.1.0",
+		}),
+	)
+	assert.NoError(t, err)
+
+	var editor, version string
+	assert.NoError(t, cfg.Get("dev.editor", &editor))
+	assert.Equal(t, "vim", editor)
+	assert.NoError(t, cfg.Get("app.version", &version))
+	assert.Equal(t, "0.1.0", version)
+}
+
+func TestConfig_WithDefaults_Bad(t *testing.T) {
+	// An explicit Set() shadows the default — defaults are the floor, not a
+	// ceiling.
+	m := coreio.NewMockMedium()
+	cfg, err := New(
+		WithMedium(m),
+		WithPath("/defaults.yaml"),
+		WithDefaults(map[string]any{"dev.editor": "vim"}),
+	)
+	assert.NoError(t, err)
+	assert.NoError(t, cfg.Set("dev.editor", "nano"))
+
+	var editor string
+	assert.NoError(t, cfg.Get("dev.editor", &editor))
+	assert.Equal(t, "nano", editor)
+}
+
+func TestConfig_SetDefault_Good(t *testing.T) {
+	// SetDefault installs a runtime default — visible only while no other
+	// source has set the key.
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithMedium(m), WithPath("/d.yaml"))
+	assert.NoError(t, err)
+
+	cfg.SetDefault("feature.beta", true)
+
+	var beta bool
+	assert.NoError(t, cfg.Get("feature.beta", &beta))
+	assert.True(t, beta)
+}
+
+func TestConfig_SetDefault_Ugly(t *testing.T) {
+	// Defaults never broadcast ConfigChanged — they are a silent baseline.
+	m := coreio.NewMockMedium()
+	c := core.New()
+
+	var mu sync.Mutex
+	var events []ConfigChanged
+	c.RegisterAction(func(_ *core.Core, msg core.Message) core.Result {
+		if cc, ok := msg.(ConfigChanged); ok {
+			mu.Lock()
+			events = append(events, cc)
+			mu.Unlock()
+		}
+		return core.Result{}
+	})
+
+	cfg, err := New(WithMedium(m), WithPath("/d.yaml"), WithCore(c))
+	assert.NoError(t, err)
+
+	cfg.SetDefault("feature.beta", true)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Empty(t, events)
+}
+
+func TestConfig_WithDefaults_FileWins_Good(t *testing.T) {
+	// File values shadow defaults even when both are present.
+	m := coreio.NewMockMedium()
+	m.Files["/defaults.yaml"] = "dev:\n  editor: nano\n"
+
+	cfg, err := New(
+		WithMedium(m),
+		WithPath("/defaults.yaml"),
+		WithDefaults(map[string]any{"dev.editor": "vim"}),
+	)
+	assert.NoError(t, err)
+
+	var editor string
+	assert.NoError(t, cfg.Get("dev.editor", &editor))
+	assert.Equal(t, "nano", editor)
+}

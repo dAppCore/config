@@ -93,6 +93,28 @@ func TestManifest_LoadManifest_Run_Good(t *testing.T) {
 	assert.Contains(t, run.Dev.Watch, "app/")
 }
 
+func TestManifest_LoadManifest_Repos_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/Code/.core/repos.yaml"] = "org: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n    branch: dev\n    type: lib\n    depends:\n      - go-io\n  - path: core/config\n    remote: ssh://forge.example/core/config.git\n    branch: dev\n"
+
+	var repos ReposManifest
+	err := LoadManifest(m, "/Code/.core/repos.yaml", &repos)
+	assert.NoError(t, err)
+	assert.Equal(t, "host-uk", repos.Org)
+	assert.Len(t, repos.Repos, 2)
+	assert.Equal(t, "core/go", repos.Repos[0].Path)
+	assert.Equal(t, "dev", repos.Repos[0].Branch)
+	assert.Equal(t, "lib", repos.Repos[0].Type)
+	assert.Contains(t, repos.Repos[0].Depends, "go-io")
+}
+
+func TestManifest_LoadManifest_Repos_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	var repos ReposManifest
+	err := LoadManifest(m, "/missing/repos.yaml", &repos)
+	assert.Error(t, err)
+}
+
 func TestManifest_LoadManifest_Release_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/.core/release.yaml"] = "archive:\n  format: tar.gz\n  include:\n    - LICENSE.txt\n    - README.md\nchecksums: true\ngithub:\n  draft: false\n  prerelease: false\nchangelog:\n  include:\n    - feat\n    - fix\n"

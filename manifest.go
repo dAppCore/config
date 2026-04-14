@@ -223,9 +223,34 @@ type ReleaseChangelog struct {
 	Include []string `yaml:"include"`
 }
 
+// ReposManifest defines the structure of .core/repos.yaml.
+// Used by go-scm and `core dev health` for multi-repo workspace operations.
+// Lives at the workspace root (e.g. `~/Code/.core/repos.yaml`) and enumerates
+// every repository that belongs to the federated monorepo.
+//
+//	var repos config.ReposManifest
+//	_ = config.LoadManifest(io.Local, "~/Code/.core/repos.yaml", &repos)
+type ReposManifest struct {
+	Org   string      `yaml:"org"`
+	Repos []ReposRepo `yaml:"repos"`
+}
+
+// ReposRepo is a single repository entry in repos.yaml.
+//
+//	repo := config.ReposRepo{Path: "core/go", Remote: "ssh://…/go.git", Branch: "dev"}
+type ReposRepo struct {
+	Path        string   `yaml:"path"`
+	Remote      string   `yaml:"remote"`
+	Branch      string   `yaml:"branch"`
+	Type        string   `yaml:"type"`
+	Description string   `yaml:"description"`
+	Depends     []string `yaml:"depends"`
+}
+
 // LoadManifest reads a YAML manifest file from the given medium and decodes
 // it into the destination value. Accepts any of the ViewManifest / BuildManifest /
-// PackageManifest / WorkspaceManifest types (or any YAML-tagged struct).
+// PackageManifest / WorkspaceManifest / ReposManifest types (or any YAML-tagged
+// struct).
 //
 //	var build config.BuildManifest
 //	err := config.LoadManifest(io.Local, ".core/build.yaml", &build)

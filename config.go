@@ -100,6 +100,24 @@ func WithCore(c *core.Core) Option {
 	}
 }
 
+// WithDefaults seeds default values into the defaults layer, the lowest rung
+// of the resolution priority (defaults → file → env → Set()). Existing file
+// or env values are NOT shadowed — defaults only fill in gaps the caller has
+// not supplied another way.
+//
+//	cfg, _ := config.New(config.WithDefaults(map[string]any{
+//	    "dev.editor":  "vim",
+//	    "app.version": "0.1.0",
+//	}))
+//	cfg.Get("dev.editor", &editor)  // "vim" unless file/env/Set overrides
+func WithDefaults(defaults map[string]any) Option {
+	return func(c *Config) {
+		for key, value := range defaults {
+			c.full.SetDefault(key, value)
+		}
+	}
+}
+
 // AttachCore wires the Config to a Core instance after construction. Use this
 // when New() ran before Core was available (e.g. from a service lifecycle).
 // Thread-safe; safe to call concurrently with Set()/Commit().
@@ -245,6 +263,20 @@ func (c *Config) Get(key string, out any) error {
 		return coreerr.E("config.Get", fmt.Sprintf("failed to unmarshal key: %s", key), err)
 	}
 	return nil
+}
+
+// SetDefault stores a value in the lowest-precedence defaults layer. File,
+// env and explicit Set() values all shadow defaults. Unlike Set(), defaults
+// are NOT persisted by Commit() and do NOT broadcast ConfigChanged — they
+// exist so callers can declare a baseline the config resolves to when no
+// other source has spoken.
+//
+//	cfg.SetDefault("dev.editor", "vim")
+//	cfg.Get("dev.editor", &editor)  // "vim" until someone Sets/loads another value
+func (c *Config) SetDefault(key string, v any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.full.SetDefault(key, v)
 }
 
 // Set stores a configuration value in memory and broadcasts ConfigChanged.
