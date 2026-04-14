@@ -19,27 +19,53 @@ import (
 	"strings"
 	"sync"
 
-	coreio "forge.lthn.ai/core/go-io"
-	coreerr "forge.lthn.ai/core/go-log"
-	core "forge.lthn.ai/core/go/pkg/core"
+	core "dappco.re/go/core"
+	coreio "dappco.re/go/core/io"
+	coreerr "dappco.re/go/core/log"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
 
-// Config implements the core.Config interface with layered resolution.
-// It uses viper as the underlying configuration engine.
+// ConfigChanged is broadcast on every Set() and Commit() call so other services
+// can react to runtime config updates without polling.
+//
+//	c.RegisterAction(func(c *core.Core, msg core.Message) core.Result {
+//	    if cc, ok := msg.(config.ConfigChanged); ok {
+//	        // react to cc.Key / cc.Value
+//	    }
+//	    return core.Result{}
+//	})
+type ConfigChanged struct {
+	Key      string
+	Value    any
+	Previous any
+	Source   string // "set", "env", "file", "commit"
+}
+
+// Config implements layered configuration with a dual-Viper pattern.
+// The full viper holds file + env + defaults (for reads); the file viper
+// holds file + explicit Set() calls only (for persistence).
+//
+//	cfg, _ := config.New(config.WithPath("~/.core/config.yaml"))
+//	cfg.Set("dev.editor", "vim")
+//	cfg.Commit()
 type Config struct {
-	mu     sync.RWMutex
-	full   *viper.Viper // Full configuration (file + env + defaults)
-	file   *viper.Viper // File-backed configuration only (for persistence)
-	medium coreio.Medium
-	path   string
+	mu        sync.RWMutex
+	full      *viper.Viper // Full configuration (file + env + defaults)
+	file      *viper.Viper // File-backed configuration only (for persistence)
+	medium    coreio.Medium
+	path      string
+	core      *core.Core // optional — set when attached to a Core service
+	callbacks []func(key string, value any)
+	watcher   *fileWatcher
 }
 
 // Option is a functional option for configuring a Config instance.
 type Option func(*Config)
 
 // WithMedium sets the storage medium for configuration file operations.
+//
+//	config.New(config.WithMedium(io.Local))
 func WithMedium(m coreio.Medium) Option {
 	return func(c *Config) {
 		c.medium = m
@@ -47,6 +73,8 @@ func WithMedium(m coreio.Medium) Option {
 }
 
 // WithPath sets the path to the configuration file.
+//
+//	config.New(config.WithPath("~/.core/config.yaml"))
 func WithPath(path string) Option {
 	return func(c *Config) {
 		c.path = path
@@ -54,15 +82,33 @@ func WithPath(path string) Option {
 }
 
 // WithEnvPrefix sets the prefix for environment variables.
+//
+//	config.New(config.WithEnvPrefix("CORE_CONFIG"))  // CORE_CONFIG_DEV_EDITOR → dev.editor
 func WithEnvPrefix(prefix string) Option {
 	return func(c *Config) {
 		c.full.SetEnvPrefix(strings.TrimSuffix(prefix, "_"))
 	}
 }
 
+// WithCore attaches the Config to a Core instance so Set()/Commit() calls
+// broadcast ConfigChanged events.
+//
+//	config.New(config.WithCore(c))
+func WithCore(c *core.Core) Option {
+	return func(cfg *Config) {
+		cfg.core = c
+	}
+}
+
 // New creates a new Config instance with the given options.
 // If no medium is provided, it defaults to io.Local.
 // If no path is provided, it defaults to ~/.core/config.yaml.
+//
+//	cfg, err := config.New(
+//	    config.WithPath("~/.core/config.yaml"),
+//	    config.WithMedium(io.Local),
+//	    config.WithEnvPrefix("CORE_CONFIG"),
+//	)
 func New(opts ...Option) (*Config, error) {
 	c := &Config{
 		full: viper.New(),
@@ -124,8 +170,10 @@ func configTypeForPath(path string) (string, error) {
 	}
 }
 
-// LoadFile reads a configuration file from the given medium and path and merges it into the current config.
-// It supports YAML, JSON, TOML, and dotenv files (.env).
+// LoadFile reads a configuration file from the given medium and path and merges it
+// into the current config. It supports YAML, JSON, TOML, and dotenv files (.env).
+//
+//	cfg.LoadFile(io.Local, ".core/build.yaml")
 func (c *Config) LoadFile(m coreio.Medium, path string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -163,6 +211,9 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 // Get retrieves a configuration value by dot-notation key and stores it in out.
 // If key is empty, it unmarshals the entire configuration into out.
 // The out parameter must be a pointer to the target type.
+//
+//	var editor string
+//	cfg.Get("dev.editor", &editor)
 func (c *Config) Get(key string, out any) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -184,20 +235,34 @@ func (c *Config) Get(key string, out any) error {
 	return nil
 }
 
-// Set stores a configuration value in memory.
+// Set stores a configuration value in memory and broadcasts ConfigChanged.
 // Call Commit() to persist changes to disk.
+//
+//	cfg.Set("dev.editor", "vim")
+//	cfg.Commit()
 func (c *Config) Set(key string, v any) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	previous := c.full.Get(key)
 	c.file.Set(key, v)
 	c.full.Set(key, v)
+	callbacks := append([]func(string, any){}, c.callbacks...)
+	attached := c.core
+	c.mu.Unlock()
+
+	for _, fn := range callbacks {
+		fn(key, v)
+	}
+	if attached != nil {
+		attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: "set"})
+	}
 	return nil
 }
 
 // Commit persists any changes made via Set() to the configuration file on disk.
 // This will only save the configuration that was loaded from the file or explicitly Set(),
 // preventing environment variable leakage.
+//
+//	cfg.Commit()
 func (c *Config) Commit() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -205,11 +270,18 @@ func (c *Config) Commit() error {
 	if err := Save(c.medium, c.path, c.file.AllSettings()); err != nil {
 		return coreerr.E("config.Commit", "failed to save config", err)
 	}
+	if c.core != nil {
+		c.core.ACTION(ConfigChanged{Key: "", Value: nil, Source: "commit"})
+	}
 	return nil
 }
 
 // All returns an iterator over all configuration values in lexical key order
 // (including environment variables).
+//
+//	for key, value := range cfg.All() {
+//	    fmt.Println(key, value)
+//	}
 func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -231,12 +303,67 @@ func (c *Config) All() iter.Seq2[string, any] {
 }
 
 // Path returns the path to the configuration file.
+//
+//	cfg.Path()  // "~/.core/config.yaml"
 func (c *Config) Path() string {
 	return c.path
 }
 
+// Medium returns the I/O medium backing the configuration.
+//
+//	medium := cfg.Medium()
+func (c *Config) Medium() coreio.Medium {
+	return c.medium
+}
+
+// MergeFrom overlays source values onto the receiver.
+// Existing keys in the receiver are NOT overwritten.
+// Used by Discover() to merge closer (project) configs over further (global) ones.
+//
+//	base := config.New()
+//	base.MergeFrom(projectConfig)   // closest wins
+//	base.MergeFrom(globalConfig)    // fills gaps only
+func (c *Config) MergeFrom(source *Config) {
+	if source == nil {
+		return
+	}
+	source.mu.RLock()
+	sourceSettings := source.file.AllSettings()
+	source.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, value := range sourceSettings {
+		if !c.full.IsSet(key) {
+			c.file.Set(key, value)
+			c.full.Set(key, value)
+		}
+	}
+}
+
+// OnChange registers a callback invoked when a config key changes.
+// The callback receives the key path and new value.
+// Multiple callbacks can be registered; all are called in order.
+//
+//	cfg.OnChange(func(key string, value any) {
+//	    if key == "dev.editor" {
+//	        fmt.Println("editor changed to", value)
+//	    }
+//	})
+func (c *Config) OnChange(fn func(key string, value any)) {
+	if fn == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.callbacks = append(c.callbacks, fn)
+}
+
 // Load reads a YAML configuration file from the given medium and path.
 // Returns the parsed data as a map, or an error if the file cannot be read or parsed.
+//
+//	data, err := config.Load(io.Local, "~/.core/config.yaml")
+//
 // Deprecated: Use Config.LoadFile instead.
 func Load(m coreio.Medium, path string) (map[string]any, error) {
 	switch ext := strings.ToLower(filepath.Ext(path)); ext {
@@ -262,6 +389,8 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 
 // Save writes configuration data to a YAML file at the given path.
 // It ensures the parent directory exists before writing.
+//
+//	config.Save(io.Local, "~/.core/config.yaml", map[string]any{"dev": map[string]any{"editor": "vim"}})
 func Save(m coreio.Medium, path string, data map[string]any) error {
 	switch ext := strings.ToLower(filepath.Ext(path)); ext {
 	case "", ".yaml", ".yml":
@@ -286,6 +415,3 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 
 	return nil
 }
-
-// Ensure Config implements core.Config at compile time.
-var _ core.Config = (*Config)(nil)

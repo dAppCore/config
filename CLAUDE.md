@@ -47,8 +47,8 @@ This prevents environment variables from leaking into saved config files. When i
 
 ## Dependencies
 
-- `forge.lthn.ai/core/go-io` — `Medium` interface for storage
-- `forge.lthn.ai/core/go-log` — `coreerr.E()` error helper
-- `forge.lthn.ai/core/go/pkg/core` — `core.Config`, `core.Startable`, `core.ServiceRuntime` interfaces
+- `dappco.re/go/core/io` — `Medium` interface for storage
+- `dappco.re/go/core/log` — `coreerr.E()` error helper
+- `dappco.re/go/core` — `core.Core`, `core.Startable`, `core.ServiceRuntime`, primitives
 - `github.com/spf13/viper` — configuration engine
 - `github.com/stretchr/testify` — test assertions

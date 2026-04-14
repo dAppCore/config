@@ -165,7 +165,7 @@ All public methods on `Config` and `Service` are safe for concurrent use. A `syn
 
 ## The Medium Abstraction
 
-File operations go through `io.Medium` (from `forge.lthn.ai/core/go-io`), not `os` directly. This means:
+File operations go through `io.Medium` (from `dappco.re/go/core/io`), not `os` directly. This means:
 
 - **Tests** use `io.NewMockMedium()` -- an in-memory filesystem with a `Files` map
 - **Production** uses `io.Local` -- the real local filesystem
@@ -173,15 +173,13 @@ File operations go through `io.Medium` (from `forge.lthn.ai/core/go-io`), not `o
 
 ## Compile-Time Interface Checks
 
-The package includes two compile-time assertions at the bottom of the respective files:
+The package includes a compile-time assertion that the `Service` type satisfies `core.Startable`:
 
 ```go
-var _ core.Config = (*Config)(nil)   // config.go
-var _ core.Config    = (*Service)(nil)  // service.go
 var _ core.Startable = (*Service)(nil)  // service.go
 ```
 
-These ensure that if the `core.Config` or `core.Startable` interfaces ever change, this package will fail to compile rather than fail at runtime.
+`core.Config` is a concrete struct in upstream Core (not an interface), so this package provides its own `*Config` implementation alongside the Core one. Framework consumers interact with `*config.Service` directly via `core.ServiceFor[*config.Service]`.
 
 ## Licence
 

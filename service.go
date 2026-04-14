@@ -3,12 +3,15 @@ package config
 import (
 	"context"
 
-	coreio "forge.lthn.ai/core/go-io"
-	coreerr "forge.lthn.ai/core/go-log"
-	core "forge.lthn.ai/core/go/pkg/core"
+	core "dappco.re/go/core"
+	coreio "dappco.re/go/core/io"
+	coreerr "dappco.re/go/core/log"
 )
 
 // Service wraps Config as a framework service with lifecycle support.
+//
+//	c := core.New(core.WithService(config.NewConfigService))
+//	svc := c.Config()
 type Service struct {
 	*core.ServiceRuntime[ServiceOptions]
 	config *Config
@@ -26,6 +29,8 @@ type ServiceOptions struct {
 
 // NewConfigService creates a new config service factory for the Core framework.
 // Register it with core.WithService(config.NewConfigService).
+//
+//	c := core.New(core.WithService(config.NewConfigService))
 func NewConfigService(c *core.Core) (any, error) {
 	svc := &Service{
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{}),
@@ -33,9 +38,12 @@ func NewConfigService(c *core.Core) (any, error) {
 	return svc, nil
 }
 
-// OnStartup loads the configuration file during application startup.
-func (s *Service) OnStartup(_ context.Context) error {
-	opts := s.Opts()
+// OnStartup loads the configuration file during application startup
+// and registers named actions and commands on the Core.
+//
+//	func (s *Service) OnStartup(ctx context.Context) core.Result
+func (s *Service) OnStartup(_ context.Context) core.Result {
+	opts := s.Options()
 
 	var configOpts []Option
 	if opts.Path != "" {
@@ -50,14 +58,134 @@ func (s *Service) OnStartup(_ context.Context) error {
 
 	cfg, err := New(configOpts...)
 	if err != nil {
-		return coreerr.E("config.Service.OnStartup", "failed to create config", err)
+		return core.Result{Value: coreerr.E("config.Service.OnStartup", "failed to create config", err), OK: false}
 	}
 
 	s.config = cfg
-	return nil
+
+	if c := s.Core(); c != nil {
+		s.config.core = c
+		s.registerActions(c)
+		s.registerCommands(c)
+	}
+
+	return core.Result{OK: true}
+}
+
+// registerActions exposes config.get/set/commit/load/all on the Core IPC bus.
+//
+//	c.Action("config.get").Run(ctx, core.NewOptions(core.Option{Key:"key", Value:"dev.editor"}))
+func (s *Service) registerActions(c *core.Core) {
+	c.Action("config.get", func(_ context.Context, opts core.Options) core.Result {
+		key := opts.String("key")
+		if s.config == nil {
+			return core.Result{Value: coreerr.E("config.get", "config not loaded", nil), OK: false}
+		}
+		var value any
+		if err := s.config.Get(key, &value); err != nil {
+			return core.Result{Value: err, OK: false}
+		}
+		return core.Result{Value: value, OK: true}
+	})
+
+	c.Action("config.set", func(_ context.Context, opts core.Options) core.Result {
+		key := opts.String("key")
+		r := opts.Get("value")
+		if s.config == nil {
+			return core.Result{Value: coreerr.E("config.set", "config not loaded", nil), OK: false}
+		}
+		if err := s.config.Set(key, r.Value); err != nil {
+			return core.Result{Value: err, OK: false}
+		}
+		return core.Result{OK: true}
+	})
+
+	c.Action("config.commit", func(_ context.Context, _ core.Options) core.Result {
+		if s.config == nil {
+			return core.Result{Value: coreerr.E("config.commit", "config not loaded", nil), OK: false}
+		}
+		if err := s.config.Commit(); err != nil {
+			return core.Result{Value: err, OK: false}
+		}
+		return core.Result{OK: true}
+	})
+
+	c.Action("config.load", func(_ context.Context, opts core.Options) core.Result {
+		path := opts.String("path")
+		if s.config == nil {
+			return core.Result{Value: coreerr.E("config.load", "config not loaded", nil), OK: false}
+		}
+		if err := s.config.LoadFile(s.config.medium, path); err != nil {
+			return core.Result{Value: err, OK: false}
+		}
+		return core.Result{OK: true}
+	})
+
+	c.Action("config.all", func(_ context.Context, _ core.Options) core.Result {
+		if s.config == nil {
+			return core.Result{Value: coreerr.E("config.all", "config not loaded", nil), OK: false}
+		}
+		out := make(map[string]any)
+		for k, v := range s.config.All() {
+			out[k] = v
+		}
+		return core.Result{Value: out, OK: true}
+	})
+}
+
+// registerCommands exposes config commands for CLI discovery.
+//
+//	core config/get --key dev.editor
+func (s *Service) registerCommands(c *core.Core) {
+	c.Command("config/get", core.Command{
+		Description: "Read a config value",
+		Action: func(opts core.Options) core.Result {
+			key := opts.String("key")
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/get", "config not loaded", nil), OK: false}
+			}
+			var value any
+			if err := s.config.Get(key, &value); err != nil {
+				return core.Result{Value: err, OK: false}
+			}
+			return core.Result{Value: value, OK: true}
+		},
+	})
+
+	c.Command("config/set", core.Command{
+		Description: "Set a config value",
+		Action: func(opts core.Options) core.Result {
+			key := opts.String("key")
+			r := opts.Get("value")
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/set", "config not loaded", nil), OK: false}
+			}
+			if err := s.config.Set(key, r.Value); err != nil {
+				return core.Result{Value: err, OK: false}
+			}
+			return core.Result{OK: true}
+		},
+	})
+
+	c.Command("config/list", core.Command{
+		Description: "List all config values",
+		Action: func(_ core.Options) core.Result {
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/list", "config not loaded", nil), OK: false}
+			}
+			out := make(map[string]any)
+			for k, v := range s.config.All() {
+				out[k] = v
+			}
+			return core.Result{Value: out, OK: true}
+		},
+	})
 }
 
 // Get retrieves a configuration value by key.
+//
+//	var editor string
+//	svc.Get("dev.editor", &editor)
 func (s *Service) Get(key string, out any) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.Get", "config not loaded", nil)
@@ -66,6 +194,8 @@ func (s *Service) Get(key string, out any) error {
 }
 
 // Set stores a configuration value by key.
+//
+//	svc.Set("dev.editor", "vim")
 func (s *Service) Set(key string, v any) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.Set", "config not loaded", nil)
@@ -74,6 +204,8 @@ func (s *Service) Set(key string, v any) error {
 }
 
 // Commit persists any configuration changes to disk.
+//
+//	svc.Commit()
 func (s *Service) Commit() error {
 	if s.config == nil {
 		return coreerr.E("config.Service.Commit", "config not loaded", nil)
@@ -82,6 +214,8 @@ func (s *Service) Commit() error {
 }
 
 // LoadFile merges a configuration file into the central configuration.
+//
+//	svc.LoadFile(io.Local, ".core/build.yaml")
 func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.LoadFile", "config not loaded", nil)
@@ -89,8 +223,13 @@ func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	return s.config.LoadFile(m, path)
 }
 
-// Ensure Service implements core.Config and Startable at compile time.
-var (
-	_ core.Config    = (*Service)(nil)
-	_ core.Startable = (*Service)(nil)
-)
+// Config returns the underlying Config instance for advanced operations.
+//
+//	cfg := svc.Config()
+//	cfg.OnChange(func(k string, v any) { ... })
+func (s *Service) Config() *Config {
+	return s.config
+}
+
+// Ensure Service implements Startable at compile time.
+var _ core.Startable = (*Service)(nil)

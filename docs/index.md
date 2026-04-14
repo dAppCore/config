@@ -5,12 +5,12 @@ description: Layered configuration management for the Core framework with file, 
 
 # config
 
-`forge.lthn.ai/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
+`dappco.re/go/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
 
 ## Module Path
 
 ```
-forge.lthn.ai/core/config
+dappco.re/go/core/config
 ```
 
 Requires **Go 1.26+**.
@@ -24,7 +24,7 @@ package main
 
 import (
     "fmt"
-    config "forge.lthn.ai/core/config"
+    config "dappco.re/go/core/config"
 )
 
 func main() {
@@ -48,8 +48,8 @@ func main() {
 
 ```go
 import (
-    config "forge.lthn.ai/core/config"
-    "forge.lthn.ai/core/go/pkg/core"
+    config "dappco.re/go/core/config"
+    "dappco.re/go/core"
 )
 
 app, _ := core.New(
@@ -72,9 +72,9 @@ app, _ := core.New(
 
 | Module                            | Role                                    |
 |-----------------------------------|-----------------------------------------|
-| `forge.lthn.ai/core/go`          | Core framework (`core.Config` interface, `ServiceRuntime`) |
-| `forge.lthn.ai/core/go-io`       | Storage abstraction (`Medium` for reading/writing files)    |
-| `forge.lthn.ai/core/go-log`      | Contextual error helper (`E()`)         |
+| `dappco.re/go/core`              | Core framework (`core.Core`, `ServiceRuntime`, primitives) |
+| `dappco.re/go/core/io`           | Storage abstraction (`Medium` for reading/writing files)   |
+| `dappco.re/go/core/log`          | Contextual error helper (`E()`)                            |
 | `github.com/spf13/viper`         | Underlying configuration engine         |
 | `gopkg.in/yaml.v3`               | YAML serialisation for `Commit()`       |
 
