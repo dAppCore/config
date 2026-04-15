@@ -84,6 +84,10 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 
 	s.config = cfg
 
+	// Publish the loaded config as the process-wide feature source so
+	// config.Feature() reflects the current .core/config.yaml by default.
+	SetFeatureSource(cfg)
+
 	if c := s.Core(); c != nil {
 		s.config.AttachCore(c)
 		s.registerActions(c)
