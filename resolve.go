@@ -336,14 +336,14 @@ func WorkspaceSandboxPath(repo, branch string, parts ...string) string {
 	return core.Path(elems...)
 }
 
-// FindReposManifest returns the nearest project-local .core/repos.yaml.
-func FindReposManifest(medium coreio.Medium, start string) string {
-	return FindProjectManifest(medium, start, FileRepos)
+// FindReposManifest returns the workspace-root ~/.core/repos.yaml when it exists.
+func FindReposManifest(medium coreio.Medium, _ string) string {
+	return FindUserManifest(medium, FileRepos)
 }
 
-// ResolveReposManifest loads the nearest project-local .core/repos.yaml.
-func ResolveReposManifest(medium coreio.Medium, start string) (*ReposManifest, error) {
-	path := FindReposManifest(medium, start)
+// ResolveReposManifest loads the workspace-root ~/.core/repos.yaml.
+func ResolveReposManifest(medium coreio.Medium, _ string) (*ReposManifest, error) {
+	path := FindReposManifest(medium, "")
 	if path == "" {
 		return nil, coreerr.E("config.ResolveReposManifest", "no repos manifest could be detected", nil)
 	}
