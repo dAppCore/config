@@ -581,7 +581,15 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 		return coreerr.E("config.Save", "unsupported config file type: "+path, nil)
 	}
 
-	out, err := yaml.Marshal(data)
+	payload := make(map[string]any, len(data)+1)
+	for key, value := range data {
+		payload[key] = value
+	}
+	if _, ok := payload["version"]; !ok {
+		payload["version"] = 1
+	}
+
+	out, err := yaml.Marshal(payload)
 	if err != nil {
 		return coreerr.E("config.Save", "failed to marshal config", err)
 	}

@@ -549,6 +549,7 @@ func ExampleConfig_Commit() {
 	// Output:
 	// app:
 	//     name: core
+	// version: 1
 }
 
 func ExampleEnv() {
