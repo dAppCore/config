@@ -354,3 +354,37 @@ func TestService_RegistersActionsAndCommands_Good(t *testing.T) {
 	assert.True(t, runCommand("config/list", core.NewOptions()).OK)
 	assert.True(t, runCommand("config/path", core.NewOptions()).OK)
 }
+
+func TestService_ReadCommands_RequireEntitlement(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+
+	c := core.New()
+	c.SetEntitlementChecker(func(action string, qty int, _ context.Context) core.Entitlement {
+		_ = qty
+		switch action {
+		case "config/get", "config/list", "config/path":
+			return core.Entitlement{Allowed: false, Reason: "denied"}
+		default:
+			return core.Entitlement{Allowed: true, Unlimited: true}
+		}
+	})
+
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	for _, name := range []string{"config/get", "config/list", "config/path"} {
+		cmdResult := c.Command(name)
+		if !assert.True(t, cmdResult.OK, name) {
+			continue
+		}
+		res := cmdResult.Value.(*core.Command).Run(core.NewOptions())
+		assert.False(t, res.OK, name)
+		assert.Contains(t, res.Value.(error).Error(), "not entitled")
+	}
+}

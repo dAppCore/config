@@ -191,6 +191,9 @@ func resolveServiceLoadPath(candidatePath, coreAbs, absCandidate string) (string
 //	c.Action("config.get").Run(ctx, core.NewOptions(core.Option{Key:"key", Value:"dev.editor"}))
 func (s *Service) registerActions(c *core.Core) {
 	c.Action("config.get", func(_ context.Context, opts core.Options) core.Result {
+		if result := ensureConfigEntitlement(c, "config.get"); !result.OK {
+			return result
+		}
 		key := opts.String("key")
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.get", "config not loaded", nil), OK: false}
@@ -276,6 +279,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/get", core.Command{
 		Description: "Read a config value",
 		Action: func(opts core.Options) core.Result {
+			if result := ensureConfigEntitlement(c, "config/get"); !result.OK {
+				return result
+			}
 			key := opts.String("key")
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/get", "config not loaded", nil), OK: false}
@@ -309,6 +315,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/list", core.Command{
 		Description: "List all config values",
 		Action: func(_ core.Options) core.Result {
+			if result := ensureConfigEntitlement(c, "config/list"); !result.OK {
+				return result
+			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/list", "config not loaded", nil), OK: false}
 			}

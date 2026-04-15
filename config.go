@@ -537,11 +537,6 @@ func (c *Config) OnChange(fn func(key string, value any)) {
 //
 // Deprecated: Use Config.LoadFile instead.
 func Load(m coreio.Medium, path string) (map[string]any, error) {
-	content, err := m.Read(path)
-	if err != nil {
-		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
-	}
-
 	ext := core.Lower(core.PathExt(path))
 	switch ext {
 	case "", ".yaml", ".yml":
@@ -552,6 +547,11 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 		if core.PathBase(path) != ".env" {
 			return nil, coreerr.E("config.Load", "unsupported config file type: "+path, nil)
 		}
+	}
+
+	content, err := m.Read(path)
+	if err != nil {
+		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
 	}
 
 	v := viper.New()
