@@ -390,7 +390,16 @@ func FindLinuxKitDirectory(medium coreio.Medium, start string) string {
 //
 //	path := config.FindLinuxKitManifest(io.Local, cwd)
 func FindLinuxKitManifest(medium coreio.Medium, start string) string {
-	return FindProjectManifest(medium, start, FileLinuxKit)
+	if medium == nil {
+		medium = coreio.Local
+	}
+	for _, dir := range projectCoreDirs(medium, start) {
+		candidate := core.Path(dir, LinuxKitDirectory, FileLinuxKit)
+		if medium.Exists(candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // findProjectDirectory returns the nearest project-local .core/{name}/

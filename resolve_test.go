@@ -116,6 +116,26 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 	}
 }
 
+func TestResolve_FindLinuxKitManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	child := filepath.Join(repo, "service")
+
+	for _, dir := range []string{
+		filepath.Join(repo, ".core"),
+		filepath.Join(repo, ".core", LinuxKitDirectory),
+		filepath.Join(repo, ".git"),
+		child,
+	} {
+		assert.NoError(t, m.EnsureDir(dir))
+	}
+	lkPath := filepath.Join(repo, ".core", LinuxKitDirectory, FileLinuxKit)
+	assert.NoError(t, m.Write(lkPath, "version: 1\n"))
+
+	assert.Equal(t, lkPath, FindLinuxKitManifest(m, child))
+}
+
 func TestResolve_FindProjectManifest_Bad(t *testing.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
