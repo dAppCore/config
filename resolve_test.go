@@ -85,6 +85,7 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 		FileView:      "code: photo-browser\nname: Photo Browser\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\npermissions:\n  clipboard: true\n",
 		FileManifest:  packageManifestFixture(t),
 		FileWorkspace: "version: 1\ndependencies:\n  - core-php\nactive: core-php\npackages_dir: ./packages\n",
+		FileIDE:       "version: 1\neditor: nvim\n",
 	}
 
 	for name, content := range files {
@@ -104,6 +105,7 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 		{name: "view", path: filepath.Join(repo, ".core", FileView), got: FindViewManifest(m, child)},
 		{name: "manifest", path: filepath.Join(repo, ".core", FileManifest), got: FindPackageManifest(m, child)},
 		{name: "workspace", path: filepath.Join(repo, ".core", FileWorkspace), got: FindWorkspaceManifest(m, child)},
+		{name: "ide", path: filepath.Join(repo, ".core", FileIDE), got: FindIDEManifest(m, child)},
 		{name: "repos", path: filepath.Join(base, ".core", FileRepos), got: FindReposManifest(m, child)},
 	}
 
@@ -137,6 +139,7 @@ func TestResolve_FindProjectManifest_Bad(t *testing.T) {
 	assert.Empty(t, FindPackageManifest(m, child))
 	assert.Empty(t, FindReposManifest(m, child))
 	assert.Empty(t, FindWorkspaceManifest(m, child))
+	assert.Empty(t, FindIDEManifest(m, child))
 }
 
 func TestResolve_FindProjectManifest_Ugly(t *testing.T) {
@@ -150,6 +153,7 @@ func TestResolve_FindProjectManifest_Ugly(t *testing.T) {
 	assert.Empty(t, FindRunManifest(nil, start))
 	assert.Empty(t, FindViewManifest(nil, start))
 	assert.Empty(t, FindPackageManifest(nil, start))
+	assert.Empty(t, FindIDEManifest(nil, start))
 }
 
 func TestResolve_FindUserPath_Good(t *testing.T) {
@@ -420,12 +424,14 @@ func TestResolve_ResolveProjectManifests_Good(t *testing.T) {
 	runPath := filepath.Join(repo, ".core", FileRun)
 	viewPath := filepath.Join(repo, ".core", FileView)
 	packagePath := filepath.Join(repo, ".core", FileManifest)
+	idePath := filepath.Join(repo, ".core", FileIDE)
 
 	assert.NoError(t, m.Write(buildPath, "name: core\noutput: dist\ntargets:\n  - linux/amd64\n"))
 	assert.NoError(t, m.Write(releasePath, "version: 1\narchive:\n  format: tar.gz\n  include:\n    - README.md\nchecksums: true\ngithub:\n  draft: false\n  prerelease: false\nchangelog:\n  include:\n    - feat\n"))
 	assert.NoError(t, m.Write(runPath, "version: 1\nservices:\n  - name: db\n    image: postgres:16\n    port: 5432\ndev:\n  command: php artisan serve\n  port: 8000\n  watch:\n    - app/\n"))
 	assert.NoError(t, m.Write(viewPath, "code: photo-browser\nname: Photo Browser\nsign: "+base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))+"\npermissions:\n  clipboard: true\n"))
 	assert.NoError(t, m.Write(packagePath, packageManifestFixture(t)))
+	assert.NoError(t, m.Write(idePath, "version: 1\neditor: nvim\n"))
 	assert.NoError(t, m.Write(filepath.Join(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	build, err := ResolveBuildManifest(m, child)
@@ -453,6 +459,11 @@ func TestResolve_ResolveProjectManifests_Good(t *testing.T) {
 	assert.Equal(t, "go-io", pkg.Code)
 	assert.Equal(t, "Core I/O", pkg.Name)
 
+	ide, err := ResolveIDEManifest(m, child)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, ide.Version)
+	assert.Equal(t, "nvim", ide.Editor)
+
 	repos, err := ResolveReposManifest(m, child)
 	assert.NoError(t, err)
 	assert.Equal(t, "host-uk", repos.Org)
@@ -473,6 +484,8 @@ func TestResolve_ResolveProjectManifests_Bad(t *testing.T) {
 	_, err = ResolveViewManifest(m, start)
 	assert.Error(t, err)
 	_, err = ResolvePackageManifest(m, start)
+	assert.Error(t, err)
+	_, err = ResolveIDEManifest(m, start)
 	assert.Error(t, err)
 	_, err = ResolveReposManifest(m, start)
 	assert.Error(t, err)

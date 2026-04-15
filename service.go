@@ -91,7 +91,7 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 		configOpts = append(configOpts, WithStore(s.store))
 	}
 
-	cfg, err := New(configOpts...)
+	cfg, err := newServiceConfig(opts, configOpts)
 	if err != nil {
 		return core.Result{Value: coreerr.E("config.Service.OnStartup", "failed to create config", err), OK: false}
 	}
@@ -108,6 +108,30 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 		s.registerCommands(c)
 	}
 
+	return core.Result{OK: true}
+}
+
+func newServiceConfig(opts ServiceOptions, configOpts []Option) (*Config, error) {
+	if opts.Path == "" {
+		return Discover(configOpts...)
+	}
+	if isDiscoverableConfigPath(opts.Path) {
+		return DiscoverFrom(serviceProjectRoot(opts.Path), configOpts...)
+	}
+	return New(configOpts...)
+}
+
+func isDiscoverableConfigPath(path string) bool {
+	clean := filepath.Clean(path)
+	return filepath.Base(clean) == FileConfig && filepath.Base(filepath.Dir(clean)) == Directory
+}
+
+// OnShutdown releases any active config-file watcher created during the
+// service lifetime so fsnotify descriptors do not leak across restarts.
+func (s *Service) OnShutdown(_ context.Context) core.Result {
+	if s.config != nil {
+		s.config.StopWatch()
+	}
 	return core.Result{OK: true}
 }
 
@@ -504,5 +528,6 @@ func discoverStoreWriter(c *core.Core) ConfigStoreWriter {
 	return store
 }
 
-// Ensure Service implements Startable at compile time.
+// Ensure Service implements lifecycle contracts at compile time.
 var _ core.Startable = (*Service)(nil)
+var _ core.Stoppable = (*Service)(nil)

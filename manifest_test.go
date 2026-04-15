@@ -36,7 +36,7 @@ func TestManifest_SplitManifestTrustedKeys_Ugly(t *testing.T) {
 }
 
 func TestManifest_ParseManifestPublicKey_Good(t *testing.T) {
-	pub, _ , err := ed25519.GenerateKey(nil)
+	pub, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
 
 	got, err := parseManifestPublicKey(hex.EncodeToString(pub))
@@ -57,7 +57,7 @@ func TestManifest_ParseManifestPublicKey_Ugly(t *testing.T) {
 }
 
 func TestManifest_DedupeManifestKeys_Good(t *testing.T) {
-	pub, _ , err := ed25519.GenerateKey(nil)
+	pub, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
 	got := dedupeManifestKeys([]ed25519.PublicKey{pub, pub})
 	assert.Equal(t, []ed25519.PublicKey{pub}, got)
@@ -69,7 +69,7 @@ func TestManifest_DedupeManifestKeys_Bad(t *testing.T) {
 }
 
 func TestManifest_DedupeManifestKeys_Ugly(t *testing.T) {
-	pub, _ , err := ed25519.GenerateKey(nil)
+	pub, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
 
 	invalid := ed25519.PublicKey("short")
@@ -302,7 +302,7 @@ func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	signedView := &ViewManifest{
 		Code:    "photo-browser",
 		Name:    "Photo Browser",
-		Version: "0.1.0",
+		Version: ViewVersion("0.1.0"),
 		Permissions: ViewPermissions{
 			Clipboard:  true,
 			Filesystem: true,
@@ -319,6 +319,16 @@ func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	assert.Equal(t, "photo-browser", got.Code)
 	assert.True(t, got.Permissions.Clipboard)
 	assert.True(t, got.Permissions.Filesystem)
+}
+
+func TestManifest_LoadManifest_View_VersionInteger_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nversion: 1\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\n"
+
+	var view ViewManifest
+	err := LoadManifest(m, "/.core/view.yaml", &view)
+	assert.NoError(t, err)
+	assert.Equal(t, ViewVersion("1"), view.Version)
 }
 
 func TestManifest_LoadManifest_View_Bad(t *testing.T) {

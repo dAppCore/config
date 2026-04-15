@@ -89,7 +89,7 @@ var KnownFiles = []string{
 //	var view config.ViewManifest
 //	_ = config.LoadManifest(io.Local, ".core/view.yaml", &view)
 type ViewManifest struct {
-	Version     string          `yaml:"version"`
+	Version     ViewVersion     `yaml:"version"`
 	Code        string          `yaml:"code"`
 	Name        string          `yaml:"name"`
 	Sign        string          `yaml:"sign"`
@@ -102,6 +102,31 @@ type ViewManifest struct {
 	Modules     []string        `yaml:"modules"`
 	Permissions ViewPermissions `yaml:"permissions"`
 	Config      map[string]any  `yaml:"config"`
+}
+
+// ViewVersion accepts either the folder-spec integer form (`version: 1`) or
+// the RFC example's semantic string form (`version: 0.1.0`).
+type ViewVersion string
+
+// UnmarshalYAML keeps view.yaml backward-compatible across the RFC's mixed
+// version examples while preserving the public string-shaped API.
+func (v *ViewVersion) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.ScalarNode:
+		var asString string
+		if err := node.Decode(&asString); err == nil {
+			*v = ViewVersion(asString)
+			return nil
+		}
+		var asInt int
+		if err := node.Decode(&asInt); err == nil {
+			*v = ViewVersion(core.Sprintf("%d", asInt))
+			return nil
+		}
+	case yaml.AliasNode:
+		return node.Decode(v)
+	}
+	return coreerr.E("config.ViewVersion.UnmarshalYAML", "invalid view manifest version", nil)
 }
 
 // ViewPermissions controls what a webview or application surface is allowed to do.
@@ -354,6 +379,20 @@ type ReposManifest struct {
 	Version int         `yaml:"version"`
 	Org     string      `yaml:"org"`
 	Repos   []ReposRepo `yaml:"repos"`
+}
+
+// IDEManifest defines the structure of .core/ide.yaml.
+// Used by editor and LSP integrations to discover workspace-local IDE hints.
+//
+//	var ide config.IDEManifest
+//	_ = config.LoadManifest(io.Local, ".core/ide.yaml", &ide)
+type IDEManifest struct {
+	Version  int            `yaml:"version"`
+	Editor   string         `yaml:"editor"`
+	LSP      map[string]any `yaml:"lsp"`
+	Format   map[string]any `yaml:"format"`
+	Tasks    map[string]any `yaml:"tasks"`
+	Settings map[string]any `yaml:"settings"`
 }
 
 // PHPManifest defines the structure of .core/php.yaml.

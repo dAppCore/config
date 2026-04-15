@@ -1,6 +1,8 @@
 package config
 
 import (
+	"path/filepath"
+
 	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
@@ -341,6 +343,25 @@ func ResolveWorkspaceManifest(medium coreio.Medium, start string) (*WorkspaceMan
 	return &ws, nil
 }
 
+// FindIDEManifest returns the nearest project-local .core/ide.yaml.
+func FindIDEManifest(medium coreio.Medium, start string) string {
+	return FindProjectManifest(medium, start, FileIDE)
+}
+
+// ResolveIDEManifest loads the nearest project-local .core/ide.yaml.
+func ResolveIDEManifest(medium coreio.Medium, start string) (*IDEManifest, error) {
+	path := FindIDEManifest(medium, start)
+	if path == "" {
+		return nil, coreerr.E("config.ResolveIDEManifest", "no ide manifest could be detected", nil)
+	}
+
+	var ide IDEManifest
+	if err := LoadManifest(medium, path, &ide); err != nil {
+		return nil, err
+	}
+	return &ide, nil
+}
+
 // FindLinuxKitDirectory returns the nearest project-local .core/linuxkit/
 // directory.
 //
@@ -423,7 +444,10 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 		medium = coreio.Local
 	}
 
-	dir := start
+	dir := filepath.Clean(start)
+	if dir == "" {
+		dir = "."
+	}
 	for {
 		candidate := core.Path(dir, Directory, FileRepos)
 		if medium.Exists(candidate) {

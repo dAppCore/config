@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -92,6 +93,43 @@ func TestService_OnStartup_RegistersCommands_Good(t *testing.T) {
 	assert.Contains(t, c.Commands(), "config/get")
 	assert.Contains(t, c.Commands(), "config/set")
 	assert.Contains(t, c.Commands(), "config/list")
+}
+
+func TestService_OnStartup_MergesProjectOverGlobal_Good(t *testing.T) {
+	home := core.Env("DIR_HOME")
+
+	projectRoot := filepath.Join(t.TempDir(), "repo")
+	serviceDir := filepath.Join(projectRoot, "app")
+
+	for _, dir := range []string{
+		filepath.Join(home, ".core"),
+		filepath.Join(projectRoot, ".core"),
+		filepath.Join(projectRoot, ".git"),
+		serviceDir,
+	} {
+		assert.NoError(t, os.MkdirAll(dir, 0755))
+	}
+
+	assert.NoError(t, coreio.Local.Write(filepath.Join(home, ".core", FileConfig), "app:\n  name: global\nservices:\n  ollama:\n    url: http://global\n"))
+	assert.NoError(t, coreio.Local.Write(filepath.Join(projectRoot, ".core", FileConfig), "app:\n  name: project\n"))
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   filepath.Join(projectRoot, ".core", FileConfig),
+			Medium: coreio.Local,
+		}),
+	}
+
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	var name string
+	assert.NoError(t, svc.Get("app.name", &name))
+	assert.Equal(t, "project", name)
+
+	var ollamaURL string
+	assert.NoError(t, svc.Get("services.ollama.url", &ollamaURL))
+	assert.Equal(t, "http://global", ollamaURL)
 }
 
 func TestService_Config_Good(t *testing.T) {
@@ -301,6 +339,27 @@ func TestService_LoadFile_Ugly(t *testing.T) {
 	err := svc.LoadFile(m, filepath.Join("tmp", "svc", "config.yaml"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "config paths must remain under .core/")
+}
+
+func TestService_OnShutdown_StopsWatcher_Good(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "config.yaml")
+	assert.NoError(t, coreio.Local.Write(path, "app:\n  name: svc\n"))
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   path,
+			Medium: coreio.Local,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+	assert.NoError(t, svc.Config().Watch())
+	assert.NotNil(t, svc.Config().watcher)
+
+	result := svc.OnShutdown(context.Background())
+	assert.True(t, result.OK)
+	assert.Nil(t, svc.Config().watcher)
 }
 
 func TestService_RegistersActionsAndCommands_Good(t *testing.T) {

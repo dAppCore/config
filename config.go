@@ -492,15 +492,12 @@ func (c *Config) MergeFrom(source *Config) {
 	// file keys are the source's own persistable values. full keys also
 	// include values previously inherited from other MergeFrom calls — we
 	// need both so inheritance chains (discover → conclave) keep working.
-	leaf := map[string]any{}
-	for _, key := range source.file.AllKeys() {
-		leaf[key] = source.file.Get(key)
-	}
-	for _, key := range source.full.AllKeys() {
+	leaf := flattenSettings(nil, source.file.AllSettings())
+	for key, value := range flattenSettings(nil, source.full.AllSettings()) {
 		if _, ok := leaf[key]; ok {
 			continue
 		}
-		leaf[key] = source.full.Get(key)
+		leaf[key] = value
 	}
 	source.mu.RUnlock()
 
@@ -515,6 +512,46 @@ func (c *Config) MergeFrom(source *Config) {
 		// back when Commit() flushes this Config to disk.
 		c.full.SetDefault(key, value)
 	}
+}
+
+func flattenSettings(dst map[string]any, settings map[string]any) map[string]any {
+	if dst == nil {
+		dst = map[string]any{}
+	}
+	flattenInto(dst, "", settings)
+	return dst
+}
+
+func flattenInto(dst map[string]any, prefix string, value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, next := range typed {
+			flattenInto(dst, joinConfigPath(prefix, key), next)
+		}
+	case map[any]any:
+		for key, next := range typed {
+			flattenInto(dst, joinConfigPath(prefix, core.Sprintf("%v", key)), next)
+		}
+	case []any:
+		if prefix != "" {
+			dst[prefix] = typed
+		}
+	case []string:
+		if prefix != "" {
+			dst[prefix] = typed
+		}
+	default:
+		if prefix != "" {
+			dst[prefix] = value
+		}
+	}
+}
+
+func joinConfigPath(prefix, key string) string {
+	if prefix == "" {
+		return key
+	}
+	return prefix + "." + key
 }
 
 // OnChange registers a callback invoked when a config key changes.
