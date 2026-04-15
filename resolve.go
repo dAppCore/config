@@ -402,6 +402,24 @@ func FindLinuxKitManifest(medium coreio.Medium, start string) string {
 	return ""
 }
 
+// ResolveLinuxKitManifest loads the nearest project-local
+// .core/linuxkit/core-dev.yml into a generic map. LinuxKit files are part of
+// the .core registry but intentionally stay schema-light in this package.
+//
+//	lk, err := config.ResolveLinuxKitManifest(io.Local, cwd)
+func ResolveLinuxKitManifest(medium coreio.Medium, start string) (map[string]any, error) {
+	path := FindLinuxKitManifest(medium, start)
+	if path == "" {
+		return nil, coreerr.E("config.ResolveLinuxKitManifest", "no linuxkit manifest could be detected", nil)
+	}
+
+	manifest, err := Load(medium, path)
+	if err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+
 // findProjectDirectory returns the nearest project-local .core/{name}/
 // directory while walking upward from start.
 func findProjectDirectory(medium coreio.Medium, start string, name string) string {

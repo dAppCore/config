@@ -128,6 +128,130 @@ func TestManifest_TrustedManifestPublicKeys_Ugly(t *testing.T) {
 	assert.Len(t, got, 1)
 }
 
+func TestManifest_TrustedManifestPublicKeysExported_Good(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
+
+	got, err := TrustedManifestPublicKeys()
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, pub, got[0])
+}
+
+func TestManifest_ViewSignatureHelpers_Good(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	view := &ViewManifest{
+		Code:    "photo-browser",
+		Name:    "Photo Browser",
+		Version: ViewVersion("0.1.0"),
+		Layout:  "HLCRF",
+		Slots: map[string]any{
+			"C": "photo-grid",
+		},
+	}
+
+	body, err := CanonicalViewManifestBytes(view)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "sign: \"\"")
+
+	err = SignViewManifest(view, priv)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, view.Sign)
+	assert.NoError(t, ValidateViewManifestSignature(view))
+	assert.NoError(t, VerifyViewManifestSignature(view, pub))
+}
+
+func TestManifest_ViewSignatureHelpers_Bad(t *testing.T) {
+	view := &ViewManifest{
+		Code: "photo-browser",
+		Name: "Photo Browser",
+		Sign: "not-base64!!",
+	}
+
+	err := ValidateViewManifestSignature(view)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid view manifest signature")
+}
+
+func TestManifest_ViewSignatureHelpers_Ugly(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	view := &ViewManifest{
+		Code: "photo-browser",
+		Name: "Photo Browser",
+		Sign: base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)),
+	}
+
+	err = VerifyViewManifestSignature(view, pub[:ed25519.PublicKeySize-1])
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not an ed25519 public key")
+}
+
+func TestManifest_PackageSignatureHelpers_Good(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
+
+	pkg := &PackageManifest{
+		Code:        "go-io",
+		Name:        "Core I/O",
+		Version:     "0.3.0",
+		Description: "Mandatory I/O abstraction layer",
+		Licence:     "EUPL-1.2",
+	}
+
+	body, err := CanonicalPackageManifestBytes(pkg)
+	assert.NoError(t, err)
+	assert.Contains(t, string(body), "sign: \"\"")
+	assert.Contains(t, string(body), "sign_key: \"\"")
+
+	err = SignPackageManifest(pkg, priv)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, pkg.Sign)
+	assert.NotEmpty(t, pkg.SignKey)
+	assert.NoError(t, VerifyPackageManifest(pkg))
+}
+
+func TestManifest_PackageSignatureHelpers_Bad(t *testing.T) {
+	pkg := &PackageManifest{
+		Code:    "go-io",
+		Name:    "Core I/O",
+		Version: "0.3.0",
+		SignKey: "not-hex",
+		Sign:    base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)),
+	}
+
+	err := VerifyPackageManifest(pkg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode package sign_key failed")
+}
+
+func TestManifest_PackageSignatureHelpers_Ugly(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
+
+	pkg := &PackageManifest{
+		Code:        "go-io",
+		Name:        "Core I/O",
+		Version:     "0.3.0",
+		Description: "Mandatory I/O abstraction layer",
+		Licence:     "EUPL-1.2",
+	}
+
+	err = SignPackageManifest(pkg, priv)
+	assert.NoError(t, err)
+	pkg.Description = "Tampered"
+
+	err = VerifyPackageManifest(pkg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "signature mismatch")
+}
+
 func TestManifest_LoadManifest_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	pub, priv, err := ed25519.GenerateKey(nil)

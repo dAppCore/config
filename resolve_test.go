@@ -136,6 +136,36 @@ func TestResolve_FindLinuxKitManifest_Good(t *testing.T) {
 	assert.Equal(t, lkPath, FindLinuxKitManifest(m, child))
 }
 
+func TestResolve_ResolveLinuxKitManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	child := filepath.Join(repo, "service")
+
+	for _, dir := range []string{
+		filepath.Join(repo, ".core"),
+		filepath.Join(repo, ".core", LinuxKitDirectory),
+		filepath.Join(repo, ".git"),
+		child,
+	} {
+		assert.NoError(t, m.EnsureDir(dir))
+	}
+	assert.NoError(t, m.Write(filepath.Join(repo, ".core", LinuxKitDirectory, FileLinuxKit), "kernel:\n  image: linuxkit/kernel:6.6.0\n"))
+
+	manifest, err := ResolveLinuxKitManifest(m, child)
+	require.NoError(t, err)
+	assert.Equal(t, "linuxkit/kernel:6.6.0", manifest["kernel"].(map[string]any)["image"])
+}
+
+func TestResolve_ResolveLinuxKitManifest_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	manifest, err := ResolveLinuxKitManifest(m, t.TempDir())
+	assert.Nil(t, manifest)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no linuxkit manifest could be detected")
+}
+
 func TestResolve_FindProjectManifest_Bad(t *testing.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
