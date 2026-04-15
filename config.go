@@ -376,13 +376,17 @@ func (c *Config) Set(key string, v any) error {
 //	cfg.Commit()
 func (c *Config) Commit() error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	medium := c.medium
+	path := c.path
+	settings := c.file.AllSettings()
+	attached := c.core
+	c.mu.Unlock()
 
-	if err := Save(c.medium, c.path, c.file.AllSettings()); err != nil {
+	if err := Save(medium, path, settings); err != nil {
 		return coreerr.E("config.Commit", "failed to save config", err)
 	}
-	if c.core != nil {
-		c.core.ACTION(ConfigChanged{Key: "", Value: nil, Source: "commit"})
+	if attached != nil {
+		attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: "commit"})
 	}
 	return nil
 }
