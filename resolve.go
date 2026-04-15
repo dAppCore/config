@@ -225,3 +225,22 @@ func ResolveReposManifest(medium coreio.Medium, start string) (*ReposManifest, e
 	}
 	return &repos, nil
 }
+
+// FindPHPManifest returns the nearest project-local .core/php.yaml.
+func FindPHPManifest(medium coreio.Medium, start string) string {
+	return FindProjectManifest(medium, start, FilePHP)
+}
+
+// ResolvePHPManifest loads the nearest project-local .core/php.yaml.
+func ResolvePHPManifest(medium coreio.Medium, start string) (*PHPManifest, error) {
+	path := FindPHPManifest(medium, start)
+	if path == "" {
+		return nil, coreerr.E("config.ResolvePHPManifest", "no php manifest could be detected", nil)
+	}
+
+	var php PHPManifest
+	if err := LoadManifest(medium, path, &php); err != nil {
+		return nil, err
+	}
+	return &php, nil
+}

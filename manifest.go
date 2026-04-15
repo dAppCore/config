@@ -50,6 +50,8 @@ var KnownFiles = []string{
 	FileRepos,
 	FileIDE,
 	FilePHP,
+	FileAgent,
+	FileZone,
 }
 
 // ViewManifest defines the structure of .core/view.yaml.
@@ -324,6 +326,48 @@ type ReposManifest struct {
 	Version int         `yaml:"version"`
 	Org     string      `yaml:"org"`
 	Repos   []ReposRepo `yaml:"repos"`
+}
+
+// PHPManifest defines the structure of .core/php.yaml.
+// Used by core dev / core php commands to configure the local PHP runtime,
+// test runner, lint tooling, and optional deploy integration.
+//
+//	var php config.PHPManifest
+//	_ = config.LoadManifest(io.Local, ".core/php.yaml", &php)
+type PHPManifest struct {
+	Version int       `yaml:"version"`
+	Server  PHPServer `yaml:"server"`
+	Test    PHPTest   `yaml:"test"`
+	Lint    PHPLint   `yaml:"lint"`
+	Deploy  PHPDeploy `yaml:"deploy"`
+}
+
+// PHPServer configures the dev server used by `core php serve`.
+type PHPServer struct {
+	Type    string `yaml:"type"`
+	Port    int    `yaml:"port"`
+	Workers int    `yaml:"workers"`
+}
+
+// PHPTest configures the PHP test runner used by `core php test`.
+type PHPTest struct {
+	Framework string `yaml:"framework"`
+	Parallel  bool   `yaml:"parallel"`
+}
+
+// PHPLint configures the lint tool used by `core php lint`.
+type PHPLint struct {
+	Tool   string `yaml:"tool"`
+	Config string `yaml:"config"`
+}
+
+// PHPDeploy configures optional PHP deploy settings for higher-level tooling.
+type PHPDeploy struct {
+	Type         string            `yaml:"type"`
+	Environment  string            `yaml:"environment"`
+	Command      string            `yaml:"command"`
+	Inventory    string            `yaml:"inventory"`
+	Environments map[string]string `yaml:"environments"`
 }
 
 // AgentManifest defines the structure of ~/.core/agent.yaml.

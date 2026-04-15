@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	core "dappco.re/go/core"
@@ -17,6 +18,7 @@ import (
 type Service struct {
 	*core.ServiceRuntime[ServiceOptions]
 	config *Config
+	store  ConfigStoreWriter
 }
 
 // ServiceOptions holds configuration for the config service.
@@ -27,6 +29,8 @@ type ServiceOptions struct {
 	EnvPrefix string
 	// Medium overrides the default storage medium.
 	Medium coreio.Medium
+	// Store mirrors Set() calls into go-store when present.
+	Store ConfigStoreWriter
 }
 
 // NewConfigService creates a new config service factory for the Core framework.
@@ -77,6 +81,13 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 	}
 	if opts.Medium != nil {
 		configOpts = append(configOpts, WithMedium(opts.Medium))
+	}
+	s.store = opts.Store
+	if s.store == nil {
+		s.store = discoverStoreWriter(s.Core())
+	}
+	if s.store != nil {
+		configOpts = append(configOpts, WithStore(s.store))
 	}
 
 	cfg, err := New(configOpts...)
@@ -340,6 +351,44 @@ func (s *Service) LoadFile(m coreio.Medium, path string) error {
 //	cfg.OnChange(func(k string, v any) { ... })
 func (s *Service) Config() *Config {
 	return s.config
+}
+
+func discoverStoreWriter(c *core.Core) ConfigStoreWriter {
+	if c == nil {
+		return nil
+	}
+
+	result := c.Service("store")
+	if !result.OK || result.Value == nil {
+		return nil
+	}
+	if store, ok := result.Value.(ConfigStoreWriter); ok {
+		return store
+	}
+
+	ref := reflect.ValueOf(result.Value)
+	if !ref.IsValid() {
+		return nil
+	}
+	if ref.Kind() == reflect.Ptr && !ref.IsNil() {
+		ref = ref.Elem()
+	}
+	if ref.Kind() != reflect.Struct {
+		return nil
+	}
+
+	field := ref.FieldByName("Store")
+	if !field.IsValid() || !field.CanInterface() {
+		return nil
+	}
+	if field.Kind() != reflect.Ptr && field.Kind() != reflect.Interface {
+		return nil
+	}
+	if field.IsNil() {
+		return nil
+	}
+	store, _ := field.Interface().(ConfigStoreWriter)
+	return store
 }
 
 // Ensure Service implements Startable at compile time.

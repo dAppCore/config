@@ -12,7 +12,6 @@ package config
 
 import (
 	"iter"
-	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -58,12 +57,21 @@ type Config struct {
 	medium    coreio.Medium
 	path      string
 	core      *core.Core // optional — set when attached to a Core service
+	store     ConfigStoreWriter
 	callbacks []func(key string, value any)
 	watcher   *fileWatcher
 }
 
 // Option is a functional option for configuring a Config instance.
 type Option func(*Config)
+
+// ConfigStoreWriter is the minimal store contract config needs for mirroring
+// Set() calls into go-store when available.
+//
+//	store.Set("config", "dev.editor", "\"vim\"")
+type ConfigStoreWriter interface {
+	Set(string, string, string) error
+}
 
 // WithMedium sets the storage medium for configuration file operations.
 //
@@ -99,6 +107,16 @@ func WithEnvPrefix(prefix string) Option {
 func WithCore(c *core.Core) Option {
 	return func(cfg *Config) {
 		cfg.core = c
+	}
+}
+
+// WithStore attaches an optional go-store-compatible writer. When present,
+// every Set() call mirrors the new value into the "config" bucket.
+//
+//	config.New(config.WithStore(store))
+func WithStore(store ConfigStoreWriter) Option {
+	return func(c *Config) {
+		c.store = store
 	}
 }
 
@@ -336,6 +354,7 @@ func (c *Config) Set(key string, v any) error {
 	previous := c.full.Get(key)
 	c.file.Set(key, v)
 	c.full.Set(key, v)
+	store := c.store
 	callbacks := append([]func(string, any){}, c.callbacks...)
 	attached := c.core
 	c.mu.Unlock()
@@ -346,7 +365,7 @@ func (c *Config) Set(key string, v any) error {
 	if attached != nil {
 		attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: "set"})
 	}
-	c.persistToStore(key, v)
+	persistToStore(store, key, v)
 	return nil
 }
 
@@ -579,47 +598,9 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 	return nil
 }
 
-func (c *Config) persistToStore(key string, value any) {
-	if c == nil || c.core == nil || key == "" {
+func persistToStore(store ConfigStoreWriter, key string, value any) {
+	if store == nil || key == "" {
 		return
 	}
-
-	result := c.core.Service("store")
-	if !result.OK || result.Value == nil {
-		return
-	}
-
-	if setter, ok := result.Value.(interface {
-		Set(string, string, string) error
-	}); ok {
-		_ = setter.Set("config", key, core.JSONMarshalString(value))
-		return
-	}
-
-	ref := reflect.ValueOf(result.Value)
-	if !ref.IsValid() {
-		return
-	}
-	if ref.Kind() == reflect.Ptr && !ref.IsNil() {
-		ref = ref.Elem()
-	}
-	if ref.Kind() != reflect.Struct {
-		return
-	}
-
-	field := ref.FieldByName("Store")
-	if !field.IsValid() || !field.CanInterface() {
-		return
-	}
-	if field.Kind() != reflect.Ptr && field.Kind() != reflect.Interface {
-		return
-	}
-	if field.IsNil() {
-		return
-	}
-	if setter, ok := field.Interface().(interface {
-		Set(string, string, string) error
-	}); ok {
-		_ = setter.Set("config", key, core.JSONMarshalString(value))
-	}
+	_ = store.Set("config", key, core.JSONMarshalString(value))
 }
