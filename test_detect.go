@@ -8,40 +8,6 @@ import (
 	coreerr "dappco.re/go/core/log"
 )
 
-// ResolveTestManifest loads the nearest .core/test.yaml if one exists.
-// When no override file is present, it falls back to the RFC auto-detection
-// chain: composer.json, package.json, go.mod, pytest.ini / pyproject.toml,
-// then Taskfile.yaml.
-//
-//	cfg, _ := config.ResolveTestManifest(io.Local, cwd)
-//	for _, cmd := range cfg.Commands { fmt.Println(cmd.Name, cmd.Run) }
-func ResolveTestManifest(medium coreio.Medium, start string) (*TestManifest, error) {
-	if medium == nil {
-		medium = coreio.Local
-	}
-
-	if path := FindManifest(medium, start, FileTest); path != "" {
-		var test TestManifest
-		if err := LoadManifest(medium, path, &test); err != nil {
-			return nil, err
-		}
-		return &test, nil
-	}
-
-	if command, ok, err := detectTestCommand(medium, start); err != nil {
-		return nil, err
-	} else if ok {
-		return &TestManifest{
-			Version: 1,
-			Commands: []TestCommand{
-				{Name: "test", Run: command},
-			},
-		}, nil
-	}
-
-	return nil, coreerr.E("config.ResolveTestManifest", "no test command could be detected", nil)
-}
-
 func detectTestCommand(medium coreio.Medium, start string) (string, bool, error) {
 	for dir := start; ; dir = core.PathDir(dir) {
 		if command, ok, err := detectTestCommandAtDir(medium, dir); err != nil {
