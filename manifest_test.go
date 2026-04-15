@@ -187,6 +187,26 @@ func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	assert.True(t, view.Permissions.Filesystem)
 }
 
+func TestManifest_LoadManifest_View_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n"
+
+	var view ViewManifest
+	err := LoadManifest(m, "/.core/view.yaml", &view)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsigned view manifest rejected")
+}
+
+func TestManifest_LoadManifest_View_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize-1)) + "\npermissions:\n  clipboard: true\n"
+
+	var view ViewManifest
+	err := LoadManifest(m, "/.core/view.yaml", &view)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "view manifest signature is not ed25519-sized")
+}
+
 func TestManifest_LoadManifest_Test_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/.core/test.yaml"] = "version: 1\ncommands:\n  - name: unit\n    run: vendor/bin/pest --parallel\n  - name: types\n    run: vendor/bin/phpstan analyse\nenv:\n  APP_ENV: testing\n  DB_CONNECTION: sqlite\n"
@@ -238,6 +258,44 @@ func TestManifest_LoadManifest_Repos_Bad(t *testing.T) {
 	var repos ReposManifest
 	err := LoadManifest(m, "/missing/repos.yaml", &repos)
 	assert.Error(t, err)
+}
+
+func TestManifest_LoadManifest_Package_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\nsign_key: not-hex\n"
+
+	var pkg PackageManifest
+	err := LoadManifest(m, "/.core/manifest.yaml", &pkg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode package sign_key failed")
+}
+
+func TestManifest_LoadManifest_Package_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	pub1, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	_, priv2, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	pkg := &PackageManifest{
+		Code:    "go-io",
+		Name:    "Core I/O",
+		Version: "0.3.0",
+		Licence: "EUPL-1.2",
+		SignKey: hex.EncodeToString(pub1),
+	}
+	msg, err := packageManifestBytes(pkg)
+	assert.NoError(t, err)
+	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv2, msg))
+
+	out, err := yaml.Marshal(pkg)
+	assert.NoError(t, err)
+	m.Files["/.core/manifest.yaml"] = string(out)
+
+	var got PackageManifest
+	err = LoadManifest(m, "/.core/manifest.yaml", &got)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "package manifest signature mismatch")
 }
 
 func TestManifest_LoadManifest_Release_Good(t *testing.T) {
