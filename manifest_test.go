@@ -540,6 +540,7 @@ func TestManifest_LoadManifest_Package_Bad(t *testing.T) {
 
 func TestManifest_LoadManifest_Package_Ugly(t *testing.T) {
 	m := coreio.NewMockMedium()
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 	pub1, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
 	_, priv2, err := ed25519.GenerateKey(nil)

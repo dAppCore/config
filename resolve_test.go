@@ -554,6 +554,7 @@ func TestResolve_ResolveConfigManifest_Ugly(t *testing.T) {
 }
 
 func TestResolve_ResolveProjectManifests_Good(t *testing.T) {
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
 	repo := filepath.Join(tmp, "workspace", "repo")
