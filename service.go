@@ -208,8 +208,8 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.set", func(_ context.Context, opts core.Options) core.Result {
-		if err := ensureConfigEntitlement(c, "config.set"); err != nil {
-			return err
+		if result := ensureConfigEntitlement(c, "config.set"); !result.OK {
+			return result
 		}
 		key := opts.String("key")
 		r := opts.Get("value")
@@ -223,8 +223,8 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.commit", func(_ context.Context, _ core.Options) core.Result {
-		if err := ensureConfigEntitlement(c, "config.commit"); err != nil {
-			return err
+		if result := ensureConfigEntitlement(c, "config.commit"); !result.OK {
+			return result
 		}
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.commit", "config not loaded", nil), OK: false}
@@ -236,8 +236,8 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.load", func(_ context.Context, opts core.Options) core.Result {
-		if err := ensureConfigEntitlement(c, "config.load"); err != nil {
-			return err
+		if result := ensureConfigEntitlement(c, "config.load"); !result.OK {
+			return result
 		}
 		path := opts.String("path")
 		if s.config == nil {
@@ -250,8 +250,8 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.all", func(_ context.Context, _ core.Options) core.Result {
-		if err := ensureConfigEntitlement(c, "config.all"); err != nil {
-			return err
+		if result := ensureConfigEntitlement(c, "config.all"); !result.OK {
+			return result
 		}
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.all", "config not loaded", nil), OK: false}
@@ -264,8 +264,8 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.path", func(_ context.Context, _ core.Options) core.Result {
-		if err := ensureConfigEntitlement(c, "config.path"); err != nil {
-			return err
+		if result := ensureConfigEntitlement(c, "config.path"); !result.OK {
+			return result
 		}
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.path", "config not loaded", nil), OK: false}
@@ -296,8 +296,8 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/set", core.Command{
 		Description: "Set a config value",
 		Action: func(opts core.Options) core.Result {
-			if err := ensureConfigEntitlement(c, "config/set"); err != nil {
-				return err
+			if result := ensureConfigEntitlement(c, "config/set"); !result.OK {
+				return result
 			}
 			key := opts.String("key")
 			r := opts.Get("value")
@@ -328,8 +328,8 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/commit", core.Command{
 		Description: "Persist config changes",
 		Action: func(_ core.Options) core.Result {
-			if err := ensureConfigEntitlement(c, "config/commit"); err != nil {
-				return err
+			if result := ensureConfigEntitlement(c, "config/commit"); !result.OK {
+				return result
 			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/commit", "config not loaded", nil), OK: false}
@@ -344,8 +344,8 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/load", core.Command{
 		Description: "Load a config file",
 		Action: func(opts core.Options) core.Result {
-			if err := ensureConfigEntitlement(c, "config/load"); err != nil {
-				return err
+			if result := ensureConfigEntitlement(c, "config/load"); !result.OK {
+				return result
 			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/load", "config not loaded", nil), OK: false}
@@ -361,8 +361,8 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/all", core.Command{
 		Description: "List all config values",
 		Action: func(_ core.Options) core.Result {
-			if err := ensureConfigEntitlement(c, "config/all"); err != nil {
-				return err
+			if result := ensureConfigEntitlement(c, "config/all"); !result.OK {
+				return result
 			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/all", "config not loaded", nil), OK: false}
@@ -378,8 +378,8 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/path", core.Command{
 		Description: "Show the config file path",
 		Action: func(_ core.Options) core.Result {
-			if err := ensureConfigEntitlement(c, "config/path"); err != nil {
-				return err
+			if result := ensureConfigEntitlement(c, "config/path"); !result.OK {
+				return result
 			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/path", "config not loaded", nil), OK: false}

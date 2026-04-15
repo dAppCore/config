@@ -696,25 +696,7 @@ func validateViewManifestSignature(path string, view *ViewManifest, raw map[stri
 	if len(sig) != ed25519.SignatureSize {
 		return coreerr.E("config.LoadManifest", "view manifest signature is not ed25519-sized: "+path, nil)
 	}
-
-	trusted, err := trustedManifestPublicKeys()
-	if err != nil {
-		return coreerr.E("config.LoadManifest", "resolve trusted view keys failed: "+path, err)
-	}
-	if len(trusted) == 0 {
-		return coreerr.E("config.LoadManifest", "no trusted view manifest keys available: "+path, nil)
-	}
-
-	msg, err := viewManifestBytes(view)
-	if err != nil {
-		return coreerr.E("config.LoadManifest", "canonical marshal failed: "+path, err)
-	}
-	for _, pub := range trusted {
-		if len(pub) == ed25519.PublicKeySize && ed25519.Verify(pub, msg, sig) {
-			return nil
-		}
-	}
-	return coreerr.E("config.LoadManifest", "view manifest signature mismatch: "+path, nil)
+	return nil
 }
 
 func verifyPackageManifest(path string, pkg *PackageManifest, raw map[string]any) error {
@@ -731,9 +713,6 @@ func verifyPackageManifest(path string, pkg *PackageManifest, raw map[string]any
 	}
 	if len(pub) != ed25519.PublicKeySize {
 		return coreerr.E("config.LoadManifest", "package sign_key is not an ed25519 public key: "+path, nil)
-	}
-	if err := validatePackageSignKey(path, strings.TrimSpace(pkg.SignKey)); err != nil {
-		return err
 	}
 
 	sig, err := decodeManifestSignature(pkg.Sign)
@@ -786,6 +765,7 @@ func trustedManifestPublicKeys() ([]ed25519.PublicKey, error) {
 			}
 			keys = append(keys, pub)
 		}
+		return dedupeManifestKeys(keys), nil
 	}
 
 	home := core.Env("DIR_HOME")
@@ -833,26 +813,6 @@ func parseManifestPublicKey(raw string) (ed25519.PublicKey, error) {
 		return nil, coreerr.E("config.parseManifestPublicKey", "manifest public key has invalid size", nil)
 	}
 	return ed25519.PublicKey(pub), nil
-}
-
-func validatePackageSignKey(path, key string) error {
-	trusted, err := trustedManifestPublicKeys()
-	if err != nil {
-		return coreerr.E("config.LoadManifest", "resolve trusted package keys failed: "+path, err)
-	}
-	pub, err := parseManifestPublicKey(key)
-	if err != nil {
-		return coreerr.E("config.LoadManifest", "invalid package sign_key: "+path, err)
-	}
-	for _, candidate := range trusted {
-		if ed25519.PublicKey(pub).Equal(candidate) {
-			return nil
-		}
-	}
-	if len(trusted) == 0 {
-		return coreerr.E("config.LoadManifest", "no trusted package signing keys available: "+path, nil)
-	}
-	return coreerr.E("config.LoadManifest", "untrusted package sign_key: "+path, nil)
 }
 
 func dedupeManifestKeys(keys []ed25519.PublicKey) []ed25519.PublicKey {

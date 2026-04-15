@@ -290,7 +290,7 @@ func TestConfig_PersistToStore_Bad(t *testing.T) {
 
 func TestConfig_PersistToStore_Ugly(t *testing.T) {
 	store := &mockConfigStore{}
-	cfg, err := New(WithStore(store))
+	_, err := New(WithStore(store))
 	assert.NoError(t, err)
 
 	assert.NotPanics(t, func() {
