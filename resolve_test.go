@@ -10,6 +10,7 @@ import (
 	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -149,6 +150,197 @@ func TestResolve_FindProjectManifest_Ugly(t *testing.T) {
 	assert.Empty(t, FindRunManifest(nil, start))
 	assert.Empty(t, FindViewManifest(nil, start))
 	assert.Empty(t, FindPackageManifest(nil, start))
+}
+
+func TestResolve_FindUserPath_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	home := core.Env("DIR_HOME")
+
+	for _, dir := range []string{
+		filepath.Join(home, ".core"),
+		filepath.Join(home, ".core", DirectoryImages),
+		filepath.Join(home, ".core", DirectorySecrets),
+		filepath.Join(home, ".core", DirectoryDaemons),
+		filepath.Join(home, ".core", DirectoryWorkspaces),
+	} {
+		require.NoError(t, m.EnsureDir(dir))
+	}
+
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: true\n"))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n"))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), "{\"images\":{}}"))
+
+	assert.Equal(t, filepath.Join(home, ".core", FileAgent), FindUserManifest(m, FileAgent))
+	assert.Equal(t, filepath.Join(home, ".core", FileAgent), FindAgentManifest(m))
+	assert.Equal(t, filepath.Join(home, ".core", FileAgent), FindUserPath(m, "", FileAgent))
+	assert.Equal(t, filepath.Join(home, ".core", FileZone), FindZoneManifest(m))
+	assert.Equal(t, filepath.Join(home, ".core", DirectoryImages), FindUserImagesDirectory(m))
+	assert.Equal(t, filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), FindUserImagesManifest(m))
+	assert.Equal(t, filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), FindUserPath(m, DirectoryImages, "", FileImagesManifest))
+	assert.Equal(t, filepath.Join(home, ".core", DirectorySecrets), FindUserSecretsDirectory(m))
+	assert.Equal(t, filepath.Join(home, ".core", DirectoryDaemons), FindUserDaemonsDirectory(m))
+	assert.Equal(t, filepath.Join(home, ".core", DirectoryWorkspaces), FindUserWorkspacesDirectory(m))
+	assert.Equal(t, filepath.Join(home, ".core", DirectoryImages), FindUserDirectory(m, DirectoryImages))
+}
+
+func TestResolve_FindUserPath_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	assert.Empty(t, FindUserManifest(m, FileAgent))
+	assert.Empty(t, FindUserDirectory(m, DirectoryImages))
+	assert.Empty(t, FindUserImagesManifest(m))
+	assert.Empty(t, FindUserImagesDirectory(m))
+	assert.Empty(t, FindUserSecretsDirectory(m))
+	assert.Empty(t, FindUserDaemonsDirectory(m))
+	assert.Empty(t, FindUserWorkspacesDirectory(m))
+}
+
+func TestResolve_ResolveUserManifests_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	home := core.Env("DIR_HOME")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(home, ".core")))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: true\nagents:\n  worker:\n    total: 2\n"))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n  services:\n    vpn:\n      enabled: true\n"))
+
+	agent, err := ResolveAgentManifest(m)
+	require.NoError(t, err)
+	require.NotNil(t, agent)
+	assert.True(t, agent.Daemon.Enabled)
+	assert.Equal(t, 2, agent.Agents["worker"].Total)
+
+	zone, err := ResolveZoneManifest(m)
+	require.NoError(t, err)
+	require.NotNil(t, zone)
+	assert.Equal(t, "alpha", zone.Zone.Name)
+	assert.True(t, zone.Zone.Services.VPN.Enabled)
+}
+
+func TestResolve_ResolveUserManifests_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	agent, err := ResolveAgentManifest(m)
+	assert.Nil(t, agent)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no agent manifest could be detected")
+
+	zone, err := ResolveZoneManifest(m)
+	assert.Nil(t, zone)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no zone manifest could be detected")
+}
+
+func TestResolve_ResolveUserManifests_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	home := core.Env("DIR_HOME")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(home, ".core")))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: [broken"))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: [broken"))
+
+	agent, err := ResolveAgentManifest(m)
+	assert.Nil(t, agent)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse manifest")
+
+	zone, err := ResolveZoneManifest(m)
+	assert.Nil(t, zone)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse manifest")
+}
+
+func TestResolve_FindPHPManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	child := filepath.Join(repo, "service")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(repo, ".core")))
+	require.NoError(t, m.EnsureDir(filepath.Join(repo, ".git")))
+	require.NoError(t, m.EnsureDir(child))
+	require.NoError(t, m.Write(filepath.Join(repo, ".core", FilePHP), "version: 1\n"))
+	require.NoError(t, m.EnsureDir(filepath.Join(repo, ".core", LinuxKitDirectory)))
+
+	assert.Equal(t, filepath.Join(repo, ".core", FilePHP), FindPHPManifest(m, child))
+	assert.Equal(t, filepath.Join(repo, ".core", LinuxKitDirectory), FindLinuxKitDirectory(m, child))
+}
+
+func TestResolve_ResolvePHPManifest_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	php, err := ResolvePHPManifest(m, t.TempDir())
+	assert.Nil(t, php)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no php manifest could be detected")
+}
+
+func TestResolve_ResolvePHPManifest_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(repo, ".core")))
+	require.NoError(t, m.Write(filepath.Join(repo, ".core", FilePHP), "version: [broken"))
+
+	php, err := ResolvePHPManifest(m, repo)
+	assert.Nil(t, php)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse manifest")
+}
+
+func TestResolve_ResolvePHPManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(repo, ".core")))
+	require.NoError(t, m.Write(filepath.Join(repo, ".core", FilePHP), "version: 1\nserver:\n  type: php-fpm\n"))
+
+	php, err := ResolvePHPManifest(m, repo)
+	require.NoError(t, err)
+	require.NotNil(t, php)
+	assert.Equal(t, 1, php.Version)
+	assert.Equal(t, "php-fpm", php.Server.Type)
+}
+
+func TestResolve_FindReposManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	start := filepath.Join(tmp, "workspace", "repo", "service")
+	home := core.Env("DIR_HOME")
+
+	require.NoError(t, m.EnsureDir(start))
+	require.NoError(t, m.EnsureDir(filepath.Join(home, "Code", Directory)))
+	require.NoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+
+	assert.Equal(t, filepath.Join(home, "Code", Directory, FileRepos), FindReposManifest(m, start))
+}
+
+func TestResolve_ResolveImagesManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	home := core.Env("DIR_HOME")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(home, ".core", DirectoryImages)))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), `{"images":{"core-dev":{"version":"1.2.3","downloaded":"2026-04-15T12:00:00Z","source":"github"}}}`))
+
+	manifest, err := ResolveImagesManifest(m)
+	require.NoError(t, err)
+	require.NotNil(t, manifest)
+	require.Len(t, manifest.Images, 1)
+	assert.Equal(t, "1.2.3", manifest.Images["core-dev"].Version)
+}
+
+func TestResolve_WorkspaceSandboxPath_Good(t *testing.T) {
+	home := core.Env("DIR_HOME")
+	assert.Equal(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev"), WorkspaceSandboxRoot("repo", "dev"))
+	assert.Equal(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceSourceDirectory, "app", "main.go"), WorkspaceSandboxSourcePath("repo", "dev", "app", "main.go"))
+	assert.Equal(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceMetaDirectory, "status.json"), WorkspaceSandboxMetaPath("repo", "dev", "status.json"))
+	assert.Equal(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceInstructionsFile), WorkspaceSandboxInstructionsPath("repo", "dev"))
+}
+
+func TestResolve_WorkspaceSandboxPath_Ugly(t *testing.T) {
+	home := core.Env("DIR_HOME")
+	assert.Equal(t, filepath.Join(home, Directory, WorkspaceDirectory, "src"), WorkspaceSandboxPath("", "", "", "src", ""))
 }
 
 func TestResolve_ResolveConfigManifest_Good(t *testing.T) {

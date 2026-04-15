@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -39,4 +40,38 @@ func TestImagesManifest_ResolveMissing_Good(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, manifest)
 	assert.Empty(t, manifest.Images)
+}
+
+func TestImagesManifest_LoadImagesManifest_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	require.NoError(t, m.EnsureDir(filepath.Dir(path)))
+	require.NoError(t, m.Write(path, "{not-json"))
+
+	manifest, err := LoadImagesManifest(m, path)
+	assert.Nil(t, manifest)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse images manifest")
+}
+
+func TestImagesManifest_LoadImagesManifest_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	require.NoError(t, m.EnsureDir(filepath.Dir(path)))
+	bad := map[string]any{
+		"images": map[string]any{
+			"core-dev": map[string]any{
+				"version": 123,
+			},
+		},
+	}
+
+	payload, err := json.Marshal(bad)
+	require.NoError(t, err)
+	require.NoError(t, m.Write(path, string(payload)))
+
+	manifest, err := LoadImagesManifest(m, path)
+	assert.Nil(t, manifest)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "schema validation failed")
 }

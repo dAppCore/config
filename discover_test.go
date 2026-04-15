@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
 )
@@ -161,4 +162,21 @@ func TestDiscover_CommitDoesNotLeakInherited_Good(t *testing.T) {
 	assert.Contains(t, body, "shell: zsh")
 	assert.NotContains(t, body, "GLOBAL_ONLY")
 	assert.NotContains(t, body, "secret:")
+}
+
+func TestDiscover_DiscoverFrom_GlobalFallback_Good(t *testing.T) {
+	tmp := t.TempDir()
+	repo := filepath.Join(tmp, "repo")
+	home := core.Env("DIR_HOME")
+
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(repo, ".git")))
+	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(home, ".core")))
+	assert.NoError(t, coreio.Local.Write(filepath.Join(home, ".core", "config.yaml"), "app:\n  name: global\n"))
+
+	cfg, err := DiscoverFrom(repo, WithMedium(coreio.Local))
+	assert.NoError(t, err)
+
+	var name string
+	assert.NoError(t, cfg.Get("app.name", &name))
+	assert.Equal(t, "global", name)
 }
