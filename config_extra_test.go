@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"sync"
 	"testing"
 
@@ -8,6 +9,25 @@ import (
 	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
 )
+
+type mockConfigStore struct {
+	bucket   string
+	key      string
+	value    string
+	calls    int
+	failWith error
+}
+
+func (s *mockConfigStore) Set(bucket string, key string, value string) error {
+	s.calls++
+	s.bucket = bucket
+	s.key = key
+	s.value = value
+	if s.failWith != nil {
+		return s.failWith
+	}
+	return nil
+}
 
 func TestConfig_MergeFrom_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
@@ -244,4 +264,38 @@ func TestConfig_AttachCore_Ugly(t *testing.T) {
 
 	cfg.AttachCore(nil)
 	assert.NoError(t, cfg.Set("quiet", "ok"))
+}
+
+func TestConfig_PersistToStore_Good(t *testing.T) {
+	store := &mockConfigStore{}
+	cfg, err := New(WithStore(store))
+	assert.NoError(t, err)
+
+	assert.NoError(t, cfg.Set("app.name", "core"))
+
+	assert.Equal(t, 1, store.calls)
+	assert.Equal(t, "config", store.bucket)
+	assert.Equal(t, "app.name", store.key)
+	assert.Equal(t, "\"core\"", store.value)
+}
+
+func TestConfig_PersistToStore_Bad(t *testing.T) {
+	store := &mockConfigStore{failWith: errors.New("store write failed")}
+	cfg, err := New(WithStore(store))
+	assert.NoError(t, err)
+
+	assert.NoError(t, cfg.Set("app.name", "core"))
+	assert.Equal(t, 1, store.calls)
+}
+
+func TestConfig_PersistToStore_Ugly(t *testing.T) {
+	store := &mockConfigStore{}
+	cfg, err := New(WithStore(store))
+	assert.NoError(t, err)
+
+	assert.NotPanics(t, func() {
+		persistToStore(nil, "app.name", "core")
+		persistToStore(store, "", "core")
+	})
+	assert.Equal(t, 0, store.calls)
 }

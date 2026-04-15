@@ -4,6 +4,9 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,6 +18,114 @@ import (
 func setManifestTrustKeys(t *testing.T, keys ...string) {
 	t.Helper()
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", strings.Join(keys, ","))
+}
+
+func TestManifest_SplitManifestTrustedKeys_Good(t *testing.T) {
+	got := splitManifestTrustedKeys("a,b;c d\te\nf")
+	assert.Equal(t, []string{"a", "b", "c", "d", "e", "f"}, got)
+}
+
+func TestManifest_SplitManifestTrustedKeys_Bad(t *testing.T) {
+	got := splitManifestTrustedKeys("")
+	assert.Empty(t, got)
+}
+
+func TestManifest_SplitManifestTrustedKeys_Ugly(t *testing.T) {
+	got := splitManifestTrustedKeys("   ")
+	assert.Empty(t, got)
+}
+
+func TestManifest_ParseManifestPublicKey_Good(t *testing.T) {
+	pub, _ , err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	got, err := parseManifestPublicKey(hex.EncodeToString(pub))
+	assert.NoError(t, err)
+	assert.Equal(t, hex.EncodeToString(pub), hex.EncodeToString(got))
+}
+
+func TestManifest_ParseManifestPublicKey_Bad(t *testing.T) {
+	_, err := parseManifestPublicKey("not-hex")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode manifest public key failed")
+}
+
+func TestManifest_ParseManifestPublicKey_Ugly(t *testing.T) {
+	_, err := parseManifestPublicKey("   ")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty manifest public key")
+}
+
+func TestManifest_DedupeManifestKeys_Good(t *testing.T) {
+	pub, _ , err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	got := dedupeManifestKeys([]ed25519.PublicKey{pub, pub})
+	assert.Equal(t, []ed25519.PublicKey{pub}, got)
+}
+
+func TestManifest_DedupeManifestKeys_Bad(t *testing.T) {
+	out := dedupeManifestKeys(nil)
+	assert.Empty(t, out)
+}
+
+func TestManifest_DedupeManifestKeys_Ugly(t *testing.T) {
+	pub, _ , err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	invalid := ed25519.PublicKey("short")
+	out := dedupeManifestKeys([]ed25519.PublicKey{invalid, invalid, pub})
+	assert.Equal(t, []ed25519.PublicKey{pub}, out)
+}
+
+func TestManifest_MissingOrEmptyStringField_Good(t *testing.T) {
+	raw := map[string]any{"sign": "abc"}
+	assert.False(t, missingOrEmptyStringField(raw, "sign", "abc"))
+}
+
+func TestManifest_MissingOrEmptyStringField_Bad(t *testing.T) {
+	raw := map[string]any{}
+	assert.True(t, missingOrEmptyStringField(raw, "sign", "abc"))
+}
+
+func TestManifest_MissingOrEmptyStringField_Ugly(t *testing.T) {
+	raw := map[string]any{"sign": ""}
+	assert.True(t, missingOrEmptyStringField(raw, "sign", "abc"))
+	raw["sign"] = "   "
+	assert.True(t, missingOrEmptyStringField(raw, "sign", "abc"))
+}
+
+func TestManifest_TrustedManifestPublicKeys_Good(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
+
+	got, err := trustedManifestPublicKeys()
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Equal(t, pub, got[0])
+}
+
+func TestManifest_TrustedManifestPublicKeys_Bad(t *testing.T) {
+	setManifestTrustKeys(t, "not-hex")
+	_, err := trustedManifestPublicKeys()
+	assert.Error(t, err)
+}
+
+func TestManifest_TrustedManifestPublicKeys_Ugly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("DIR_HOME", home)
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
+
+	keysDir := filepath.Join(home, ".core", "keys")
+	assert.NoError(t, os.MkdirAll(keysDir, 0o755))
+
+	pub, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	assert.NoError(t, os.WriteFile(filepath.Join(keysDir, "trusted.pub"), []byte(fmt.Sprintf("%x\n", pub)), 0o644))
+
+	got, err := trustedManifestPublicKeys()
+	assert.NoError(t, err)
+	assert.Len(t, got, 1)
 }
 
 func TestManifest_LoadManifest_Good(t *testing.T) {

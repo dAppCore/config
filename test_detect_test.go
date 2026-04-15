@@ -57,6 +57,12 @@ func TestTestDetect_ResolveTestManifest_Good(t *testing.T) {
 			content:  "version: '3'\n",
 			expected: "task test",
 		},
+		{
+			name:     "taskfile-yml",
+			filename: "Taskfile.yml",
+			content:  "version: '3'\n",
+			expected: "task test",
+		},
 	}
 
 	for _, tc := range tests {
