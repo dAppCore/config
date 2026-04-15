@@ -22,6 +22,24 @@ func FindProjectManifest(medium coreio.Medium, start string, name string) string
 	return ""
 }
 
+// FindUserManifest returns the user-global ~/.core/{name} path when it exists.
+//
+//	path := config.FindUserManifest(io.Local, config.FileAgent)
+func FindUserManifest(medium coreio.Medium, name string) string {
+	if medium == nil {
+		medium = coreio.Local
+	}
+	home := core.Env("DIR_HOME")
+	if home == "" {
+		return ""
+	}
+	candidate := core.Path(home, Directory, name)
+	if medium.Exists(candidate) {
+		return candidate
+	}
+	return ""
+}
+
 func projectCoreDirs(medium coreio.Medium, start string) []string {
 	if medium == nil {
 		medium = coreio.Local
@@ -186,6 +204,52 @@ func ResolvePackageManifest(medium coreio.Medium, start string) (*PackageManifes
 		return nil, err
 	}
 	return &pkg, nil
+}
+
+// FindAgentManifest returns the user-global ~/.core/agent.yaml when it exists.
+//
+//	path := config.FindAgentManifest(io.Local)
+func FindAgentManifest(medium coreio.Medium) string {
+	return FindUserManifest(medium, FileAgent)
+}
+
+// ResolveAgentManifest loads the user-global ~/.core/agent.yaml.
+//
+//	agent, err := config.ResolveAgentManifest(io.Local)
+func ResolveAgentManifest(medium coreio.Medium) (*AgentManifest, error) {
+	path := FindAgentManifest(medium)
+	if path == "" {
+		return nil, coreerr.E("config.ResolveAgentManifest", "no agent manifest could be detected", nil)
+	}
+
+	var agent AgentManifest
+	if err := LoadManifest(medium, path, &agent); err != nil {
+		return nil, err
+	}
+	return &agent, nil
+}
+
+// FindZoneManifest returns the user-global ~/.core/zone.yaml when it exists.
+//
+//	path := config.FindZoneManifest(io.Local)
+func FindZoneManifest(medium coreio.Medium) string {
+	return FindUserManifest(medium, FileZone)
+}
+
+// ResolveZoneManifest loads the user-global ~/.core/zone.yaml.
+//
+//	zone, err := config.ResolveZoneManifest(io.Local)
+func ResolveZoneManifest(medium coreio.Medium) (*ZoneManifest, error) {
+	path := FindZoneManifest(medium)
+	if path == "" {
+		return nil, coreerr.E("config.ResolveZoneManifest", "no zone manifest could be detected", nil)
+	}
+
+	var zone ZoneManifest
+	if err := LoadManifest(medium, path, &zone); err != nil {
+		return nil, err
+	}
+	return &zone, nil
 }
 
 // FindWorkspaceManifest returns the nearest project-local .core/workspace.yaml.
