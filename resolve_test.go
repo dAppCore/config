@@ -27,7 +27,6 @@ func TestResolve_FindConfigManifest_Good(t *testing.T) {
 	base := filepath.Join(tmp, "workspace")
 	repo := filepath.Join(base, "repo")
 	child := filepath.Join(repo, "service")
-	home := core.Env("DIR_HOME")
 
 	for _, dir := range []string{
 		filepath.Join(base, ".core"),
@@ -38,12 +37,12 @@ func TestResolve_FindConfigManifest_Good(t *testing.T) {
 		assert.NoError(t, m.EnsureDir(dir))
 	}
 
-	globalConfig := filepath.Join(home, ".core", FileConfig)
+	globalConfig := filepath.Join(core.Env("DIR_HOME"), ".core", FileConfig)
 	projectConfig := filepath.Join(repo, ".core", FileConfig)
-	globalRepos := filepath.Join(home, ".core", FileRepos)
+	workspaceRepos := filepath.Join(base, ".core", FileRepos)
 	assert.NoError(t, m.Write(globalConfig, "app:\n  name: global\n"))
 	assert.NoError(t, m.Write(projectConfig, "app:\n  name: project\n"))
-	assert.NoError(t, m.Write(globalRepos, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	assert.NoError(t, m.Write(workspaceRepos, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	assert.Equal(t, projectConfig, FindConfigManifest(m, child))
 }
@@ -67,7 +66,6 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 	base := filepath.Join(tmp, "workspace")
 	repo := filepath.Join(base, "repo")
 	child := filepath.Join(repo, "service")
-	home := core.Env("DIR_HOME")
 
 	for _, dir := range []string{
 		filepath.Join(base, ".core"),
@@ -78,7 +76,6 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 		assert.NoError(t, m.EnsureDir(dir))
 	}
 	assert.NoError(t, m.EnsureDir(filepath.Join(base, ".core")))
-	assert.NoError(t, m.EnsureDir(filepath.Join(home, ".core")))
 
 	files := map[string]string{
 		FileBuild:     "name: core\noutput: dist\ntargets:\n  - linux/amd64\n",
@@ -93,7 +90,7 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 		assert.NoError(t, m.Write(filepath.Join(repo, ".core", name), content))
 	}
 	assert.NoError(t, m.Write(filepath.Join(base, ".core", FileBuild), "name: external\noutput: ext\n"))
-	assert.NoError(t, m.Write(filepath.Join(home, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	assert.NoError(t, m.Write(filepath.Join(base, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	cases := []struct {
 		name string
@@ -106,7 +103,7 @@ func TestResolve_FindProjectManifest_Good(t *testing.T) {
 		{name: "view", path: filepath.Join(repo, ".core", FileView), got: FindViewManifest(m, child)},
 		{name: "manifest", path: filepath.Join(repo, ".core", FileManifest), got: FindPackageManifest(m, child)},
 		{name: "workspace", path: filepath.Join(repo, ".core", FileWorkspace), got: FindWorkspaceManifest(m, child)},
-		{name: "repos", path: filepath.Join(home, ".core", FileRepos), got: FindReposManifest(m, child)},
+		{name: "repos", path: filepath.Join(base, ".core", FileRepos), got: FindReposManifest(m, child)},
 	}
 
 	for _, tc := range cases {
@@ -143,14 +140,15 @@ func TestResolve_FindProjectManifest_Bad(t *testing.T) {
 
 func TestResolve_FindProjectManifest_Ugly(t *testing.T) {
 	// Nil medium falls back to the local filesystem; with no .core tree the
-	// wrappers should still return an empty path instead of panicking.
+	// project-local wrappers should still return an empty path instead of panicking.
+	// Repos are resolved from the shared workspace root and may legitimately
+	// exist on the host machine, so this test does not assert on repos.yaml.
 	start := filepath.Join(t.TempDir(), "missing", "service")
 	assert.Empty(t, FindBuildManifest(nil, start))
 	assert.Empty(t, FindReleaseManifest(nil, start))
 	assert.Empty(t, FindRunManifest(nil, start))
 	assert.Empty(t, FindViewManifest(nil, start))
 	assert.Empty(t, FindPackageManifest(nil, start))
-	assert.Empty(t, FindReposManifest(nil, start))
 }
 
 func TestResolve_ResolveConfigManifest_Good(t *testing.T) {
@@ -213,14 +211,14 @@ func TestResolve_ResolveProjectManifests_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
 	repo := filepath.Join(tmp, "workspace", "repo")
+	workspace := filepath.Join(tmp, "workspace")
 	child := filepath.Join(repo, "service")
-	home := core.Env("DIR_HOME")
 
 	for _, dir := range []string{
 		filepath.Join(repo, ".core"),
 		filepath.Join(repo, ".git"),
 		child,
-		filepath.Join(home, ".core"),
+		filepath.Join(workspace, ".core"),
 	} {
 		assert.NoError(t, m.EnsureDir(dir))
 	}
@@ -236,7 +234,7 @@ func TestResolve_ResolveProjectManifests_Good(t *testing.T) {
 	assert.NoError(t, m.Write(runPath, "version: 1\nservices:\n  - name: db\n    image: postgres:16\n    port: 5432\ndev:\n  command: php artisan serve\n  port: 8000\n  watch:\n    - app/\n"))
 	assert.NoError(t, m.Write(viewPath, "code: photo-browser\nname: Photo Browser\nsign: "+base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))+"\npermissions:\n  clipboard: true\n"))
 	assert.NoError(t, m.Write(packagePath, packageManifestFixture(t)))
-	assert.NoError(t, m.Write(filepath.Join(home, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	assert.NoError(t, m.Write(filepath.Join(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	build, err := ResolveBuildManifest(m, child)
 	assert.NoError(t, err)
@@ -270,6 +268,7 @@ func TestResolve_ResolveProjectManifests_Good(t *testing.T) {
 }
 
 func TestResolve_ResolveProjectManifests_Bad(t *testing.T) {
+	t.Setenv("DIR_HOME", t.TempDir())
 	m := coreio.NewMockMedium()
 	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
 
@@ -287,18 +286,29 @@ func TestResolve_ResolveProjectManifests_Bad(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestResolve_FindReposManifest_FallsBackToWorkspaceRoot_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
+	reposPath := filepath.Join(core.Env("DIR_HOME"), "Code", ".core", FileRepos)
+
+	assert.NoError(t, m.EnsureDir(filepath.Dir(reposPath)))
+	assert.NoError(t, m.Write(reposPath, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+
+	assert.Equal(t, reposPath, FindReposManifest(m, start))
+}
+
 func TestResolve_ResolveProjectManifests_Ugly(t *testing.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
 	repo := filepath.Join(tmp, "workspace", "repo")
+	workspace := filepath.Join(tmp, "workspace")
 	child := filepath.Join(repo, "service")
-	home := core.Env("DIR_HOME")
 
 	for _, dir := range []string{
 		filepath.Join(repo, ".core"),
 		filepath.Join(repo, ".git"),
 		child,
-		filepath.Join(home, ".core"),
+		filepath.Join(workspace, ".core"),
 	} {
 		assert.NoError(t, m.EnsureDir(dir))
 	}
@@ -308,7 +318,7 @@ func TestResolve_ResolveProjectManifests_Ugly(t *testing.T) {
 	assert.NoError(t, m.Write(filepath.Join(repo, ".core", FileRun), "version: 1\nservices: [broken yaml"))
 	assert.NoError(t, m.Write(filepath.Join(repo, ".core", FileView), "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n"))
 	assert.NoError(t, m.Write(filepath.Join(repo, ".core", FileManifest), "code: go-io\nname: Core I/O\nsign: not-base64\nsign_key: \"\"\n"))
-	assert.NoError(t, m.Write(filepath.Join(home, ".core", FileRepos), "version: 1\norg: host-uk\nrepos: [broken yaml"))
+	assert.NoError(t, m.Write(filepath.Join(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos: [broken yaml"))
 
 	_, err := ResolveBuildManifest(m, child)
 	assert.Error(t, err)

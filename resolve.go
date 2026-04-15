@@ -415,14 +415,39 @@ func WorkspaceSandboxPath(repo, branch string, parts ...string) string {
 	return core.Path(elems...)
 }
 
-// FindReposManifest returns the workspace-root ~/.core/repos.yaml when it exists.
-func FindReposManifest(medium coreio.Medium, _ string) string {
-	return FindUserManifest(medium, FileRepos)
+// FindReposManifest returns the nearest workspace-root .core/repos.yaml while
+// walking upward from start without stopping at repository boundaries. This
+// keeps repos.yaml at the shared workspace root rather than under ~/.core/.
+func FindReposManifest(medium coreio.Medium, start string) string {
+	if medium == nil {
+		medium = coreio.Local
+	}
+
+	dir := start
+	for {
+		candidate := core.Path(dir, Directory, FileRepos)
+		if medium.Exists(candidate) {
+			return candidate
+		}
+		parent := core.PathDir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	if home := core.Env("DIR_HOME"); home != "" {
+		candidate := core.Path(home, "Code", Directory, FileRepos)
+		if medium.Exists(candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
-// ResolveReposManifest loads the workspace-root ~/.core/repos.yaml.
-func ResolveReposManifest(medium coreio.Medium, _ string) (*ReposManifest, error) {
-	path := FindReposManifest(medium, "")
+// ResolveReposManifest loads the workspace-root .core/repos.yaml.
+func ResolveReposManifest(medium coreio.Medium, start string) (*ReposManifest, error) {
+	path := FindReposManifest(medium, start)
 	if path == "" {
 		return nil, coreerr.E("config.ResolveReposManifest", "no repos manifest could be detected", nil)
 	}

@@ -259,7 +259,7 @@ func TestService_Commit_Bad(t *testing.T) {
 func TestService_LoadFile_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
-	m.Files[".core/override.yaml"] = "dev:\n  shell: zsh\n"
+	m.Files["/tmp/svc/.core/override.yaml"] = "dev:\n  shell: zsh\n"
 
 	c := core.New()
 	svc := &Service{
@@ -306,7 +306,7 @@ func TestService_LoadFile_Ugly(t *testing.T) {
 func TestService_RegistersActionsAndCommands_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
-	m.Files[".core/loaded.yaml"] = "dev:\n  editor: nano\n"
+	m.Files["/tmp/svc/.core/loaded.yaml"] = "dev:\n  editor: nano\n"
 
 	c := core.New()
 	svc := &Service{

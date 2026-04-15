@@ -111,62 +111,57 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 	return core.Result{OK: true}
 }
 
-func validateServiceLoadPath(basePath, path string) error {
+func resolveValidatedServiceLoadPath(basePath, path string) (string, error) {
 	if path == "" {
-		return coreerr.E("config.validateServiceLoadPath", "empty config path", nil)
+		return "", coreerr.E("config.validateServiceLoadPath", "empty config path", nil)
 	}
 	if filepath.IsAbs(path) {
-		return coreerr.E("config.validateServiceLoadPath", "absolute config paths are not allowed: "+path, nil)
+		return "", coreerr.E("config.validateServiceLoadPath", "absolute config paths are not allowed: "+path, nil)
 	}
 
 	clean := filepath.Clean(path)
 	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return coreerr.E("config.validateServiceLoadPath", "path traversal rejected: "+path, nil)
+		return "", coreerr.E("config.validateServiceLoadPath", "path traversal rejected: "+path, nil)
 	}
 	if !strings.Contains(clean, string(filepath.Separator)+Directory+string(filepath.Separator)) &&
 		!strings.HasPrefix(clean, Directory+string(filepath.Separator)) &&
 		clean != Directory {
-		return coreerr.E("config.validateServiceLoadPath", "config paths must remain under .core/: "+path, nil)
+		return "", coreerr.E("config.validateServiceLoadPath", "config paths must remain under .core/: "+path, nil)
 	}
-	validatedPathType := false
 	if basePath != "" {
 		base := filepath.Clean(filepath.Dir(basePath))
 		corePath := filepath.Clean(filepath.Join(base, Directory))
 		absCorePath, err := filepath.Abs(corePath)
 		if err != nil {
-			return coreerr.E("config.validateServiceLoadPath", "resolve config base failed: "+path, err)
+			return "", coreerr.E("config.validateServiceLoadPath", "resolve config base failed: "+path, err)
 		}
 		candidatePath := filepath.Clean(filepath.Join(base, clean))
 		absCandidate, err := filepath.Abs(candidatePath)
 		if err != nil {
-			return coreerr.E("config.validateServiceLoadPath", "resolve config path failed: "+path, err)
+			return "", coreerr.E("config.validateServiceLoadPath", "resolve config path failed: "+path, err)
 		}
 
 		resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(candidatePath, absCorePath, absCandidate)
 		if err != nil {
-			return err
+			return "", err
 		}
 		coreAbs := resolvedCore
 		rel, relErr := filepath.Rel(coreAbs, resolvedCandidate)
 		if relErr != nil {
-			return coreerr.E("config.validateServiceLoadPath", "failed relative path check: "+path, relErr)
+			return "", coreerr.E("config.validateServiceLoadPath", "failed relative path check: "+path, relErr)
 		}
-		if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
-			validatedPathType = true
-		} else {
-			return coreerr.E("config.validateServiceLoadPath", "config path escapes .core/: "+path, nil)
+		if rel != "." && (rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+			return "", coreerr.E("config.validateServiceLoadPath", "config path escapes .core/: "+path, nil)
 		}
-	}
-	if basePath == "" {
-		validatedPathType = true
-	}
-	if !validatedPathType {
-		return coreerr.E("config.validateServiceLoadPath", "config path validation failed: "+path, nil)
+		if _, err := configTypeForPath(clean); err != nil {
+			return "", err
+		}
+		return candidatePath, nil
 	}
 	if _, err := configTypeForPath(clean); err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return clean, nil
 }
 
 func resolveServiceLoadPath(candidatePath, coreAbs, absCandidate string) (string, string, error) {
@@ -427,10 +422,11 @@ func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.LoadFile", "config not loaded", nil)
 	}
-	if err := validateServiceLoadPath(s.config.Path(), path); err != nil {
+	resolvedPath, err := resolveValidatedServiceLoadPath(s.config.Path(), path)
+	if err != nil {
 		return err
 	}
-	return s.config.LoadFile(m, path)
+	return s.config.LoadFile(m, resolvedPath)
 }
 
 func ensureConfigEntitlement(c *core.Core, action string) core.Result {
