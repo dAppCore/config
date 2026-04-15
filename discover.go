@@ -54,6 +54,9 @@ func DiscoverFrom(start string, opts ...Option) (*Config, error) {
 		}
 		base.MergeFrom(layer)
 	}
+	if err := base.loadStoreState(); err != nil {
+		return nil, coreerr.E("config.DiscoverFrom", "failed to load config store state", err)
+	}
 
 	return base, nil
 }

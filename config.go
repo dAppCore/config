@@ -11,6 +11,7 @@
 package config
 
 import (
+	"encoding/json"
 	"iter"
 	"slices"
 	"strings"
@@ -71,6 +72,14 @@ type Option func(*Config)
 //	store.Set("config", "dev.editor", "\"vim\"")
 type ConfigStoreWriter interface {
 	Set(string, string, string) error
+}
+
+// ConfigStoreReader is the optional store contract for hydrating config state
+// back into memory on startup so pre-Commit Set() calls survive restarts.
+//
+//	values, _ := store.GetAll("config")
+type ConfigStoreReader interface {
+	GetAll(string) (map[string]string, error)
 }
 
 // WithMedium sets the storage medium for configuration file operations.
@@ -197,6 +206,11 @@ func newConfig(loadFromPath bool, opts ...Option) (*Config, error) {
 	if loadFromPath && c.medium.Exists(c.path) {
 		if err := c.loadFile(c.medium, c.path, false); err != nil {
 			return nil, coreerr.E("config.New", "failed to load config file", err)
+		}
+	}
+	if loadFromPath {
+		if err := c.loadStoreState(); err != nil {
+			return nil, coreerr.E("config.New", "failed to load config store state", err)
 		}
 	}
 
@@ -656,4 +670,41 @@ func persistToStore(store ConfigStoreWriter, key string, value any) {
 		return
 	}
 	_ = store.Set("config", key, core.JSONMarshalString(value))
+}
+
+func (c *Config) loadStoreState() error {
+	reader, ok := c.store.(ConfigStoreReader)
+	if !ok || reader == nil {
+		return nil
+	}
+
+	entries, err := reader.GetAll("config")
+	if err != nil {
+		return coreerr.E("config.loadStoreState", "failed to read config entries from store", err)
+	}
+
+	for key, raw := range entries {
+		if key == "" {
+			continue
+		}
+		decoded := decodeStoredConfigValue(raw)
+		c.file.Set(key, decoded)
+		c.full.Set(key, decoded)
+	}
+
+	return nil
+}
+
+func decodeStoredConfigValue(raw string) any {
+	if raw == "" {
+		return ""
+	}
+
+	var decoded any
+	if err := json.Unmarshal([]byte(raw), &decoded); err == nil {
+		return decoded
+	}
+
+	// Older or non-core writers may persist plain strings instead of JSON.
+	return raw
 }
