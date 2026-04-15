@@ -492,6 +492,14 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 	return ""
 }
 
+// FindWorkspaceRegistryManifest returns the nearest workspace-root
+// .core/repos.yaml. It is an alias for FindReposManifest and exists so callers
+// can use the workspace-registry naming from the RFC without changing the
+// underlying storage layout.
+func FindWorkspaceRegistryManifest(medium coreio.Medium, start string) string {
+	return FindReposManifest(medium, start)
+}
+
 // ResolveReposManifest loads the workspace-root .core/repos.yaml.
 func ResolveReposManifest(medium coreio.Medium, start string) (*ReposManifest, error) {
 	path := FindReposManifest(medium, start)
@@ -504,6 +512,13 @@ func ResolveReposManifest(medium coreio.Medium, start string) (*ReposManifest, e
 		return nil, err
 	}
 	return &repos, nil
+}
+
+// ResolveWorkspaceRegistryManifest loads the workspace-root .core/repos.yaml.
+// It mirrors ResolveReposManifest for callers that prefer the RFC-aligned
+// workspace-registry naming.
+func ResolveWorkspaceRegistryManifest(medium coreio.Medium, start string) (*ReposManifest, error) {
+	return ResolveReposManifest(medium, start)
 }
 
 // FindPHPManifest returns the nearest project-local .core/php.yaml.
