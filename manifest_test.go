@@ -9,7 +9,7 @@ import (
 
 func TestManifest_LoadManifest_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/pkg/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\n"
+	m.Files["/pkg/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign: signed-manifest\nsign_key: pubkey\n"
 
 	var pkg PackageManifest
 	err := LoadManifest(m, "/pkg/.core/manifest.yaml", &pkg)
@@ -70,7 +70,7 @@ func TestManifest_LoadManifest_Build_ShorthandTargets_Good(t *testing.T) {
 
 func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n  filesystem: true\n"
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: signed-view\npermissions:\n  clipboard: true\n  filesystem: true\n"
 
 	var view ViewManifest
 	err := LoadManifest(m, "/.core/view.yaml", &view)

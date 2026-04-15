@@ -621,7 +621,7 @@ func validateManifest(path string, out any, raw map[string]any) error {
 		if !ok {
 			return nil
 		}
-		if hasEmptyStringField(raw, "sign") && view.Sign == "" {
+		if missingOrEmptyStringField(raw, "sign", view.Sign) {
 			return coreerr.E("config.LoadManifest", "unsigned view manifest rejected: "+path, nil)
 		}
 	case FileManifest:
@@ -629,23 +629,26 @@ func validateManifest(path string, out any, raw map[string]any) error {
 		if !ok {
 			return nil
 		}
-		if hasEmptyStringField(raw, "sign") && pkg.Sign == "" {
+		if missingOrEmptyStringField(raw, "sign", pkg.Sign) {
 			return coreerr.E("config.LoadManifest", "unsigned package manifest rejected: "+path, nil)
 		}
-		if hasEmptyStringField(raw, "sign_key") && pkg.SignKey == "" {
+		if missingOrEmptyStringField(raw, "sign_key", pkg.SignKey) {
 			return coreerr.E("config.LoadManifest", "missing package sign_key: "+path, nil)
 		}
 	}
 	return nil
 }
 
-func hasEmptyStringField(raw map[string]any, key string) bool {
-	value, ok := raw[key]
-	if !ok {
-		return false
+func missingOrEmptyStringField(raw map[string]any, key string, current string) bool {
+	if strings.TrimSpace(current) == "" {
+		return true
 	}
-	s, ok := value.(string)
-	return ok && strings.TrimSpace(s) == ""
+	rawValue, ok := raw[key]
+	if !ok {
+		return true
+	}
+	s, ok := rawValue.(string)
+	return !ok || strings.TrimSpace(s) == ""
 }
 
 func firstNonEmpty(values ...string) string {

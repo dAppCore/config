@@ -38,12 +38,17 @@ func DiscoverFrom(start string, opts ...Option) (*Config, error) {
 	if medium == nil {
 		medium = coreio.Local
 	}
+	envPrefix := envPrefixOf(base.full)
 
 	paths := discoverPaths(medium, start)
 
 	// paths are ordered closest → furthest; closest-wins via MergeFrom.
 	for _, p := range paths {
-		layer, err := New(WithMedium(medium), WithPath(p))
+		layerOpts := []Option{WithMedium(medium), WithPath(p)}
+		if envPrefix != "" {
+			layerOpts = append(layerOpts, WithEnvPrefix(envPrefix))
+		}
+		layer, err := New(layerOpts...)
 		if err != nil {
 			return nil, coreerr.E("config.DiscoverFrom", "failed to load discovered config: "+p, err)
 		}

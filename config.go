@@ -12,6 +12,7 @@ package config
 
 import (
 	"iter"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -345,6 +346,7 @@ func (c *Config) Set(key string, v any) error {
 	if attached != nil {
 		attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: "set"})
 	}
+	c.persistToStore(key, v)
 	return nil
 }
 
@@ -516,20 +518,30 @@ func (c *Config) OnChange(fn func(key string, value any)) {
 //
 // Deprecated: Use Config.LoadFile instead.
 func Load(m coreio.Medium, path string) (map[string]any, error) {
-	switch ext := core.Lower(core.PathExt(path)); ext {
-	case "", ".yaml", ".yml":
-		// These paths are safe to treat as YAML sources.
-	default:
-		return nil, coreerr.E("config.Load", "unsupported config file type: "+path, nil)
-	}
-
 	content, err := m.Read(path)
 	if err != nil {
 		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
 	}
 
+	ext := core.Lower(core.PathExt(path))
+	switch ext {
+	case "", ".yaml", ".yml":
+		// These paths are safe to treat as YAML sources.
+	case ".env":
+		// dotenv sources are also supported by the RFC contract.
+	default:
+		if core.PathBase(path) != ".env" {
+			return nil, coreerr.E("config.Load", "unsupported config file type: "+path, nil)
+		}
+	}
+
 	v := viper.New()
-	v.SetConfigType("yaml")
+	switch {
+	case ext == ".env" || core.PathBase(path) == ".env":
+		v.SetConfigType("env")
+	default:
+		v.SetConfigType("yaml")
+	}
 	if err := v.ReadConfig(core.NewReader(content)); err != nil {
 		return nil, coreerr.E("config.Load", "failed to parse config file: "+path, err)
 	}
@@ -564,4 +576,49 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 	}
 
 	return nil
+}
+
+func (c *Config) persistToStore(key string, value any) {
+	if c == nil || c.core == nil || key == "" {
+		return
+	}
+
+	result := c.core.Service("store")
+	if !result.OK || result.Value == nil {
+		return
+	}
+
+	if setter, ok := result.Value.(interface {
+		Set(string, string, string) error
+	}); ok {
+		_ = setter.Set("config", key, core.JSONMarshalString(value))
+		return
+	}
+
+	ref := reflect.ValueOf(result.Value)
+	if !ref.IsValid() {
+		return
+	}
+	if ref.Kind() == reflect.Ptr && !ref.IsNil() {
+		ref = ref.Elem()
+	}
+	if ref.Kind() != reflect.Struct {
+		return
+	}
+
+	field := ref.FieldByName("Store")
+	if !field.IsValid() || !field.CanInterface() {
+		return
+	}
+	if field.Kind() != reflect.Ptr && field.Kind() != reflect.Interface {
+		return
+	}
+	if field.IsNil() {
+		return
+	}
+	if setter, ok := field.Interface().(interface {
+		Set(string, string, string) error
+	}); ok {
+		_ = setter.Set("config", key, core.JSONMarshalString(value))
+	}
 }
