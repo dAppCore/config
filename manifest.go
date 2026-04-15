@@ -1,6 +1,7 @@
 package config
 
 import (
+	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
 	"strings"
@@ -490,7 +491,48 @@ func LoadManifest(m coreio.Medium, path string, out any) error {
 	if err := yaml.Unmarshal([]byte(content), out); err != nil {
 		return coreerr.E("config.LoadManifest", "failed to parse manifest: "+path, err)
 	}
+	var raw map[string]any
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		return coreerr.E("config.LoadManifest", "failed to inspect manifest: "+path, err)
+	}
+	if err := validateManifest(path, out, raw); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateManifest(path string, out any, raw map[string]any) error {
+	switch core.PathBase(path) {
+	case FileView:
+		view, ok := out.(*ViewManifest)
+		if !ok {
+			return nil
+		}
+		if hasEmptyStringField(raw, "sign") && view.Sign == "" {
+			return coreerr.E("config.LoadManifest", "unsigned view manifest rejected: "+path, nil)
+		}
+	case FileManifest:
+		pkg, ok := out.(*PackageManifest)
+		if !ok {
+			return nil
+		}
+		if hasEmptyStringField(raw, "sign") && pkg.Sign == "" {
+			return coreerr.E("config.LoadManifest", "unsigned package manifest rejected: "+path, nil)
+		}
+		if hasEmptyStringField(raw, "sign_key") && pkg.SignKey == "" {
+			return coreerr.E("config.LoadManifest", "missing package sign_key: "+path, nil)
+		}
+	}
+	return nil
+}
+
+func hasEmptyStringField(raw map[string]any, key string) bool {
+	value, ok := raw[key]
+	if !ok {
+		return false
+	}
+	s, ok := value.(string)
+	return ok && s == ""
 }
 
 func firstNonEmpty(values ...string) string {
