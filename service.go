@@ -152,6 +152,13 @@ func (s *Service) registerActions(c *core.Core) {
 		}
 		return core.Result{Value: out, OK: true}
 	})
+
+	c.Action("config.path", func(_ context.Context, _ core.Options) core.Result {
+		if s.config == nil {
+			return core.Result{Value: coreerr.E("config.path", "config not loaded", nil), OK: false}
+		}
+		return core.Result{Value: s.config.Path(), OK: true}
+	})
 }
 
 // registerCommands exposes config commands for CLI discovery.
@@ -199,6 +206,57 @@ func (s *Service) registerCommands(c *core.Core) {
 				out[k] = v
 			}
 			return core.Result{Value: out, OK: true}
+		},
+	})
+
+	c.Command("config/commit", core.Command{
+		Description: "Persist config changes",
+		Action: func(_ core.Options) core.Result {
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/commit", "config not loaded", nil), OK: false}
+			}
+			if err := s.config.Commit(); err != nil {
+				return core.Result{Value: err, OK: false}
+			}
+			return core.Result{OK: true}
+		},
+	})
+
+	c.Command("config/load", core.Command{
+		Description: "Load a config file",
+		Action: func(opts core.Options) core.Result {
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/load", "config not loaded", nil), OK: false}
+			}
+			path := opts.String("path")
+			if err := s.config.LoadFile(s.config.medium, path); err != nil {
+				return core.Result{Value: err, OK: false}
+			}
+			return core.Result{OK: true}
+		},
+	})
+
+	c.Command("config/all", core.Command{
+		Description: "List all config values",
+		Action: func(_ core.Options) core.Result {
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/all", "config not loaded", nil), OK: false}
+			}
+			out := make(map[string]any)
+			for k, v := range s.config.All() {
+				out[k] = v
+			}
+			return core.Result{Value: out, OK: true}
+		},
+	})
+
+	c.Command("config/path", core.Command{
+		Description: "Show the config file path",
+		Action: func(_ core.Options) core.Result {
+			if s.config == nil {
+				return core.Result{Value: coreerr.E("config/path", "config not loaded", nil), OK: false}
+			}
+			return core.Result{Value: s.config.Path(), OK: true}
 		},
 	})
 }

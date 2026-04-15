@@ -532,7 +532,7 @@ func hasEmptyStringField(raw map[string]any, key string) bool {
 		return false
 	}
 	s, ok := value.(string)
-	return ok && s == ""
+	return ok && strings.TrimSpace(s) == ""
 }
 
 func firstNonEmpty(values ...string) string {
