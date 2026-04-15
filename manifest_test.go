@@ -155,6 +155,57 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedCore_Bad(t *testing.T) {
 	assert.Contains(t, err.Error(), "symlinked .core directory rejected")
 }
 
+func TestManifest_TrustedManifestPublicKeys_SymlinkedKeysDir_Bad(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	home := core.Env("DIR_HOME")
+	realKeys := filepath.Join(t.TempDir(), "real-keys")
+
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
+
+	coreDir := filepath.Join(home, ".core")
+	keysDir := filepath.Join(coreDir, "keys")
+	if _, err := os.Lstat(keysDir); err == nil {
+		t.Skip("DIR_HOME/.core/keys already exists in this environment")
+	}
+	assert.NoError(t, os.MkdirAll(coreDir, 0o755))
+	assert.NoError(t, os.MkdirAll(realKeys, 0o755))
+	assert.NoError(t, os.Symlink(realKeys, keysDir))
+	t.Cleanup(func() { _ = os.Remove(keysDir) })
+
+	_, err := trustedManifestPublicKeys()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked trusted keys directory rejected")
+}
+
+func TestManifest_TrustedManifestPublicKeys_SymlinkedKeyFile_Bad(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	home := core.Env("DIR_HOME")
+	realKeys := filepath.Join(t.TempDir(), "real-keys")
+	pub, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
+
+	coreDir := filepath.Join(home, ".core")
+	keysDir := filepath.Join(coreDir, "keys")
+	assert.NoError(t, os.MkdirAll(keysDir, 0o755))
+	assert.NoError(t, os.MkdirAll(realKeys, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(realKeys, "trusted.pub"), []byte(fmt.Sprintf("%x\n", pub)), 0o644))
+	symlinkPath := filepath.Join(keysDir, "trusted.pub")
+	assert.NoError(t, os.Symlink(filepath.Join(realKeys, "trusted.pub"), symlinkPath))
+	t.Cleanup(func() { _ = os.Remove(symlinkPath) })
+
+	_, err = trustedManifestPublicKeys()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked trusted key rejected")
+}
+
 func TestManifest_TrustedManifestPublicKeysExported_Good(t *testing.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)

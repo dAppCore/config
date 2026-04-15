@@ -292,6 +292,12 @@ func TestConfig_DefaultPath_Good(t *testing.T) {
 	assert.Equal(t, home+"/.core/config.yaml", cfg.Path())
 }
 
+func TestConfig_New_NoHome_Bad(t *testing.T) {
+	// Missing seam: New() resolves its default home directory through core.Env
+	// and cannot currently be forced to fail from a unit test.
+	t.Skip("missing seam: cannot force home-directory resolution failure in New()")
+}
+
 func TestLoadEnv_Good(t *testing.T) {
 	t.Setenv("CORE_CONFIG_FOO_BAR", "baz")
 	t.Setenv("CORE_CONFIG_SIMPLE", "value")
