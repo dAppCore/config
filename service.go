@@ -123,19 +123,17 @@ func resolveValidatedServiceLoadPath(basePath, path string) (string, error) {
 	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", coreerr.E("config.validateServiceLoadPath", "path traversal rejected: "+path, nil)
 	}
-	if !strings.Contains(clean, string(filepath.Separator)+Directory+string(filepath.Separator)) &&
-		!strings.HasPrefix(clean, Directory+string(filepath.Separator)) &&
-		clean != Directory {
+	if !isProjectCoreRelativePath(clean) {
 		return "", coreerr.E("config.validateServiceLoadPath", "config paths must remain under .core/: "+path, nil)
 	}
 	if basePath != "" {
-		base := filepath.Clean(filepath.Dir(basePath))
-		corePath := filepath.Clean(filepath.Join(base, Directory))
+		projectRoot := serviceProjectRoot(basePath)
+		corePath := filepath.Clean(filepath.Join(projectRoot, Directory))
 		absCorePath, err := filepath.Abs(corePath)
 		if err != nil {
 			return "", coreerr.E("config.validateServiceLoadPath", "resolve config base failed: "+path, err)
 		}
-		candidatePath := filepath.Clean(filepath.Join(base, clean))
+		candidatePath := filepath.Clean(filepath.Join(projectRoot, clean))
 		absCandidate, err := filepath.Abs(candidatePath)
 		if err != nil {
 			return "", coreerr.E("config.validateServiceLoadPath", "resolve config path failed: "+path, err)
@@ -162,6 +160,18 @@ func resolveValidatedServiceLoadPath(basePath, path string) (string, error) {
 		return "", err
 	}
 	return clean, nil
+}
+
+func serviceProjectRoot(basePath string) string {
+	baseDir := filepath.Clean(filepath.Dir(basePath))
+	if filepath.Base(baseDir) == Directory {
+		return filepath.Dir(baseDir)
+	}
+	return baseDir
+}
+
+func isProjectCoreRelativePath(path string) bool {
+	return path == Directory || strings.HasPrefix(path, Directory+string(filepath.Separator))
 }
 
 func resolveServiceLoadPath(candidatePath, coreAbs, absCandidate string) (string, string, error) {
