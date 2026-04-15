@@ -370,6 +370,14 @@ func FindLinuxKitDirectory(medium coreio.Medium, start string) string {
 	return findProjectDirectory(medium, start, LinuxKitDirectory)
 }
 
+// FindLinuxKitManifest returns the nearest project-local .core/linuxkit/core-dev.yml
+// path when it exists.
+//
+//	path := config.FindLinuxKitManifest(io.Local, cwd)
+func FindLinuxKitManifest(medium coreio.Medium, start string) string {
+	return FindProjectManifest(medium, start, FileLinuxKit)
+}
+
 // findProjectDirectory returns the nearest project-local .core/{name}/
 // directory while walking upward from start.
 func findProjectDirectory(medium coreio.Medium, start string, name string) string {

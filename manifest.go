@@ -33,6 +33,7 @@ const (
 	FileAgent          = "agent.yaml"     // core agent — daemon config (user-level)
 	FileZone           = "zone.yaml"      // lethernet — network zone (user-level)
 	FileImagesManifest = "manifest.json"  // core dev — LinuxKit image registry
+	FileLinuxKit       = "core-dev.yml"   // core dev — LinuxKit base image config
 
 	// Directory is the conventional directory name that holds the .core/ files.
 	Directory = ".core"
