@@ -50,6 +50,24 @@ func TestManifest_LoadManifest_Build_Good(t *testing.T) {
 	assert.Equal(t, "amd64", build.Targets[0].Arch)
 }
 
+func TestManifest_LoadManifest_Build_ShorthandTargets_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/build.yaml"] = "name: core\noutput: dist\ntargets:\n  - linux/amd64\n  - darwin/arm64\nsign:\n  enabled: true\n  gpg:\n    key: $GPG_KEY_ID\n  macos:\n    identity: 'Developer ID Application: Example'\n    notarize: false\nsdk:\n  spec: openapi.yaml\n  languages:\n    - typescript\n    - go\n  output: sdk/\n  diff: true\n"
+
+	var build BuildManifest
+	err := LoadManifest(m, "/.core/build.yaml", &build)
+	assert.NoError(t, err)
+	assert.Len(t, build.Targets, 2)
+	assert.Equal(t, "linux", build.Targets[0].OS)
+	assert.Equal(t, "amd64", build.Targets[0].Arch)
+	assert.True(t, build.Signing.Enabled)
+	assert.Equal(t, "$GPG_KEY_ID", build.Signing.GPG.Key)
+	assert.Equal(t, "Developer ID Application: Example", build.Signing.MacOS.Identity)
+	assert.True(t, build.SDK.Diff)
+	assert.Equal(t, "openapi.yaml", build.SDK.Spec)
+	assert.Equal(t, []string{"typescript", "go"}, build.SDK.Languages)
+}
+
 func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n  filesystem: true\n"

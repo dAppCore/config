@@ -95,6 +95,8 @@ type BuildManifest struct {
 	Project BuildProject      `yaml:"project"`
 	Build   BuildSettings     `yaml:"build"`
 	Targets []BuildTarget     `yaml:"targets"`
+	Signing BuildSigning      `yaml:"sign"`
+	SDK     BuildSDK          `yaml:"sdk"`
 	Name    string            `yaml:"-"`
 	Main    string            `yaml:"-"`
 	Binary  string            `yaml:"-"`
@@ -127,6 +129,67 @@ type BuildSettings struct {
 type BuildTarget struct {
 	OS   string `yaml:"os"`
 	Arch string `yaml:"arch"`
+}
+
+// UnmarshalYAML accepts either the structured `{os, arch}` form or the RFC
+// shorthand `linux/amd64` form.
+func (t *BuildTarget) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var raw string
+		if err := value.Decode(&raw); err != nil {
+			return err
+		}
+		if raw == "" {
+			*t = BuildTarget{}
+			return nil
+		}
+		osPart, archPart, ok := strings.Cut(raw, "/")
+		if !ok || osPart == "" || archPart == "" {
+			return coreerr.E("config.BuildTarget.UnmarshalYAML", "invalid target shorthand: "+raw, nil)
+		}
+		*t = BuildTarget{OS: osPart, Arch: archPart}
+		return nil
+	case yaml.MappingNode:
+		type alias BuildTarget
+		var raw alias
+		if err := value.Decode(&raw); err != nil {
+			return err
+		}
+		*t = BuildTarget(raw)
+		return nil
+	case yaml.AliasNode:
+		return value.Decode(t)
+	default:
+		*t = BuildTarget{}
+		return nil
+	}
+}
+
+// BuildSigning controls artifact signing for build outputs.
+type BuildSigning struct {
+	Enabled bool              `yaml:"enabled"`
+	GPG     BuildSigningGPG   `yaml:"gpg"`
+	MacOS   BuildSigningMacOS `yaml:"macos"`
+}
+
+// BuildSigningGPG configures GPG signing.
+type BuildSigningGPG struct {
+	Key string `yaml:"key"`
+}
+
+// BuildSigningMacOS configures macOS signing and notarization.
+type BuildSigningMacOS struct {
+	Identity string `yaml:"identity"`
+	Notarize bool   `yaml:"notarize"`
+}
+
+// BuildSDK configures SDK generation from an OpenAPI or similar source.
+type BuildSDK struct {
+	Spec      string   `yaml:"spec"`
+	Languages []string `yaml:"languages"`
+	Output    string   `yaml:"output"`
+	Diff      bool     `yaml:"diff"`
 }
 
 // PackageManifest defines the structure of .core/manifest.yaml.
@@ -264,6 +327,8 @@ type buildManifestYAML struct {
 	Project buildManifestProject `yaml:"project"`
 	Build   buildManifestBuild   `yaml:"build"`
 	Targets []BuildTarget        `yaml:"targets"`
+	Signing buildManifestSigning `yaml:"sign"`
+	SDK     buildManifestSDK     `yaml:"sdk"`
 	Name    string               `yaml:"name"`
 	Main    string               `yaml:"main"`
 	Binary  string               `yaml:"binary"`
@@ -286,6 +351,28 @@ type buildManifestBuild struct {
 	CGO     *bool                `yaml:"cgo"`
 	Flags   []string             `yaml:"flags"`
 	LDFlags buildManifestLDFlags `yaml:"ldflags"`
+}
+
+type buildManifestSigning struct {
+	Enabled bool                      `yaml:"enabled"`
+	GPG     buildManifestSigningGPG   `yaml:"gpg"`
+	MacOS   buildManifestSigningMacOS `yaml:"macos"`
+}
+
+type buildManifestSigningGPG struct {
+	Key string `yaml:"key"`
+}
+
+type buildManifestSigningMacOS struct {
+	Identity string `yaml:"identity"`
+	Notarize bool   `yaml:"notarize"`
+}
+
+type buildManifestSDK struct {
+	Spec      string   `yaml:"spec"`
+	Languages []string `yaml:"languages"`
+	Output    string   `yaml:"output"`
+	Diff      bool     `yaml:"diff"`
 }
 
 type buildManifestLDFlags []string
@@ -349,6 +436,22 @@ func (m *BuildManifest) UnmarshalYAML(value *yaml.Node) error {
 		LDFlags: firstLDFlags(raw.Build.LDFlags, raw.LDFlags),
 	}
 	m.Targets = append([]BuildTarget(nil), raw.Targets...)
+	m.Signing = BuildSigning{
+		Enabled: raw.Signing.Enabled,
+		GPG: BuildSigningGPG{
+			Key: raw.Signing.GPG.Key,
+		},
+		MacOS: BuildSigningMacOS{
+			Identity: raw.Signing.MacOS.Identity,
+			Notarize: raw.Signing.MacOS.Notarize,
+		},
+	}
+	m.SDK = BuildSDK{
+		Spec:      raw.SDK.Spec,
+		Languages: append([]string(nil), raw.SDK.Languages...),
+		Output:    raw.SDK.Output,
+		Diff:      raw.SDK.Diff,
+	}
 	m.Name = m.Project.Name
 	m.Main = m.Project.Main
 	m.Binary = m.Project.Binary
