@@ -371,6 +371,30 @@ func WorkspaceSandboxRoot(repo, branch string) string {
 	return WorkspaceSandboxPath(repo, branch)
 }
 
+// WorkspaceSandboxSourcePath returns a path inside the checked-out source tree
+// for a sandboxed workspace.
+//
+//	src := config.WorkspaceSandboxSourcePath("my-repo", "dev", "app", "main.go")
+func WorkspaceSandboxSourcePath(repo, branch string, parts ...string) string {
+	return WorkspaceSandboxPath(repo, branch, append([]string{WorkspaceSourceDirectory}, parts...)...)
+}
+
+// WorkspaceSandboxMetaPath returns a path inside the sandbox metadata
+// directory.
+//
+//	meta := config.WorkspaceSandboxMetaPath("my-repo", "dev", "status.json")
+func WorkspaceSandboxMetaPath(repo, branch string, parts ...string) string {
+	return WorkspaceSandboxPath(repo, branch, append([]string{WorkspaceMetaDirectory}, parts...)...)
+}
+
+// WorkspaceSandboxInstructionsPath returns the agent instruction file for a
+// sandboxed workspace.
+//
+//	path := config.WorkspaceSandboxInstructionsPath("my-repo", "dev")
+func WorkspaceSandboxInstructionsPath(repo, branch string) string {
+	return WorkspaceSandboxPath(repo, branch, WorkspaceInstructionsFile)
+}
+
 // WorkspaceSandboxPath returns a path inside the project-local sandbox workspace tree.
 //
 //	meta := config.WorkspaceSandboxPath("my-repo", "dev", ".meta", "status")

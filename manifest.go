@@ -46,6 +46,18 @@ const (
 	// WorkspaceDirectory is the sandbox root inside a project-local .core/.
 	WorkspaceDirectory = "workspace"
 
+	// WorkspaceSourceDirectory is the checked-out repository source inside a
+	// sandboxed workspace.
+	WorkspaceSourceDirectory = "src"
+
+	// WorkspaceMetaDirectory stores agent logs, status files, and other
+	// workspace-local bookkeeping.
+	WorkspaceMetaDirectory = ".meta"
+
+	// WorkspaceInstructionsFile is the agent instruction file stored at the
+	// root of a sandboxed workspace.
+	WorkspaceInstructionsFile = "CODEX.md"
+
 	// LinuxKitDirectory is the conventional directory for LinuxKit templates
 	// under either a project-local or user-global .core/ tree.
 	LinuxKitDirectory = "linuxkit"
