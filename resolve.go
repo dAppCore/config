@@ -26,18 +26,38 @@ func FindProjectManifest(medium coreio.Medium, start string, name string) string
 //
 //	path := config.FindUserManifest(io.Local, config.FileAgent)
 func FindUserManifest(medium coreio.Medium, name string) string {
+	return FindUserPath(medium, name)
+}
+
+// FindUserPath returns the user-global ~/.core/... path when it exists.
+//
+//	path := config.FindUserPath(io.Local, config.DirectoryImages, config.FileImagesManifest)
+func FindUserPath(medium coreio.Medium, parts ...string) string {
 	if medium == nil {
 		medium = coreio.Local
 	}
-	home := core.Env("DIR_HOME")
-	if home == "" {
+	candidate := userCorePath(parts...)
+	if candidate == "" {
 		return ""
 	}
-	candidate := core.Path(home, Directory, name)
 	if medium.Exists(candidate) {
 		return candidate
 	}
 	return ""
+}
+
+// FindUserDirectory returns the user-global ~/.core/<name>/ directory when it exists.
+//
+//	dir := config.FindUserDirectory(io.Local, config.DirectoryImages)
+func FindUserDirectory(medium coreio.Medium, name string) string {
+	return FindUserPath(medium, name)
+}
+
+// FindUserImagesManifest returns the user-global ~/.core/images/manifest.json path when it exists.
+//
+//	path := config.FindUserImagesManifest(io.Local)
+func FindUserImagesManifest(medium coreio.Medium) string {
+	return FindUserPath(medium, DirectoryImages, FileImagesManifest)
 }
 
 func projectCoreDirs(medium coreio.Medium, start string) []string {
@@ -62,6 +82,24 @@ func projectCoreDirs(medium coreio.Medium, start string) []string {
 		dir = parent
 	}
 	return dirs
+}
+
+// userCorePath joins a path under ~/.core/ using DIR_HOME as the home root.
+// Empty parts are ignored so callers can build declarative registry paths.
+func userCorePath(parts ...string) string {
+	home := core.Env("DIR_HOME")
+	if home == "" {
+		return ""
+	}
+	elems := make([]string, 0, 2+len(parts))
+	elems = append(elems, home, Directory)
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		elems = append(elems, part)
+	}
+	return core.Path(elems...)
 }
 
 // ResolveConfigManifest loads the nearest .core/config.yaml found while
@@ -269,6 +307,33 @@ func ResolveWorkspaceManifest(medium coreio.Medium, start string) (*WorkspaceMan
 		return nil, err
 	}
 	return &ws, nil
+}
+
+// WorkspaceSandboxRoot returns the project-local sandbox root used for agent workspaces.
+//
+//	root := config.WorkspaceSandboxRoot("my-repo", "dev")
+func WorkspaceSandboxRoot(repo, branch string) string {
+	return WorkspaceSandboxPath(repo, branch)
+}
+
+// WorkspaceSandboxPath returns a path inside the project-local sandbox workspace tree.
+//
+//	meta := config.WorkspaceSandboxPath("my-repo", "dev", ".meta", "status")
+func WorkspaceSandboxPath(repo, branch string, parts ...string) string {
+	elems := []string{Directory, WorkspaceDirectory}
+	for _, part := range []string{repo, branch} {
+		if part == "" {
+			continue
+		}
+		elems = append(elems, part)
+	}
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		elems = append(elems, part)
+	}
+	return core.Path(elems...)
 }
 
 // FindReposManifest returns the nearest project-local .core/repos.yaml.

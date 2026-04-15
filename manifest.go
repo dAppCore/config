@@ -19,22 +19,32 @@ import (
 //
 //	path := filepath.Join(dir, ".core", config.FileBuild)
 const (
-	FileConfig    = "config.yaml"    // go-config — identity, preferences, feature flags
-	FileBuild     = "build.yaml"     // go-build — targets, ldflags, cgo
-	FileRelease   = "release.yaml"   // go-build — archive, checksums, publish
-	FileTest      = "test.yaml"      // core dev — test framework override
-	FileRun       = "run.yaml"       // core dev — dev services, server, env
-	FileView      = "view.yaml"      // go-webview / dAppServer — HLCRF slots, permissions
-	FileManifest  = "manifest.yaml"  // go-scm — package identity + signature
-	FileWorkspace = "workspace.yaml" // core — project dependencies
-	FileRepos     = "repos.yaml"     // go-scm — multi-repo registry
-	FileIDE       = "ide.yaml"       // ide — editor integration, LSP, formatters
-	FilePHP       = "php.yaml"       // core dev — PHP/Laravel settings
-	FileAgent     = "agent.yaml"     // core agent — daemon config (user-level)
-	FileZone      = "zone.yaml"      // lethernet — network zone (user-level)
+	FileConfig         = "config.yaml"    // go-config — identity, preferences, feature flags
+	FileBuild          = "build.yaml"     // go-build — targets, ldflags, cgo
+	FileRelease        = "release.yaml"   // go-build — archive, checksums, publish
+	FileTest           = "test.yaml"      // core dev — test framework override
+	FileRun            = "run.yaml"       // core dev — dev services, server, env
+	FileView           = "view.yaml"      // go-webview / dAppServer — HLCRF slots, permissions
+	FileManifest       = "manifest.yaml"  // go-scm — package identity + signature
+	FileWorkspace      = "workspace.yaml" // core — project dependencies
+	FileRepos          = "repos.yaml"     // go-scm — multi-repo registry
+	FileIDE            = "ide.yaml"       // ide — editor integration, LSP, formatters
+	FilePHP            = "php.yaml"       // core dev — PHP/Laravel settings
+	FileAgent          = "agent.yaml"     // core agent — daemon config (user-level)
+	FileZone           = "zone.yaml"      // lethernet — network zone (user-level)
+	FileImagesManifest = "manifest.json"  // core dev — LinuxKit image registry
 
 	// Directory is the conventional directory name that holds the .core/ files.
 	Directory = ".core"
+
+	// Directory names that live under ~/.core/ for user-level registries.
+	DirectoryImages     = "images"
+	DirectorySecrets    = "secrets"
+	DirectoryDaemons    = "daemons"
+	DirectoryWorkspaces = "workspaces"
+
+	// WorkspaceDirectory is the sandbox root inside a project-local .core/.
+	WorkspaceDirectory = "workspace"
 )
 
 // KnownFiles enumerates the canonical .core/ file names in discovery order.
