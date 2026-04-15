@@ -8,6 +8,7 @@ import (
 
 	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 )
 
 func TestManifest_LoadManifest_Good(t *testing.T) {
@@ -82,6 +83,96 @@ func TestManifest_LoadManifest_Build_ShorthandTargets_Good(t *testing.T) {
 	assert.True(t, build.SDK.Diff)
 	assert.Equal(t, "openapi.yaml", build.SDK.Spec)
 	assert.Equal(t, []string{"typescript", "go"}, build.SDK.Languages)
+}
+
+func TestManifest_LoadManifest_Build_LegacyFlat_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/build.yaml"] = "name: core\nmain: ./cmd/core\nbinary: core\noutput: dist\nflags:\n  - -trimpath\nldflags: -s -w\ncgo: false\ntargets:\n  - linux/amd64\n"
+
+	var build BuildManifest
+	err := LoadManifest(m, "/.core/build.yaml", &build)
+	assert.NoError(t, err)
+	assert.Equal(t, "core", build.Name)
+	assert.Equal(t, "./cmd/core", build.Main)
+	assert.Equal(t, "core", build.Binary)
+	assert.Equal(t, "dist", build.Output)
+	assert.Equal(t, []string{"-trimpath"}, build.Flags)
+	assert.Equal(t, "-s -w", build.LDFlags)
+	assert.False(t, build.CGO)
+	assert.Len(t, build.Targets, 1)
+}
+
+func TestManifest_BuildTarget_UnmarshalYAML_Good(t *testing.T) {
+	var target BuildTarget
+	assert.NoError(t, target.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "linux/amd64"}))
+	assert.Equal(t, BuildTarget{OS: "linux", Arch: "amd64"}, target)
+
+	assert.NoError(t, target.UnmarshalYAML(&yaml.Node{
+		Kind: yaml.MappingNode,
+		Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Value: "os"},
+			{Kind: yaml.ScalarNode, Value: "darwin"},
+			{Kind: yaml.ScalarNode, Value: "arch"},
+			{Kind: yaml.ScalarNode, Value: "arm64"},
+		},
+	}))
+	assert.Equal(t, BuildTarget{OS: "darwin", Arch: "arm64"}, target)
+}
+
+func TestManifest_BuildTarget_UnmarshalYAML_Bad(t *testing.T) {
+	var target BuildTarget
+
+	err := target.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "linux"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid target shorthand")
+}
+
+func TestManifest_BuildTarget_UnmarshalYAML_Ugly(t *testing.T) {
+	var target BuildTarget
+
+	assert.NoError(t, target.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: ""}))
+	assert.Equal(t, BuildTarget{}, target)
+}
+
+func TestManifest_BuildManifestLDFlags_String_Good(t *testing.T) {
+	flags := buildManifestLDFlags{"-s", "-w"}
+	assert.Equal(t, "-s -w", flags.String())
+}
+
+func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Good(t *testing.T) {
+	var flags buildManifestLDFlags
+
+	assert.NoError(t, flags.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "-s -w"}))
+	assert.Equal(t, buildManifestLDFlags{"-s -w"}, flags)
+
+	assert.NoError(t, flags.UnmarshalYAML(&yaml.Node{
+		Kind: yaml.SequenceNode,
+		Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Value: "-s"},
+			{Kind: yaml.ScalarNode, Value: "-w"},
+		},
+	}))
+	assert.Equal(t, buildManifestLDFlags{"-s", "-w"}, flags)
+}
+
+func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Bad(t *testing.T) {
+	var flags buildManifestLDFlags
+
+	err := flags.UnmarshalYAML(&yaml.Node{
+		Kind: yaml.MappingNode,
+		Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Value: "0"},
+			{Kind: yaml.ScalarNode, Value: "-s"},
+		},
+	})
+	assert.Error(t, err)
+}
+
+func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Ugly(t *testing.T) {
+	var flags buildManifestLDFlags
+
+	assert.NoError(t, flags.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: ""}))
+	assert.Nil(t, flags)
 }
 
 func TestManifest_LoadManifest_View_Good(t *testing.T) {
@@ -264,6 +355,51 @@ func TestManifest_LoadManifest_ViewSignatureShape_Bad(t *testing.T) {
 	err := LoadManifest(m, "/.core/view.yaml", &view)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid view manifest signature")
+}
+
+func TestManifest_LoadManifest_ViewUnsigned_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\n"
+
+	var view ViewManifest
+	err := LoadManifest(m, "/.core/view.yaml", &view)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsigned view manifest rejected")
+}
+
+func TestManifest_LoadManifest_PackageUnsigned_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\n"
+
+	var pkg PackageManifest
+	err := LoadManifest(m, "/.core/manifest.yaml", &pkg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsigned package manifest rejected")
+}
+
+func TestManifest_LoadManifest_PackageMissingSignKey_Bad(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	pkg := &PackageManifest{
+		Code:        "go-io",
+		Name:        "Core I/O",
+		Version:     "0.3.0",
+		Description: "Mandatory I/O abstraction layer",
+		Licence:     "EUPL-1.2",
+		SignKey:     hex.EncodeToString(pub),
+	}
+	msg, err := packageManifestBytes(pkg)
+	assert.NoError(t, err)
+	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
+
+	m := coreio.NewMockMedium()
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign: " + pkg.Sign + "\n"
+
+	var round PackageManifest
+	err = LoadManifest(m, "/.core/manifest.yaml", &round)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing package sign_key")
 }
 
 func TestManifest_KnownFiles_Good(t *testing.T) {

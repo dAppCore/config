@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	core "dappco.re/go/core"
@@ -197,4 +198,159 @@ func TestService_LoadFile_RejectsUnsafePaths(t *testing.T) {
 	err = svc.LoadFile(m, "/etc/passwd")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "absolute config paths are not allowed")
+}
+
+func TestService_Set_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	assert.NoError(t, svc.Set("dev.editor", "vim"))
+
+	var editor string
+	assert.NoError(t, svc.Get("dev.editor", &editor))
+	assert.Equal(t, "vim", editor)
+}
+
+func TestService_Set_Bad(t *testing.T) {
+	svc := &Service{}
+
+	err := svc.Set("dev.editor", "vim")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "config not loaded")
+}
+
+func TestService_Commit_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+	assert.NoError(t, svc.Set("dev.editor", "vim"))
+
+	assert.NoError(t, svc.Commit())
+	body, err := m.Read("/tmp/svc/config.yaml")
+	assert.NoError(t, err)
+	assert.Contains(t, body, "editor: vim")
+}
+
+func TestService_Commit_Bad(t *testing.T) {
+	svc := &Service{}
+
+	err := svc.Commit()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "config not loaded")
+}
+
+func TestService_LoadFile_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+	m.Files[".core/override.yaml"] = "dev:\n  shell: zsh\n"
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	assert.NoError(t, svc.LoadFile(m, ".core/override.yaml"))
+
+	var shell string
+	assert.NoError(t, svc.Get("dev.shell", &shell))
+	assert.Equal(t, "zsh", shell)
+}
+
+func TestService_LoadFile_Bad_NoConfig(t *testing.T) {
+	svc := &Service{}
+
+	err := svc.LoadFile(coreio.NewMockMedium(), ".core/override.yaml")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "config not loaded")
+}
+
+func TestService_LoadFile_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	err := svc.LoadFile(m, filepath.Join("tmp", "svc", "config.yaml"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "config paths must remain under .core/")
+}
+
+func TestService_RegistersActionsAndCommands_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+	m.Files[".core/loaded.yaml"] = "dev:\n  editor: nano\n"
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	runAction := func(name string, opts core.Options) core.Result {
+		return c.Action(name).Run(context.Background(), opts)
+	}
+	runCommand := func(name string, opts core.Options) core.Result {
+		r := c.Command(name)
+		if !assert.True(t, r.OK) {
+			return core.Result{}
+		}
+		return r.Value.(*core.Command).Run(opts)
+	}
+
+	assert.True(t, runAction("config.get", core.NewOptions(core.Option{Key: "key", Value: "app.name"})).OK)
+	assert.True(t, runAction("config.set", core.NewOptions(
+		core.Option{Key: "key", Value: "dev.shell"},
+		core.Option{Key: "value", Value: "zsh"},
+	)).OK)
+	assert.True(t, runAction("config.commit", core.NewOptions()).OK)
+	assert.True(t, runAction("config.load", core.NewOptions(core.Option{Key: "path", Value: ".core/loaded.yaml"})).OK)
+
+	all := runAction("config.all", core.NewOptions())
+	assert.True(t, all.OK)
+	assert.Contains(t, all.Value.(map[string]any), "app.name")
+
+	path := runAction("config.path", core.NewOptions())
+	assert.True(t, path.OK)
+	assert.Equal(t, "/tmp/svc/config.yaml", path.Value)
+
+	assert.True(t, runCommand("config/get", core.NewOptions(core.Option{Key: "key", Value: "app.name"})).OK)
+	assert.True(t, runCommand("config/set", core.NewOptions(
+		core.Option{Key: "key", Value: "dev.theme"},
+		core.Option{Key: "value", Value: "dark"},
+	)).OK)
+	assert.True(t, runCommand("config/commit", core.NewOptions()).OK)
+	assert.True(t, runCommand("config/load", core.NewOptions(core.Option{Key: "path", Value: ".core/loaded.yaml"})).OK)
+	assert.True(t, runCommand("config/list", core.NewOptions()).OK)
+	assert.True(t, runCommand("config/path", core.NewOptions()).OK)
 }
