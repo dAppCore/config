@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"path/filepath"
+	"strings"
 
 	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
@@ -97,6 +99,29 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 	return core.Result{OK: true}
 }
 
+func validateServiceLoadPath(path string) error {
+	if path == "" {
+		return coreerr.E("config.validateServiceLoadPath", "empty config path", nil)
+	}
+	if filepath.IsAbs(path) {
+		return coreerr.E("config.validateServiceLoadPath", "absolute config paths are not allowed: "+path, nil)
+	}
+
+	clean := filepath.Clean(path)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return coreerr.E("config.validateServiceLoadPath", "path traversal rejected: "+path, nil)
+	}
+	if !strings.Contains(clean, string(filepath.Separator)+Directory+string(filepath.Separator)) &&
+		!strings.HasPrefix(clean, Directory+string(filepath.Separator)) &&
+		clean != Directory {
+		return coreerr.E("config.validateServiceLoadPath", "config paths must remain under .core/: "+path, nil)
+	}
+	if _, err := configTypeForPath(clean); err != nil {
+		return err
+	}
+	return nil
+}
+
 // registerActions exposes config.get/set/commit/load/all on the Core IPC bus.
 //
 //	c.Action("config.get").Run(ctx, core.NewOptions(core.Option{Key:"key", Value:"dev.editor"}))
@@ -140,7 +165,7 @@ func (s *Service) registerActions(c *core.Core) {
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.load", "config not loaded", nil), OK: false}
 		}
-		if err := s.config.LoadFile(s.config.medium, path); err != nil {
+		if err := s.LoadFile(s.config.medium, path); err != nil {
 			return core.Result{Value: err, OK: false}
 		}
 		return core.Result{OK: true}
@@ -233,7 +258,7 @@ func (s *Service) registerCommands(c *core.Core) {
 				return core.Result{Value: coreerr.E("config/load", "config not loaded", nil), OK: false}
 			}
 			path := opts.String("path")
-			if err := s.config.LoadFile(s.config.medium, path); err != nil {
+			if err := s.LoadFile(s.config.medium, path); err != nil {
 				return core.Result{Value: err, OK: false}
 			}
 			return core.Result{OK: true}
@@ -302,6 +327,9 @@ func (s *Service) Commit() error {
 func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.LoadFile", "config not loaded", nil)
+	}
+	if err := validateServiceLoadPath(path); err != nil {
+		return err
 	}
 	return s.config.LoadFile(m, path)
 }

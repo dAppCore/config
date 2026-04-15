@@ -1,11 +1,14 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/hex"
+	"strings"
+
 	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
-	"strings"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -621,22 +624,80 @@ func validateManifest(path string, out any, raw map[string]any) error {
 		if !ok {
 			return nil
 		}
-		if missingOrEmptyStringField(raw, "sign", view.Sign) {
-			return coreerr.E("config.LoadManifest", "unsigned view manifest rejected: "+path, nil)
+		if err := validateViewManifestSignature(path, view, raw); err != nil {
+			return err
 		}
 	case FileManifest:
 		pkg, ok := out.(*PackageManifest)
 		if !ok {
 			return nil
 		}
-		if missingOrEmptyStringField(raw, "sign", pkg.Sign) {
-			return coreerr.E("config.LoadManifest", "unsigned package manifest rejected: "+path, nil)
-		}
-		if missingOrEmptyStringField(raw, "sign_key", pkg.SignKey) {
-			return coreerr.E("config.LoadManifest", "missing package sign_key: "+path, nil)
+		if err := verifyPackageManifest(path, pkg, raw); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func validateViewManifestSignature(path string, view *ViewManifest, raw map[string]any) error {
+	if missingOrEmptyStringField(raw, "sign", view.Sign) {
+		return coreerr.E("config.LoadManifest", "unsigned view manifest rejected: "+path, nil)
+	}
+	sig, err := decodeManifestSignature(view.Sign)
+	if err != nil {
+		return coreerr.E("config.LoadManifest", "invalid view manifest signature: "+path, err)
+	}
+	if len(sig) != ed25519.SignatureSize {
+		return coreerr.E("config.LoadManifest", "view manifest signature is not ed25519-sized: "+path, nil)
+	}
+	return nil
+}
+
+func verifyPackageManifest(path string, pkg *PackageManifest, raw map[string]any) error {
+	if missingOrEmptyStringField(raw, "sign", pkg.Sign) {
+		return coreerr.E("config.LoadManifest", "unsigned package manifest rejected: "+path, nil)
+	}
+	if missingOrEmptyStringField(raw, "sign_key", pkg.SignKey) {
+		return coreerr.E("config.LoadManifest", "missing package sign_key: "+path, nil)
+	}
+
+	pub, err := hex.DecodeString(strings.TrimSpace(pkg.SignKey))
+	if err != nil {
+		return coreerr.E("config.LoadManifest", "decode package sign_key failed: "+path, err)
+	}
+	if len(pub) != ed25519.PublicKeySize {
+		return coreerr.E("config.LoadManifest", "package sign_key is not an ed25519 public key: "+path, nil)
+	}
+
+	sig, err := decodeManifestSignature(pkg.Sign)
+	if err != nil {
+		return coreerr.E("config.LoadManifest", "invalid package manifest signature: "+path, err)
+	}
+	if len(sig) != ed25519.SignatureSize {
+		return coreerr.E("config.LoadManifest", "package manifest signature is not ed25519-sized: "+path, nil)
+	}
+
+	msg, err := packageManifestBytes(pkg)
+	if err != nil {
+		return coreerr.E("config.LoadManifest", "canonical marshal failed: "+path, err)
+	}
+	if !ed25519.Verify(ed25519.PublicKey(pub), msg, sig) {
+		return coreerr.E("config.LoadManifest", "package manifest signature mismatch: "+path, nil)
+	}
+	return nil
+}
+
+func decodeManifestSignature(value string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(strings.TrimSpace(value))
+}
+
+func packageManifestBytes(pkg *PackageManifest) ([]byte, error) {
+	if pkg == nil {
+		return yaml.Marshal(nil)
+	}
+	tmp := *pkg
+	tmp.Sign = ""
+	return yaml.Marshal(&tmp)
 }
 
 func missingOrEmptyStringField(raw map[string]any, key string, current string) bool {

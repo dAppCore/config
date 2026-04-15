@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/hex"
 	"testing"
 
 	coreio "dappco.re/go/core/io"
@@ -9,10 +12,23 @@ import (
 
 func TestManifest_LoadManifest_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/pkg/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign: signed-manifest\nsign_key: pubkey\n"
+	pub, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	signedPkg := &PackageManifest{
+		Code:    "go-io",
+		Name:    "Core I/O",
+		Version: "0.3.0",
+		Licence: "EUPL-1.2",
+		SignKey: hex.EncodeToString(pub),
+	}
+	msg, err := packageManifestBytes(signedPkg)
+	assert.NoError(t, err)
+	signedPkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
+	m.Files["/pkg/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign_key: " + signedPkg.SignKey + "\nsign: " + signedPkg.Sign + "\n"
 
 	var pkg PackageManifest
-	err := LoadManifest(m, "/pkg/.core/manifest.yaml", &pkg)
+	err = LoadManifest(m, "/pkg/.core/manifest.yaml", &pkg)
 	assert.NoError(t, err)
 	assert.Equal(t, "go-io", pkg.Code)
 	assert.Equal(t, "Core I/O", pkg.Name)
@@ -70,7 +86,7 @@ func TestManifest_LoadManifest_Build_ShorthandTargets_Good(t *testing.T) {
 
 func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: signed-view\npermissions:\n  clipboard: true\n  filesystem: true\n"
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\npermissions:\n  clipboard: true\n  filesystem: true\n"
 
 	var view ViewManifest
 	err := LoadManifest(m, "/.core/view.yaml", &view)
@@ -182,6 +198,72 @@ func TestManifest_LoadManifest_Schema_Bad(t *testing.T) {
 	err := LoadManifest(m, "/.core/build.yaml", &build)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "schema validation failed")
+}
+
+func TestManifest_LoadManifest_PackageSignature_Good(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	pkg := &PackageManifest{
+		Code:        "go-io",
+		Name:        "Core I/O",
+		Version:     "0.3.0",
+		Description: "Mandatory I/O abstraction layer",
+		Licence:     "EUPL-1.2",
+		SignKey:     hex.EncodeToString(pub),
+	}
+
+	msg, err := packageManifestBytes(pkg)
+	assert.NoError(t, err)
+	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
+
+	m := coreio.NewMockMedium()
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+
+	var round PackageManifest
+	err = LoadManifest(m, "/.core/manifest.yaml", &round)
+	assert.NoError(t, err)
+	assert.Equal(t, pkg.Code, round.Code)
+	assert.Equal(t, pkg.SignKey, round.SignKey)
+}
+
+func TestManifest_LoadManifest_PackageSignature_Bad(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+
+	pkg := &PackageManifest{
+		Code:        "go-io",
+		Name:        "Core I/O",
+		Version:     "0.3.0",
+		Description: "Mandatory I/O abstraction layer",
+		Licence:     "EUPL-1.2",
+		SignKey:     hex.EncodeToString(pub),
+	}
+
+	msg, err := packageManifestBytes(pkg)
+	assert.NoError(t, err)
+	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
+
+	m := coreio.NewMockMedium()
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+
+	// Tamper with the persisted content after signing.
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Tampered description\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+
+	var round PackageManifest
+	err = LoadManifest(m, "/.core/manifest.yaml", &round)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "signature mismatch")
+}
+
+func TestManifest_LoadManifest_ViewSignatureShape_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: not-base64!!\n"
+
+	var view ViewManifest
+	err := LoadManifest(m, "/.core/view.yaml", &view)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid view manifest signature")
 }
 
 func TestManifest_KnownFiles_Good(t *testing.T) {

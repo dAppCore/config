@@ -176,3 +176,25 @@ func TestService_NewConfigService_Bad(t *testing.T) {
 	assert.True(t, gotFailure)
 	assert.Nil(t, svc.Config())
 }
+
+func TestService_LoadFile_RejectsUnsafePaths(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   "/tmp/svc/config.yaml",
+			Medium: m,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	err := svc.LoadFile(m, "../../etc/passwd")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "path traversal rejected")
+
+	err = svc.LoadFile(m, "/etc/passwd")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute config paths are not allowed")
+}
