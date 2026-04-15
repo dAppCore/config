@@ -627,9 +627,8 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 	for key, value := range data {
 		payload[key] = value
 	}
-	if _, ok := payload["version"]; !ok {
-		payload["version"] = 1
-	}
+	// Every .core YAML payload is versioned for forward compatibility.
+	payload["version"] = 1
 
 	out, err := yaml.Marshal(payload)
 	if err != nil {
