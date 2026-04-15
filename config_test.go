@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"io/fs"
 	"os"
 	"testing"
 
@@ -401,6 +402,10 @@ func TestSave_Good(t *testing.T) {
 	content, readErr := m.Read("/tmp/test/config.yaml")
 	assert.NoError(t, readErr)
 	assert.Contains(t, content, "key: value")
+
+	info, statErr := m.Stat("/tmp/test/config.yaml")
+	assert.NoError(t, statErr)
+	assert.Equal(t, fs.FileMode(0600), info.Mode())
 }
 
 func TestSave_Extensionless_Good(t *testing.T) {

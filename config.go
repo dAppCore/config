@@ -550,7 +550,8 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 }
 
 // Save writes configuration data to a YAML file at the given path.
-// It ensures the parent directory exists before writing.
+// It ensures the parent directory exists before writing and uses 0600
+// permissions for the file so user config does not become world-readable.
 //
 //	config.Save(io.Local, "~/.core/config.yaml", map[string]any{"dev": map[string]any{"editor": "vim"}})
 func Save(m coreio.Medium, path string, data map[string]any) error {
@@ -571,7 +572,7 @@ func Save(m coreio.Medium, path string, data map[string]any) error {
 		return coreerr.E("config.Save", "failed to create config directory: "+dir, err)
 	}
 
-	if err := m.Write(path, string(out)); err != nil {
+	if err := m.WriteMode(path, string(out), 0600); err != nil {
 		return coreerr.E("config.Save", "failed to write config file: "+path, err)
 	}
 
