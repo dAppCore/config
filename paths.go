@@ -46,3 +46,14 @@ func isSymlinkedCoreDir(medium coreio.Medium, path string) bool {
 	}
 	return info.Mode()&os.ModeSymlink != 0
 }
+
+// isSymlinkedLocalPath reports whether path is a symlink on the local
+// filesystem. It is used for sensitive user-global registries that must not
+// escape their expected on-disk roots via indirection.
+func isSymlinkedLocalPath(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeSymlink != 0
+}

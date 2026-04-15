@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	coreio "dappco.re/go/core/io"
@@ -49,6 +50,37 @@ func TestConclave_ForConclave_Ugly(t *testing.T) {
 	cfg, err := ForConclave("test-conclave")
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
+}
+
+func TestConclave_ForConclave_InvalidName_Bad(t *testing.T) {
+	SetConclaveRootFunc(nil)
+	_, err := ForConclave("../escape")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid conclave name")
+}
+
+func TestConclave_ForConclave_SymlinkedCore_Bad(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	tmp := t.TempDir()
+	conclaveDir := filepath.Join(tmp, "conclave")
+	realCore := filepath.Join(tmp, "real-core")
+
+	assert.NoError(t, coreio.Local.EnsureDir(conclaveDir))
+	assert.NoError(t, coreio.Local.EnsureDir(realCore))
+	assert.NoError(t, coreio.Local.Write(filepath.Join(realCore, "config.yaml"), "theme: dark\n"))
+	assert.NoError(t, os.Symlink(realCore, filepath.Join(conclaveDir, ".core")))
+
+	SetConclaveRootFunc(func(_ string) (string, error) {
+		return conclaveDir, nil
+	})
+	t.Cleanup(func() { SetConclaveRootFunc(nil) })
+
+	_, err := ForConclave("alpha")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked conclave .core directory rejected")
 }
 
 func TestConclave_ForConclave_InheritsProject_Good(t *testing.T) {

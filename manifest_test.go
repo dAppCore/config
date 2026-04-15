@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
+	core "dappco.re/go/core"
 	coreio "dappco.re/go/core/io"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
@@ -126,6 +128,31 @@ func TestManifest_TrustedManifestPublicKeys_Ugly(t *testing.T) {
 	got, err := trustedManifestPublicKeys()
 	assert.NoError(t, err)
 	assert.Len(t, got, 1)
+}
+
+func TestManifest_TrustedManifestPublicKeys_SymlinkedCore_Bad(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	home := core.Env("DIR_HOME")
+	if home == "" {
+		t.Skip("DIR_HOME is empty in this environment")
+	}
+
+	coreDir := filepath.Join(home, ".core")
+	if _, err := os.Lstat(coreDir); err == nil {
+		t.Skip("DIR_HOME/.core already exists in this environment")
+	}
+
+	realCore := filepath.Join(t.TempDir(), "real-core")
+	assert.NoError(t, os.MkdirAll(realCore, 0o755))
+	assert.NoError(t, os.Symlink(realCore, coreDir))
+	t.Cleanup(func() { _ = os.Remove(coreDir) })
+
+	_, err := trustedManifestPublicKeys()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked .core directory rejected")
 }
 
 func TestManifest_TrustedManifestPublicKeysExported_Good(t *testing.T) {

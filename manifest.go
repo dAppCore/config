@@ -1022,12 +1022,22 @@ func trustedManifestPublicKeys() ([]ed25519.PublicKey, error) {
 	home := core.Env("DIR_HOME")
 	if home != "" {
 		keyDir := filepath.Join(home, ".core", "keys")
+		if isSymlinkedCoreDir(coreio.Local, filepath.Join(home, ".core")) {
+			return nil, coreerr.E("config.trustedManifestPublicKeys", "symlinked .core directory rejected: "+filepath.Join(home, ".core"), nil)
+		}
+		if isSymlinkedLocalPath(keyDir) {
+			return nil, coreerr.E("config.trustedManifestPublicKeys", "symlinked trusted keys directory rejected: "+keyDir, nil)
+		}
 		if entries, err := os.ReadDir(keyDir); err == nil {
 			for _, entry := range entries {
 				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
 					continue
 				}
-				body, err := os.ReadFile(filepath.Join(keyDir, entry.Name()))
+				entryPath := filepath.Join(keyDir, entry.Name())
+				if isSymlinkedLocalPath(entryPath) {
+					return nil, coreerr.E("config.trustedManifestPublicKeys", "symlinked trusted key rejected: "+entry.Name(), nil)
+				}
+				body, err := os.ReadFile(entryPath)
 				if err != nil {
 					return nil, coreerr.E("config.trustedManifestPublicKeys", "read trusted key file failed: "+entry.Name(), err)
 				}

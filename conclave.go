@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	core "dappco.re/go/core"
+	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
 )
 
@@ -57,6 +58,12 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 	if err != nil {
 		return nil, coreerr.E("config.ForConclave", "failed to resolve conclave root: "+name, err)
 	}
+	if root == "" {
+		return nil, coreerr.E("config.ForConclave", "failed to resolve conclave root: "+name, nil)
+	}
+	if isSymlinkedCoreDir(coreio.Local, core.Path(root, ".core")) {
+		return nil, coreerr.E("config.ForConclave", "symlinked conclave .core directory rejected: "+root, nil)
+	}
 
 	conclaveOpts := append([]Option{}, opts...)
 	conclaveOpts = append(conclaveOpts, WithPath(core.Path(root, ".core", "config.yaml")))
@@ -81,5 +88,8 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 }
 
 func defaultConclaveRoot(name string) (string, error) {
+	if !isSafePathElement(name) {
+		return "", coreerr.E("config.defaultConclaveRoot", "invalid conclave name: "+name, nil)
+	}
 	return core.Path(XDG().Config(), "conclaves", name), nil
 }
