@@ -66,9 +66,11 @@ func discoverPaths(medium coreio.Medium, start string) []string {
 	dir := normalizeUpwardStart(medium, start)
 	for {
 		coreDir := core.Path(dir, ".core")
-		candidate := core.Path(coreDir, "config.yaml")
-		if medium.Exists(candidate) {
-			paths = append(paths, candidate)
+		if !isSymlinkedCoreDir(medium, coreDir) {
+			candidate := core.Path(coreDir, "config.yaml")
+			if medium.Exists(candidate) {
+				paths = append(paths, candidate)
+			}
 		}
 
 		// Repository boundary: stop once a .git sits next to the .core dir.
@@ -84,8 +86,9 @@ func discoverPaths(medium coreio.Medium, start string) []string {
 	}
 
 	if home := core.Env("DIR_HOME"); home != "" {
-		global := core.Path(home, ".core", "config.yaml")
-		if medium.Exists(global) && !contains(paths, global) {
+		globalCore := core.Path(home, ".core")
+		global := core.Path(globalCore, "config.yaml")
+		if !isSymlinkedCoreDir(medium, globalCore) && medium.Exists(global) && !contains(paths, global) {
 			paths = append(paths, global)
 		}
 	}
@@ -116,7 +119,7 @@ func CoreDirs(medium coreio.Medium, start string) []string {
 	dir := normalizeUpwardStart(medium, start)
 	for {
 		coreDir := core.Path(dir, ".core")
-		if medium.Exists(coreDir) {
+		if medium.Exists(coreDir) && !isSymlinkedCoreDir(medium, coreDir) {
 			dirs = append(dirs, coreDir)
 		}
 		if medium.Exists(core.Path(dir, ".git")) {
@@ -130,7 +133,7 @@ func CoreDirs(medium coreio.Medium, start string) []string {
 	}
 	if home := core.Env("DIR_HOME"); home != "" {
 		global := core.Path(home, ".core")
-		if medium.Exists(global) && !contains(dirs, global) {
+		if medium.Exists(global) && !isSymlinkedCoreDir(medium, global) && !contains(dirs, global) {
 			dirs = append(dirs, global)
 		}
 	}

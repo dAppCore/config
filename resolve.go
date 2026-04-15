@@ -38,6 +38,9 @@ func FindUserPath(medium coreio.Medium, parts ...string) string {
 	if medium == nil {
 		medium = coreio.Local
 	}
+	if home := core.Env("DIR_HOME"); home != "" && isSymlinkedCoreDir(medium, core.Path(home, Directory)) {
+		return ""
+	}
 	candidate := userCorePath(parts...)
 	if candidate == "" {
 		return ""
@@ -103,7 +106,7 @@ func projectCoreDirs(medium coreio.Medium, start string) []string {
 	dir := normalizeUpwardStart(medium, start)
 	for {
 		coreDir := core.Path(dir, Directory)
-		if medium.Exists(coreDir) {
+		if medium.Exists(coreDir) && !isSymlinkedCoreDir(medium, coreDir) {
 			dirs = append(dirs, coreDir)
 		}
 		if medium.Exists(core.Path(dir, ".git")) {
@@ -512,7 +515,7 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 	}
 	for {
 		candidate := core.Path(dir, Directory, FileRepos)
-		if medium.Exists(candidate) {
+		if medium.Exists(candidate) && !isSymlinkedCoreDir(medium, core.Path(dir, Directory)) {
 			return candidate
 		}
 		parent := core.PathDir(dir)
@@ -523,8 +526,9 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 	}
 
 	if home := core.Env("DIR_HOME"); home != "" {
-		candidate := core.Path(home, "Code", Directory, FileRepos)
-		if medium.Exists(candidate) {
+		coreDir := core.Path(home, "Code", Directory)
+		candidate := core.Path(coreDir, FileRepos)
+		if medium.Exists(candidate) && !isSymlinkedCoreDir(medium, coreDir) {
 			return candidate
 		}
 	}
