@@ -45,6 +45,10 @@ const (
 
 	// WorkspaceDirectory is the sandbox root inside a project-local .core/.
 	WorkspaceDirectory = "workspace"
+
+	// LinuxKitDirectory is the conventional directory for LinuxKit templates
+	// under either a project-local or user-global .core/ tree.
+	LinuxKitDirectory = "linuxkit"
 )
 
 // KnownFiles enumerates the canonical .core/ file names in discovery order.
