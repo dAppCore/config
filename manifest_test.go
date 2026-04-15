@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
+	"strings"
 	"testing"
 
 	coreio "dappco.re/go/core/io"
@@ -11,10 +12,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func setManifestTrustKeys(t *testing.T, keys ...string) {
+	t.Helper()
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", strings.Join(keys, ","))
+}
+
 func TestManifest_LoadManifest_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	pub, priv, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
 
 	signedPkg := &PackageManifest{
 		Code:    "go-io",
@@ -177,14 +184,30 @@ func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Ugly(t *testing.T) {
 
 func TestManifest_LoadManifest_View_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\npermissions:\n  clipboard: true\n  filesystem: true\n"
-
-	var view ViewManifest
-	err := LoadManifest(m, "/.core/view.yaml", &view)
+	pub, priv, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
-	assert.Equal(t, "photo-browser", view.Code)
-	assert.True(t, view.Permissions.Clipboard)
-	assert.True(t, view.Permissions.Filesystem)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
+
+	signedView := &ViewManifest{
+		Code:    "photo-browser",
+		Name:    "Photo Browser",
+		Version: "0.1.0",
+		Permissions: ViewPermissions{
+			Clipboard:  true,
+			Filesystem: true,
+		},
+	}
+	msg, err := viewManifestBytes(signedView)
+	assert.NoError(t, err)
+	signedView.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
+	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nversion: 0.1.0\npermissions:\n  clipboard: true\n  filesystem: true\nsign: " + signedView.Sign + "\n"
+
+	var got ViewManifest
+	err = LoadManifest(m, "/.core/view.yaml", &got)
+	assert.NoError(t, err)
+	assert.Equal(t, "photo-browser", got.Code)
+	assert.True(t, got.Permissions.Clipboard)
+	assert.True(t, got.Permissions.Filesystem)
 }
 
 func TestManifest_LoadManifest_View_Bad(t *testing.T) {
@@ -352,6 +375,7 @@ func TestManifest_LoadManifest_Schema_Bad(t *testing.T) {
 func TestManifest_LoadManifest_PackageSignature_Good(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
@@ -379,6 +403,7 @@ func TestManifest_LoadManifest_PackageSignature_Good(t *testing.T) {
 func TestManifest_LoadManifest_PackageSignature_Bad(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
@@ -438,6 +463,7 @@ func TestManifest_LoadManifest_PackageUnsigned_Bad(t *testing.T) {
 func TestManifest_LoadManifest_PackageMissingSignKey_Bad(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(pub))
 
 	pkg := &PackageManifest{
 		Code:        "go-io",

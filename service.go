@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -110,7 +111,7 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 	return core.Result{OK: true}
 }
 
-func validateServiceLoadPath(path string) error {
+func validateServiceLoadPath(basePath, path string) error {
 	if path == "" {
 		return coreerr.E("config.validateServiceLoadPath", "empty config path", nil)
 	}
@@ -127,10 +128,67 @@ func validateServiceLoadPath(path string) error {
 		clean != Directory {
 		return coreerr.E("config.validateServiceLoadPath", "config paths must remain under .core/: "+path, nil)
 	}
+	validatedPathType := false
+	if basePath != "" {
+		base := filepath.Clean(filepath.Dir(basePath))
+		corePath := filepath.Clean(filepath.Join(base, Directory))
+		absCorePath, err := filepath.Abs(corePath)
+		if err != nil {
+			return coreerr.E("config.validateServiceLoadPath", "resolve config base failed: "+path, err)
+		}
+		candidatePath := filepath.Clean(filepath.Join(base, clean))
+		absCandidate, err := filepath.Abs(candidatePath)
+		if err != nil {
+			return coreerr.E("config.validateServiceLoadPath", "resolve config path failed: "+path, err)
+		}
+
+		resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(candidatePath, absCorePath, absCandidate)
+		if err != nil {
+			return err
+		}
+		coreAbs := resolvedCore
+		rel, relErr := filepath.Rel(coreAbs, resolvedCandidate)
+		if relErr != nil {
+			return coreerr.E("config.validateServiceLoadPath", "failed relative path check: "+path, relErr)
+		}
+		if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+			validatedPathType = true
+		} else {
+			return coreerr.E("config.validateServiceLoadPath", "config path escapes .core/: "+path, nil)
+		}
+	}
+	if basePath == "" {
+		validatedPathType = true
+	}
+	if !validatedPathType {
+		return coreerr.E("config.validateServiceLoadPath", "config path validation failed: "+path, nil)
+	}
 	if _, err := configTypeForPath(clean); err != nil {
 		return err
 	}
 	return nil
+}
+
+func resolveServiceLoadPath(candidatePath, coreAbs, absCandidate string) (string, string, error) {
+	resolvedCore := coreAbs
+	if stat, err := os.Stat(coreAbs); err == nil && stat.IsDir() {
+		if realCore, err := filepath.EvalSymlinks(coreAbs); err == nil {
+			resolvedCore = realCore
+		} else {
+			return "", "", coreerr.E("config.validateServiceLoadPath", "resolve .core symlink failed: "+coreAbs, err)
+		}
+	}
+
+	resolvedCandidate := absCandidate
+	if _, err := os.Stat(absCandidate); err == nil {
+		realCandidate, err := filepath.EvalSymlinks(absCandidate)
+		if err != nil {
+			return "", "", coreerr.E("config.validateServiceLoadPath", "resolve config symlink failed: "+candidatePath, err)
+		}
+		resolvedCandidate = realCandidate
+	}
+
+	return resolvedCandidate, resolvedCore, nil
 }
 
 // registerActions exposes config.get/set/commit/load/all on the Core IPC bus.
@@ -150,6 +208,9 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.set", func(_ context.Context, opts core.Options) core.Result {
+		if err := ensureConfigEntitlement(c, "config.set"); err != nil {
+			return err
+		}
 		key := opts.String("key")
 		r := opts.Get("value")
 		if s.config == nil {
@@ -162,6 +223,9 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.commit", func(_ context.Context, _ core.Options) core.Result {
+		if err := ensureConfigEntitlement(c, "config.commit"); err != nil {
+			return err
+		}
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.commit", "config not loaded", nil), OK: false}
 		}
@@ -172,6 +236,9 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.load", func(_ context.Context, opts core.Options) core.Result {
+		if err := ensureConfigEntitlement(c, "config.load"); err != nil {
+			return err
+		}
 		path := opts.String("path")
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.load", "config not loaded", nil), OK: false}
@@ -183,6 +250,9 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.all", func(_ context.Context, _ core.Options) core.Result {
+		if err := ensureConfigEntitlement(c, "config.all"); err != nil {
+			return err
+		}
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.all", "config not loaded", nil), OK: false}
 		}
@@ -194,6 +264,9 @@ func (s *Service) registerActions(c *core.Core) {
 	})
 
 	c.Action("config.path", func(_ context.Context, _ core.Options) core.Result {
+		if err := ensureConfigEntitlement(c, "config.path"); err != nil {
+			return err
+		}
 		if s.config == nil {
 			return core.Result{Value: coreerr.E("config.path", "config not loaded", nil), OK: false}
 		}
@@ -223,6 +296,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/set", core.Command{
 		Description: "Set a config value",
 		Action: func(opts core.Options) core.Result {
+			if err := ensureConfigEntitlement(c, "config/set"); err != nil {
+				return err
+			}
 			key := opts.String("key")
 			r := opts.Get("value")
 			if s.config == nil {
@@ -252,6 +328,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/commit", core.Command{
 		Description: "Persist config changes",
 		Action: func(_ core.Options) core.Result {
+			if err := ensureConfigEntitlement(c, "config/commit"); err != nil {
+				return err
+			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/commit", "config not loaded", nil), OK: false}
 			}
@@ -265,6 +344,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/load", core.Command{
 		Description: "Load a config file",
 		Action: func(opts core.Options) core.Result {
+			if err := ensureConfigEntitlement(c, "config/load"); err != nil {
+				return err
+			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/load", "config not loaded", nil), OK: false}
 			}
@@ -279,6 +361,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/all", core.Command{
 		Description: "List all config values",
 		Action: func(_ core.Options) core.Result {
+			if err := ensureConfigEntitlement(c, "config/all"); err != nil {
+				return err
+			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/all", "config not loaded", nil), OK: false}
 			}
@@ -293,6 +378,9 @@ func (s *Service) registerCommands(c *core.Core) {
 	c.Command("config/path", core.Command{
 		Description: "Show the config file path",
 		Action: func(_ core.Options) core.Result {
+			if err := ensureConfigEntitlement(c, "config/path"); err != nil {
+				return err
+			}
 			if s.config == nil {
 				return core.Result{Value: coreerr.E("config/path", "config not loaded", nil), OK: false}
 			}
@@ -339,10 +427,20 @@ func (s *Service) LoadFile(m coreio.Medium, path string) error {
 	if s.config == nil {
 		return coreerr.E("config.Service.LoadFile", "config not loaded", nil)
 	}
-	if err := validateServiceLoadPath(path); err != nil {
+	if err := validateServiceLoadPath(s.config.Path(), path); err != nil {
 		return err
 	}
 	return s.config.LoadFile(m, path)
+}
+
+func ensureConfigEntitlement(c *core.Core, action string) core.Result {
+	if c == nil {
+		return core.Result{Value: coreerr.E("config."+action, "core not available", nil), OK: false}
+	}
+	if e := c.Entitled(action); !e.Allowed {
+		return core.Result{Value: coreerr.E("config."+action, "not entitled: "+action+": "+e.Reason, nil), OK: false}
+	}
+	return core.Result{OK: true}
 }
 
 // Config returns the underlying Config instance for advanced operations.
