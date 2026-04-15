@@ -60,6 +60,38 @@ func FindUserImagesManifest(medium coreio.Medium) string {
 	return FindUserPath(medium, DirectoryImages, FileImagesManifest)
 }
 
+// FindUserImagesDirectory returns the user-global ~/.core/images/ directory
+// when it exists.
+//
+//	dir := config.FindUserImagesDirectory(io.Local)
+func FindUserImagesDirectory(medium coreio.Medium) string {
+	return FindUserPath(medium, DirectoryImages)
+}
+
+// FindUserSecretsDirectory returns the user-global ~/.core/secrets/ directory
+// when it exists.
+//
+//	dir := config.FindUserSecretsDirectory(io.Local)
+func FindUserSecretsDirectory(medium coreio.Medium) string {
+	return FindUserPath(medium, DirectorySecrets)
+}
+
+// FindUserDaemonsDirectory returns the user-global ~/.core/daemons/ directory
+// when it exists.
+//
+//	dir := config.FindUserDaemonsDirectory(io.Local)
+func FindUserDaemonsDirectory(medium coreio.Medium) string {
+	return FindUserPath(medium, DirectoryDaemons)
+}
+
+// FindUserWorkspacesDirectory returns the user-global ~/.core/workspaces/
+// directory when it exists.
+//
+//	dir := config.FindUserWorkspacesDirectory(io.Local)
+func FindUserWorkspacesDirectory(medium coreio.Medium) string {
+	return FindUserPath(medium, DirectoryWorkspaces)
+}
+
 func projectCoreDirs(medium coreio.Medium, start string) []string {
 	if medium == nil {
 		medium = coreio.Local
@@ -307,6 +339,29 @@ func ResolveWorkspaceManifest(medium coreio.Medium, start string) (*WorkspaceMan
 		return nil, err
 	}
 	return &ws, nil
+}
+
+// FindLinuxKitDirectory returns the nearest project-local .core/linuxkit/
+// directory.
+//
+//	dir := config.FindLinuxKitDirectory(io.Local, cwd)
+func FindLinuxKitDirectory(medium coreio.Medium, start string) string {
+	return findProjectDirectory(medium, start, LinuxKitDirectory)
+}
+
+// findProjectDirectory returns the nearest project-local .core/{name}/
+// directory while walking upward from start.
+func findProjectDirectory(medium coreio.Medium, start string, name string) string {
+	if medium == nil {
+		medium = coreio.Local
+	}
+	for _, dir := range projectCoreDirs(medium, start) {
+		candidate := core.Path(dir, name)
+		if medium.Exists(candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // WorkspaceSandboxRoot returns the project-local sandbox root used for agent workspaces.
