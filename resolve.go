@@ -100,7 +100,7 @@ func projectCoreDirs(medium coreio.Medium, start string) []string {
 	}
 
 	var dirs []string
-	dir := start
+	dir := normalizeUpwardStart(medium, start)
 	for {
 		coreDir := core.Path(dir, Directory)
 		if medium.Exists(coreDir) {
@@ -116,6 +116,21 @@ func projectCoreDirs(medium coreio.Medium, start string) []string {
 		dir = parent
 	}
 	return dirs
+}
+
+// normalizeUpwardStart converts a file path to its containing directory before
+// performing an upward discovery walk. Directory inputs are returned unchanged.
+func normalizeUpwardStart(medium coreio.Medium, start string) string {
+	if medium == nil {
+		medium = coreio.Local
+	}
+	if start == "" {
+		return "."
+	}
+	if info, err := medium.Stat(start); err == nil && !info.IsDir() {
+		return core.PathDir(start)
+	}
+	return start
 }
 
 // userCorePath joins a path under ~/.core/ using DIR_HOME as the home root.
@@ -452,7 +467,7 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 		medium = coreio.Local
 	}
 
-	dir := filepath.Clean(start)
+	dir := filepath.Clean(normalizeUpwardStart(medium, start))
 	if dir == "" {
 		dir = "."
 	}

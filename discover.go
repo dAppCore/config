@@ -63,7 +63,7 @@ func DiscoverFrom(start string, opts ...Option) (*Config, error) {
 // the global `~/.core/config.yaml` as the lowest-precedence layer.
 func discoverPaths(medium coreio.Medium, start string) []string {
 	var paths []string
-	dir := start
+	dir := normalizeUpwardStart(medium, start)
 	for {
 		coreDir := core.Path(dir, ".core")
 		candidate := core.Path(coreDir, "config.yaml")
@@ -113,7 +113,7 @@ func CoreDirs(medium coreio.Medium, start string) []string {
 		medium = coreio.Local
 	}
 	var dirs []string
-	dir := start
+	dir := normalizeUpwardStart(medium, start)
 	for {
 		coreDir := core.Path(dir, ".core")
 		if medium.Exists(coreDir) {
