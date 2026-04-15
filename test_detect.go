@@ -9,6 +9,7 @@ import (
 )
 
 func detectTestCommand(medium coreio.Medium, start string) (string, bool, error) {
+	start = normalizeUpwardStart(medium, start)
 	for dir := start; ; dir = core.PathDir(dir) {
 		if command, ok, err := detectTestCommandAtDir(medium, dir); err != nil {
 			return "", false, err
