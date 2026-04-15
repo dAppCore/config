@@ -141,6 +141,12 @@ func (c *Config) AttachCore(core *core.Core) {
 //	    config.WithEnvPrefix("CORE_CONFIG"),
 //	)
 func New(opts ...Option) (*Config, error) {
+	return newConfig(true, opts...)
+}
+
+// newConfig centralises Config construction so discovery can create a config
+// shell without eagerly loading the path that will later receive merged layers.
+func newConfig(loadFromPath bool, opts ...Option) (*Config, error) {
 	c := &Config{
 		full: viper.New(),
 		file: viper.New(),
@@ -168,8 +174,8 @@ func New(opts ...Option) (*Config, error) {
 
 	c.full.AutomaticEnv()
 
-	// Load existing config file if it exists
-	if c.medium.Exists(c.path) {
+	// Load existing config file if it exists.
+	if loadFromPath && c.medium.Exists(c.path) {
 		if err := c.loadFile(c.medium, c.path, false); err != nil {
 			return nil, coreerr.E("config.New", "failed to load config file", err)
 		}

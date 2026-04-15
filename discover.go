@@ -30,7 +30,7 @@ func Discover(opts ...Option) (*Config, error) {
 //
 //	cfg, _ := config.DiscoverFrom("/srv/app", config.WithMedium(io.Local))
 func DiscoverFrom(start string, opts ...Option) (*Config, error) {
-	base, err := New(opts...)
+	base, err := newConfig(false, opts...)
 	if err != nil {
 		return nil, coreerr.E("config.DiscoverFrom", "failed to initialise base config", err)
 	}
