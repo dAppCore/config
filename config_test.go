@@ -3,8 +3,8 @@ package config
 import (
 	"context"
 	"fmt"
-	"maps"
 	"io/fs"
+	"maps"
 	"os"
 	"testing"
 
@@ -417,6 +417,7 @@ func TestSave_Good(t *testing.T) {
 	content, readErr := m.Read("/tmp/test/config.yaml")
 	assert.NoError(t, readErr)
 	assert.Contains(t, content, "key: value")
+	assert.Contains(t, content, "version: 1")
 
 	info, statErr := m.Stat("/tmp/test/config.yaml")
 	assert.NoError(t, statErr)

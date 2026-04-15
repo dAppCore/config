@@ -34,3 +34,10 @@ func TestXdg_XDGWithPrefix_Good(t *testing.T) {
 	assert.Equal(t, "testing", paths.Prefix())
 	assert.Contains(t, paths.Config(), "testing")
 }
+
+func TestXdg_DefaultHomes_Ugly(t *testing.T) {
+	// Missing seam: core.Env pre-populates OS and DIR_HOME at init time, so
+	// platform-matrix coverage for defaultConfigHome/defaultDataHome/
+	// defaultCacheHome/defaultRuntimeDir cannot be injected from unit tests.
+	t.Skip("missing seam: core.Env pre-populates OS and DIR_HOME at init time")
+}
