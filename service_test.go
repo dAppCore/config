@@ -368,6 +368,120 @@ func TestService_LoadFile_RejectsSymlinkedCore(t *testing.T) {
 	assert.Contains(t, err.Error(), "symlinked .core directories are not allowed")
 }
 
+func TestService_ResolveValidatedServiceLoadPath_Good(t *testing.T) {
+	projectRoot := t.TempDir()
+	coreDir := filepath.Join(projectRoot, ".core")
+	configPath := filepath.Join(projectRoot, "config.yaml")
+	overridePath := filepath.Join(coreDir, "override.yaml")
+
+	assert.NoError(t, os.MkdirAll(coreDir, 0755))
+	assert.NoError(t, os.WriteFile(configPath, []byte("app:\n  name: svc\n"), 0600))
+	assert.NoError(t, os.WriteFile(overridePath, []byte("dev:\n  editor: vim\n"), 0600))
+
+	resolved, err := resolveValidatedServiceLoadPath(configPath, ".core/override.yaml")
+	assert.NoError(t, err)
+	assert.Equal(t, overridePath, resolved)
+}
+
+func TestService_ResolveValidatedServiceLoadPath_Bad(t *testing.T) {
+	projectRoot := t.TempDir()
+	configPath := filepath.Join(projectRoot, "config.yaml")
+	assert.NoError(t, os.WriteFile(configPath, []byte("app:\n  name: svc\n"), 0600))
+
+	cases := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "empty", path: "", want: "empty config path"},
+		{name: "absolute", path: "/etc/passwd", want: "absolute config paths are not allowed"},
+		{name: "traversal", path: "../escape.yaml", want: "path traversal rejected"},
+		{name: "outside-core", path: "config.yaml", want: "config paths must remain under .core/"},
+		{name: "nested-traversal", path: ".core/../escape.yaml", want: "config paths must remain under .core/"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resolved, err := resolveValidatedServiceLoadPath(configPath, tc.path)
+			assert.Empty(t, resolved)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.want)
+		})
+	}
+}
+
+func TestService_ResolveValidatedServiceLoadPath_Ugly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	projectRoot := t.TempDir()
+	externalCore := filepath.Join(t.TempDir(), "shared-core")
+	configPath := filepath.Join(projectRoot, "config.yaml")
+
+	assert.NoError(t, os.MkdirAll(externalCore, 0755))
+	assert.NoError(t, os.WriteFile(configPath, []byte("app:\n  name: svc\n"), 0600))
+	assert.NoError(t, os.Symlink(externalCore, filepath.Join(projectRoot, ".core")))
+
+	resolved, err := resolveValidatedServiceLoadPath(configPath, ".core/override.yaml")
+	assert.Empty(t, resolved)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked .core directories are not allowed")
+}
+
+func TestService_ResolveServiceLoadPath_Good(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	projectRoot := t.TempDir()
+	coreDir := filepath.Join(projectRoot, ".core")
+	realFile := filepath.Join(projectRoot, "override.yaml")
+	symlinkFile := filepath.Join(coreDir, "override.yaml")
+
+	assert.NoError(t, os.MkdirAll(coreDir, 0755))
+	assert.NoError(t, os.WriteFile(realFile, []byte("dev:\n  shell: zsh\n"), 0600))
+	assert.NoError(t, os.Symlink(realFile, symlinkFile))
+
+	absCorePath, err := filepath.Abs(coreDir)
+	assert.NoError(t, err)
+	absCandidate, err := filepath.Abs(symlinkFile)
+	assert.NoError(t, err)
+
+	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(symlinkFile, absCorePath, absCandidate)
+	assert.NoError(t, err)
+	realCandidate, err := filepath.EvalSymlinks(realFile)
+	assert.NoError(t, err)
+	realCore, err := filepath.EvalSymlinks(coreDir)
+	assert.NoError(t, err)
+	assert.Equal(t, realCandidate, resolvedCandidate)
+	assert.Equal(t, realCore, resolvedCore)
+}
+
+func TestService_ResolveServiceLoadPath_Bad(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	projectRoot := t.TempDir()
+	externalCore := filepath.Join(t.TempDir(), "shared-core")
+	candidatePath := filepath.Join(projectRoot, ".core", "override.yaml")
+
+	assert.NoError(t, os.MkdirAll(externalCore, 0755))
+	assert.NoError(t, os.Symlink(externalCore, filepath.Join(projectRoot, ".core")))
+
+	absCorePath, err := filepath.Abs(filepath.Join(projectRoot, ".core"))
+	assert.NoError(t, err)
+	absCandidate, err := filepath.Abs(candidatePath)
+	assert.NoError(t, err)
+
+	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(candidatePath, absCorePath, absCandidate)
+	assert.Empty(t, resolvedCandidate)
+	assert.Empty(t, resolvedCore)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked .core directories are not allowed")
+}
+
 func TestService_OnShutdown_StopsWatcher_Good(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "config.yaml")

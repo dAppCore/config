@@ -4,7 +4,9 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	core "dappco.re/go/core"
@@ -252,6 +254,22 @@ func TestResolve_FindUserPath_Bad(t *testing.T) {
 	assert.Empty(t, FindManifest(m, t.TempDir(), "../config.yaml"))
 }
 
+func TestResolve_FindUserPath_Ugly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	home := t.TempDir()
+	externalCore := filepath.Join(t.TempDir(), "shared-core")
+
+	t.Setenv("DIR_HOME", home)
+	require.NoError(t, os.MkdirAll(externalCore, 0755))
+	require.NoError(t, os.Symlink(externalCore, filepath.Join(home, ".core")))
+
+	assert.Empty(t, FindUserPath(coreio.Local, FileAgent))
+	assert.Empty(t, FindUserManifest(coreio.Local, FileAgent))
+}
+
 func TestResolve_ResolveUserManifests_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
@@ -371,6 +389,82 @@ func TestResolve_FindReposManifest_Good(t *testing.T) {
 	require.NoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
 
 	assert.Equal(t, filepath.Join(home, "Code", Directory, FileRepos), FindReposManifest(m, start))
+}
+
+func TestResolve_FindWorkspaceRegistryManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	start := filepath.Join(tmp, "workspace", "repo", "service")
+	home := core.Env("DIR_HOME")
+
+	require.NoError(t, m.EnsureDir(filepath.Dir(filepath.Join(home, "Code", Directory, FileRepos))))
+	require.NoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+
+	assert.Equal(t, FindReposManifest(m, start), FindWorkspaceRegistryManifest(m, start))
+}
+
+func TestResolve_FindWorkspaceRegistryManifest_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	assert.Empty(t, FindWorkspaceRegistryManifest(m, t.TempDir()))
+}
+
+func TestResolve_FindWorkspaceRegistryManifest_Ugly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	m := coreio.NewMockMedium()
+	home := t.TempDir()
+	externalCore := filepath.Join(t.TempDir(), "shared-core")
+	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
+
+	t.Setenv("DIR_HOME", home)
+	require.NoError(t, os.MkdirAll(filepath.Join(home, "Code"), 0755))
+	require.NoError(t, os.MkdirAll(externalCore, 0755))
+	require.NoError(t, os.Symlink(externalCore, filepath.Join(home, "Code", Directory)))
+
+	assert.Empty(t, FindWorkspaceRegistryManifest(m, start))
+}
+
+func TestResolve_ResolveWorkspaceRegistryManifest_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	start := filepath.Join(tmp, "workspace", "repo", "service")
+	home := core.Env("DIR_HOME")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(home, "Code", Directory)))
+	require.NoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+
+	repos, err := ResolveWorkspaceRegistryManifest(m, start)
+	require.NoError(t, err)
+	require.NotNil(t, repos)
+	assert.Equal(t, "host-uk", repos.Org)
+	assert.Len(t, repos.Repos, 1)
+}
+
+func TestResolve_ResolveWorkspaceRegistryManifest_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	repos, err := ResolveWorkspaceRegistryManifest(m, t.TempDir())
+	assert.Nil(t, repos)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no repos manifest could be detected")
+}
+
+func TestResolve_ResolveWorkspaceRegistryManifest_Ugly(t *testing.T) {
+	m := coreio.NewMockMedium()
+	tmp := t.TempDir()
+	home := core.Env("DIR_HOME")
+	start := filepath.Join(tmp, "workspace", "repo", "service")
+
+	require.NoError(t, m.EnsureDir(filepath.Join(home, "Code", Directory)))
+	require.NoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: [broken"))
+
+	repos, err := ResolveWorkspaceRegistryManifest(m, start)
+	assert.Nil(t, repos)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to parse manifest")
 }
 
 func TestResolve_ResolveImagesManifest_Good(t *testing.T) {
