@@ -110,6 +110,21 @@ func TestConfig_All_Order_Good(t *testing.T) {
 	assert.Equal(t, []string{"alpha", "zulu"}, keys)
 }
 
+func TestConfig_All_Snapshot_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+
+	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
+	assert.NoError(t, err)
+
+	_ = cfg.Set("alpha", "one")
+	snapshot := cfg.All()
+	_ = cfg.Set("beta", "two")
+
+	all := maps.Collect(snapshot)
+	assert.Equal(t, "one", all["alpha"])
+	assert.NotContains(t, all, "beta")
+}
+
 func TestConfig_All_Nested_Good(t *testing.T) {
 	// Nested keys surface via flat dot-notation — callers iterate a single
 	// map instead of recursing through map[string]any trees.

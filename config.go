@@ -387,18 +387,17 @@ func (c *Config) Commit() error {
 	return nil
 }
 
-// All returns an iterator over every configuration value in lexical key order.
-// Keys are flat dot-notation (e.g. "dev.editor", "app.name"). The iterator
-// includes values sourced from file, Set() calls, and environment-variable
-// overrides mapped via the configured env prefix (so CORE_CONFIG_DEV_EDITOR
-// shows up as "dev.editor").
+// All returns an iterator over a snapshot of every configuration value in
+// lexical key order. Keys are flat dot-notation (e.g. "dev.editor",
+// "app.name"). The iterator includes values sourced from file, Set() calls,
+// and environment-variable overrides mapped via the configured env prefix
+// (so CORE_CONFIG_DEV_EDITOR shows up as "dev.editor").
 //
 //	for key, value := range cfg.All() {
 //	    fmt.Println(key, value)   // "dev.editor" "vim"
 //	}
 func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 
 	// AllKeys() gives flat dot-notation for every key viper knows about,
 	// covering file values, explicit Set() calls, and registered env overrides.
@@ -416,11 +415,17 @@ func (c *Config) All() iter.Seq2[string, any] {
 		}
 	}
 
+	values := make(map[string]any, len(keys))
+	for _, key := range keys {
+		values[key] = c.full.Get(key)
+	}
+	c.mu.RUnlock()
+
 	slices.Sort(keys)
 
 	return func(yield func(string, any) bool) {
 		for _, key := range keys {
-			if !yield(key, c.full.Get(key)) {
+			if !yield(key, values[key]) {
 				return
 			}
 		}
