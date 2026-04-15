@@ -323,6 +323,116 @@ type ReposManifest struct {
 	Repos   []ReposRepo `yaml:"repos"`
 }
 
+// AgentManifest defines the structure of ~/.core/agent.yaml.
+// Used by the agent daemon to configure watch roots, schedules, MCP/API
+// listeners, and pool sizing for each model backend.
+//
+//	var agent config.AgentManifest
+//	_ = config.LoadManifest(io.Local, "~/.core/agent.yaml", &agent)
+type AgentManifest struct {
+	Daemon DaemonConfig         `yaml:"daemon"`
+	Agents map[string]AgentPool `yaml:"agents"`
+}
+
+// DaemonConfig contains the top-level daemon settings for ~/.core/agent.yaml.
+type DaemonConfig struct {
+	Enabled  bool             `yaml:"enabled"`
+	Watch    []string         `yaml:"watch"`
+	Schedule []DaemonSchedule `yaml:"schedule"`
+	MCP      DaemonMCP        `yaml:"mcp"`
+	API      DaemonAPI        `yaml:"api"`
+}
+
+// DaemonSchedule defines a single cron-like daemon task.
+type DaemonSchedule struct {
+	Cron   string `yaml:"cron"`
+	Action string `yaml:"action"`
+}
+
+// DaemonMCP configures the daemon's MCP listener.
+type DaemonMCP struct {
+	Port int `yaml:"port"`
+}
+
+// DaemonAPI configures the daemon's API listener.
+type DaemonAPI struct {
+	Port int    `yaml:"port"`
+	Bind string `yaml:"bind"`
+}
+
+// AgentPool configures the total worker count for a named agent backend.
+type AgentPool struct {
+	Total int `yaml:"total"`
+}
+
+// ZoneManifest defines the structure of ~/.core/zone.yaml.
+// Used by lethernet/network tooling to configure identity, chain mode,
+// advertised services, and staking.
+//
+//	var zone config.ZoneManifest
+//	_ = config.LoadManifest(io.Local, "~/.core/zone.yaml", &zone)
+type ZoneManifest struct {
+	Zone ZoneConfig `yaml:"zone"`
+}
+
+// ZoneConfig is the root `zone:` object in ~/.core/zone.yaml.
+type ZoneConfig struct {
+	Name     string       `yaml:"name"`
+	Identity string       `yaml:"identity"`
+	Chain    ZoneChain    `yaml:"chain"`
+	Network  ZoneNetwork  `yaml:"network"`
+	Services ZoneServices `yaml:"services"`
+	Staking  ZoneStaking  `yaml:"staking"`
+}
+
+// ZoneChain configures blockchain connectivity for the zone.
+type ZoneChain struct {
+	Mode   string `yaml:"mode"`
+	Daemon string `yaml:"daemon"`
+}
+
+// ZoneNetwork configures network transport settings for the zone.
+type ZoneNetwork struct {
+	WireGuard ZoneWireGuard `yaml:"wireguard"`
+}
+
+// ZoneWireGuard configures the WireGuard listener for the zone.
+type ZoneWireGuard struct {
+	Interface string `yaml:"interface"`
+	Listen    int    `yaml:"listen"`
+}
+
+// ZoneServices enumerates the services this zone offers.
+type ZoneServices struct {
+	VPN     ZoneServiceVPN     `yaml:"vpn"`
+	DNS     ZoneServiceToggle  `yaml:"dns"`
+	Compute ZoneServiceCompute `yaml:"compute"`
+}
+
+// ZoneServiceToggle is a simple enabled/disabled service switch.
+type ZoneServiceToggle struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+// ZoneServiceVPN configures the VPN service advertisement.
+type ZoneServiceVPN struct {
+	Enabled  bool    `yaml:"enabled"`
+	Price    float64 `yaml:"price"`
+	Capacity int     `yaml:"capacity"`
+}
+
+// ZoneServiceCompute configures the compute service advertisement.
+type ZoneServiceCompute struct {
+	Enabled bool     `yaml:"enabled"`
+	Models  []string `yaml:"models"`
+}
+
+// ZoneStaking configures the zone's staking posture.
+type ZoneStaking struct {
+	Amount int    `yaml:"amount"`
+	Tier   string `yaml:"tier"`
+}
+
 type buildManifestYAML struct {
 	Version int                  `yaml:"version"`
 	Project buildManifestProject `yaml:"project"`
@@ -488,12 +598,15 @@ func LoadManifest(m coreio.Medium, path string, out any) error {
 	if err != nil {
 		return coreerr.E("config.LoadManifest", "failed to read manifest: "+path, err)
 	}
-	if err := yaml.Unmarshal([]byte(content), out); err != nil {
-		return coreerr.E("config.LoadManifest", "failed to parse manifest: "+path, err)
-	}
 	var raw map[string]any
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
-		return coreerr.E("config.LoadManifest", "failed to inspect manifest: "+path, err)
+		return coreerr.E("config.LoadManifest", "failed to parse manifest: "+path, err)
+	}
+	if err := validateSchema(path, raw); err != nil {
+		return err
+	}
+	if err := yaml.Unmarshal([]byte(content), out); err != nil {
+		return coreerr.E("config.LoadManifest", "failed to decode manifest: "+path, err)
 	}
 	if err := validateManifest(path, out, raw); err != nil {
 		return err

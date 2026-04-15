@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "zone": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "identity": { "type": "string" },
+        "chain": {
+          "type": "object",
+          "properties": {
+            "mode": { "type": "string" },
+            "daemon": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "network": {
+          "type": "object",
+          "properties": {
+            "wireguard": {
+              "type": "object",
+              "properties": {
+                "interface": { "type": "string" },
+                "listen": { "type": "integer" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "services": {
+          "type": "object",
+          "properties": {
+            "vpn": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "price": { "type": "number" },
+                "capacity": { "type": "integer" }
+              },
+              "additionalProperties": true
+            },
+            "dns": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" }
+              },
+              "additionalProperties": true
+            },
+            "compute": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "models": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "staking": {
+          "type": "object",
+          "properties": {
+            "amount": { "type": "integer" },
+            "tier": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

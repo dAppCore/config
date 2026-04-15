@@ -189,6 +189,15 @@ func TestConfig_Load_Existing_Good(t *testing.T) {
 	assert.Equal(t, "existing", name)
 }
 
+func TestConfig_Load_Existing_Schema_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/tmp/test/config.yaml"] = "features: enabled\n"
+
+	_, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "schema validation failed")
+}
+
 func TestConfig_Env_Good(t *testing.T) {
 	// Set environment variable
 	t.Setenv("CORE_CONFIG_DEV_EDITOR", "nano")

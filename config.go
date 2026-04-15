@@ -241,6 +241,10 @@ func (c *Config) loadFile(m coreio.Medium, path string, notify bool) error {
 	}
 
 	settings := parsed.AllSettings()
+	if err := validateSchema(path, settings); err != nil {
+		c.mu.Unlock()
+		return err
+	}
 
 	// Keep the persisted and runtime views aligned with the same parsed data.
 	if err := c.file.MergeConfigMap(settings); err != nil {

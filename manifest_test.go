@@ -147,6 +147,43 @@ func TestManifest_LoadManifest_Release_Good(t *testing.T) {
 	assert.Contains(t, rel.Changelog.Include, "feat")
 }
 
+func TestManifest_LoadManifest_Agent_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/home/.core/agent.yaml"] = "daemon:\n  enabled: true\n  watch:\n    - ~/Code/core/\n  schedule:\n    - cron: '*/5 * * * *'\n      action: health.check\n  mcp:\n    port: 0\n  api:\n    port: 8099\n    bind: 127.0.0.1\nagents:\n  codex:\n    total: 2\n  claude:\n    total: 1\n"
+
+	var agent AgentManifest
+	err := LoadManifest(m, "/home/.core/agent.yaml", &agent)
+	assert.NoError(t, err)
+	assert.True(t, agent.Daemon.Enabled)
+	assert.Equal(t, "health.check", agent.Daemon.Schedule[0].Action)
+	assert.Equal(t, 8099, agent.Daemon.API.Port)
+	assert.Equal(t, 2, agent.Agents["codex"].Total)
+}
+
+func TestManifest_LoadManifest_Zone_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/home/.core/zone.yaml"] = "zone:\n  name: snider\n  identity: '@snider@lthn'\n  chain:\n    mode: thin\n    daemon: localhost:36941\n  network:\n    wireguard:\n      interface: wg-lthn\n      listen: 51820\n  services:\n    vpn:\n      enabled: true\n      price: 0.001\n      capacity: 100\n    dns:\n      enabled: true\n    compute:\n      enabled: true\n      models:\n        - lem-1b\n        - lem-4b\n  staking:\n    amount: 1000\n    tier: trusted\n"
+
+	var zone ZoneManifest
+	err := LoadManifest(m, "/home/.core/zone.yaml", &zone)
+	assert.NoError(t, err)
+	assert.Equal(t, "snider", zone.Zone.Name)
+	assert.Equal(t, "thin", zone.Zone.Chain.Mode)
+	assert.Equal(t, "wg-lthn", zone.Zone.Network.WireGuard.Interface)
+	assert.Equal(t, 100, zone.Zone.Services.VPN.Capacity)
+	assert.Contains(t, zone.Zone.Services.Compute.Models, "lem-4b")
+}
+
+func TestManifest_LoadManifest_Schema_Bad(t *testing.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/.core/build.yaml"] = "targets: 42\n"
+
+	var build BuildManifest
+	err := LoadManifest(m, "/.core/build.yaml", &build)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "schema validation failed")
+}
+
 func TestManifest_KnownFiles_Good(t *testing.T) {
 	// The constants are single-source-of-truth names; KnownFiles must contain
 	// every canonical project-level file and not duplicate any.
