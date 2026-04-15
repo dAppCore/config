@@ -3,6 +3,8 @@ package config
 import (
 	coreio "dappco.re/go/core/io"
 	coreerr "dappco.re/go/core/log"
+	"strings"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -53,9 +55,9 @@ var KnownFiles = []string{
 //	var view config.ViewManifest
 //	_ = config.LoadManifest(io.Local, ".core/view.yaml", &view)
 type ViewManifest struct {
+	Version     string          `yaml:"version"`
 	Code        string          `yaml:"code"`
 	Name        string          `yaml:"name"`
-	Version     string          `yaml:"version"`
 	Sign        string          `yaml:"sign"`
 	Title       string          `yaml:"title"`
 	Width       int             `yaml:"width"`
@@ -89,13 +91,34 @@ type ViewPermissions struct {
 //	var build config.BuildManifest
 //	_ = config.LoadManifest(io.Local, ".core/build.yaml", &build)
 type BuildManifest struct {
-	Name    string            `yaml:"name"`
-	Output  string            `yaml:"output"`
+	Version int               `yaml:"version"`
+	Project BuildProject      `yaml:"project"`
+	Build   BuildSettings     `yaml:"build"`
 	Targets []BuildTarget     `yaml:"targets"`
-	Flags   []string          `yaml:"flags"`
-	LDFlags string            `yaml:"ldflags"`
-	CGO     bool              `yaml:"cgo"`
+	Name    string            `yaml:"-"`
+	Main    string            `yaml:"-"`
+	Binary  string            `yaml:"-"`
+	Output  string            `yaml:"-"`
+	Flags   []string          `yaml:"-"`
+	LDFlags string            `yaml:"-"`
+	CGO     bool              `yaml:"-"`
 	Env     map[string]string `yaml:"env"`
+}
+
+// BuildProject describes the source package being built.
+type BuildProject struct {
+	Name   string `yaml:"name"`
+	Main   string `yaml:"main"`
+	Binary string `yaml:"binary"`
+	Output string `yaml:"output"`
+}
+
+// BuildSettings captures the compiler and linker settings for a build.
+type BuildSettings struct {
+	Type    string   `yaml:"type"`
+	CGO     bool     `yaml:"cgo"`
+	Flags   []string `yaml:"flags"`
+	LDFlags []string `yaml:"ldflags"`
 }
 
 // BuildTarget defines a single platform target.
@@ -231,8 +254,110 @@ type ReleaseChangelog struct {
 //	var repos config.ReposManifest
 //	_ = config.LoadManifest(io.Local, "~/Code/.core/repos.yaml", &repos)
 type ReposManifest struct {
-	Org   string      `yaml:"org"`
-	Repos []ReposRepo `yaml:"repos"`
+	Version int         `yaml:"version"`
+	Org     string      `yaml:"org"`
+	Repos   []ReposRepo `yaml:"repos"`
+}
+
+type buildManifestYAML struct {
+	Version int                  `yaml:"version"`
+	Project buildManifestProject `yaml:"project"`
+	Build   buildManifestBuild   `yaml:"build"`
+	Targets []BuildTarget        `yaml:"targets"`
+	Name    string               `yaml:"name"`
+	Main    string               `yaml:"main"`
+	Binary  string               `yaml:"binary"`
+	Output  string               `yaml:"output"`
+	Flags   []string             `yaml:"flags"`
+	LDFlags buildManifestLDFlags `yaml:"ldflags"`
+	CGO     *bool                `yaml:"cgo"`
+	Env     map[string]string    `yaml:"env"`
+}
+
+type buildManifestProject struct {
+	Name   string `yaml:"name"`
+	Main   string `yaml:"main"`
+	Binary string `yaml:"binary"`
+	Output string `yaml:"output"`
+}
+
+type buildManifestBuild struct {
+	Type    string               `yaml:"type"`
+	CGO     *bool                `yaml:"cgo"`
+	Flags   []string             `yaml:"flags"`
+	LDFlags buildManifestLDFlags `yaml:"ldflags"`
+}
+
+type buildManifestLDFlags []string
+
+func (l *buildManifestLDFlags) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var single string
+		if err := value.Decode(&single); err != nil {
+			return err
+		}
+		if single == "" {
+			*l = nil
+			return nil
+		}
+		*l = []string{single}
+		return nil
+	case yaml.SequenceNode:
+		var values []string
+		if err := value.Decode(&values); err != nil {
+			return err
+		}
+		*l = append([]string(nil), values...)
+		return nil
+	case yaml.MappingNode, yaml.AliasNode:
+		var values []string
+		if err := value.Decode(&values); err != nil {
+			return err
+		}
+		*l = append([]string(nil), values...)
+		return nil
+	default:
+		*l = nil
+		return nil
+	}
+}
+
+func (l buildManifestLDFlags) String() string {
+	return strings.Join(l, " ")
+}
+
+// UnmarshalYAML accepts both the legacy flat build schema and the nested
+// RFC shape with project/build sections.
+func (m *BuildManifest) UnmarshalYAML(value *yaml.Node) error {
+	var raw buildManifestYAML
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+
+	m.Version = raw.Version
+	m.Project = BuildProject{
+		Name:   firstNonEmpty(raw.Project.Name, raw.Name),
+		Main:   firstNonEmpty(raw.Project.Main, raw.Main),
+		Binary: firstNonEmpty(raw.Project.Binary, raw.Binary),
+		Output: firstNonEmpty(raw.Project.Output, raw.Output),
+	}
+	m.Build = BuildSettings{
+		Type:    raw.Build.Type,
+		CGO:     firstBool(raw.Build.CGO, raw.CGO),
+		Flags:   firstStrings(raw.Build.Flags, raw.Flags),
+		LDFlags: firstLDFlags(raw.Build.LDFlags, raw.LDFlags),
+	}
+	m.Targets = append([]BuildTarget(nil), raw.Targets...)
+	m.Name = m.Project.Name
+	m.Main = m.Project.Main
+	m.Binary = m.Project.Binary
+	m.Output = m.Project.Output
+	m.Flags = append([]string(nil), m.Build.Flags...)
+	m.LDFlags = strings.Join(m.Build.LDFlags, " ")
+	m.CGO = m.Build.CGO
+	m.Env = raw.Env
+	return nil
 }
 
 // ReposRepo is a single repository entry in repos.yaml.
@@ -261,6 +386,42 @@ func LoadManifest(m coreio.Medium, path string, out any) error {
 	}
 	if err := yaml.Unmarshal([]byte(content), out); err != nil {
 		return coreerr.E("config.LoadManifest", "failed to parse manifest: "+path, err)
+	}
+	return nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstBool(values ...*bool) bool {
+	for _, value := range values {
+		if value != nil {
+			return *value
+		}
+	}
+	return false
+}
+
+func firstStrings(values ...[]string) []string {
+	for _, value := range values {
+		if len(value) > 0 {
+			return append([]string(nil), value...)
+		}
+	}
+	return nil
+}
+
+func firstLDFlags(values ...buildManifestLDFlags) buildManifestLDFlags {
+	for _, value := range values {
+		if len(value) > 0 {
+			return append(buildManifestLDFlags(nil), value...)
+		}
 	}
 	return nil
 }
