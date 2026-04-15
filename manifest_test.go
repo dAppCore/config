@@ -511,6 +511,35 @@ func TestManifest_LoadManifest_PackageSignature_Good(t *testing.T) {
 	assert.Equal(t, pkg.SignKey, round.SignKey)
 }
 
+func TestManifest_LoadManifest_PackageSignature_UntrustedKey_Bad(t *testing.T) {
+	trustedPub, _, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	untrustedPub, priv, err := ed25519.GenerateKey(nil)
+	assert.NoError(t, err)
+	setManifestTrustKeys(t, hex.EncodeToString(trustedPub))
+
+	pkg := &PackageManifest{
+		Code:        "go-io",
+		Name:        "Core I/O",
+		Version:     "0.3.0",
+		Description: "Mandatory I/O abstraction layer",
+		Licence:     "EUPL-1.2",
+		SignKey:     hex.EncodeToString(untrustedPub),
+	}
+
+	msg, err := packageManifestBytes(pkg)
+	assert.NoError(t, err)
+	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
+
+	m := coreio.NewMockMedium()
+	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+
+	var round PackageManifest
+	err = LoadManifest(m, "/.core/manifest.yaml", &round)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "package sign_key is not trusted")
+}
+
 func TestManifest_LoadManifest_PackageSignature_Bad(t *testing.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)

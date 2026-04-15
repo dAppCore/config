@@ -741,6 +741,14 @@ func verifyPackageManifest(path string, pkg *PackageManifest, raw map[string]any
 		return coreerr.E("config.LoadManifest", "package sign_key is not an ed25519 public key: "+path, nil)
 	}
 
+	trustedKeys, err := trustedManifestTrustedEnvKeys()
+	if err != nil {
+		return coreerr.E("config.LoadManifest", "load trusted manifest public keys failed: "+path, err)
+	}
+	if len(trustedKeys) > 0 && !manifestKeyTrusted(ed25519.PublicKey(pub), trustedKeys) {
+		return coreerr.E("config.LoadManifest", "package sign_key is not trusted: "+path, nil)
+	}
+
 	sig, err := decodeManifestSignature(pkg.Sign)
 	if err != nil {
 		return coreerr.E("config.LoadManifest", "invalid package manifest signature: "+path, err)
@@ -757,6 +765,34 @@ func verifyPackageManifest(path string, pkg *PackageManifest, raw map[string]any
 		return coreerr.E("config.LoadManifest", "package manifest signature mismatch: "+path, nil)
 	}
 	return nil
+}
+
+func manifestKeyTrusted(candidate ed25519.PublicKey, trusted []ed25519.PublicKey) bool {
+	for _, key := range trusted {
+		if len(key) != ed25519.PublicKeySize {
+			continue
+		}
+		if strings.EqualFold(hex.EncodeToString(candidate), hex.EncodeToString(key)) {
+			return true
+		}
+	}
+	return false
+}
+
+func trustedManifestTrustedEnvKeys() ([]ed25519.PublicKey, error) {
+	fromEnv := strings.TrimSpace(core.Env("CORE_MANIFEST_TRUST_KEYS"))
+	if fromEnv == "" {
+		return nil, nil
+	}
+	var keys []ed25519.PublicKey
+	for _, raw := range splitManifestTrustedKeys(fromEnv) {
+		pub, err := parseManifestPublicKey(raw)
+		if err != nil {
+			return nil, coreerr.E("config.trustedManifestPublicKeys", "decode trusted key failed", err)
+		}
+		keys = append(keys, pub)
+	}
+	return dedupeManifestKeys(keys), nil
 }
 
 func decodeManifestSignature(value string) ([]byte, error) {
