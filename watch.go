@@ -120,7 +120,7 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 func (c *Config) reloadAndNotify() {
 	before := c.snapshotAll()
 
-	if err := c.LoadFile(c.medium, c.path); err != nil {
+	if err := c.loadFile(c.medium, c.path, false); err != nil {
 		return
 	}
 

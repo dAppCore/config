@@ -170,7 +170,7 @@ func New(opts ...Option) (*Config, error) {
 
 	// Load existing config file if it exists
 	if c.medium.Exists(c.path) {
-		if err := c.LoadFile(c.medium, c.path); err != nil {
+		if err := c.loadFile(c.medium, c.path, false); err != nil {
 			return nil, coreerr.E("config.New", "failed to load config file", err)
 		}
 	}
@@ -206,22 +206,31 @@ func configTypeForPath(path string) (string, error) {
 //
 //	cfg.LoadFile(io.Local, ".core/build.yaml")
 func (c *Config) LoadFile(m coreio.Medium, path string) error {
+	return c.loadFile(m, path, true)
+}
+
+// loadFile merges a configuration file into the current Config. When notify is
+// true it also broadcasts ConfigChanged events for each changed key.
+func (c *Config) loadFile(m coreio.Medium, path string, notify bool) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	before := c.snapshotAllLocked()
 
 	configType, err := configTypeForPath(path)
 	if err != nil {
+		c.mu.Unlock()
 		return coreerr.E("config.LoadFile", "failed to determine config file type: "+path, err)
 	}
 
 	content, err := m.Read(path)
 	if err != nil {
+		c.mu.Unlock()
 		return coreerr.E("config.LoadFile", core.Sprintf("failed to read config file: %s", path), err)
 	}
 
 	parsed := viper.New()
 	parsed.SetConfigType(configType)
 	if err := parsed.MergeConfig(core.NewReader(content)); err != nil {
+		c.mu.Unlock()
 		return coreerr.E("config.LoadFile", core.Sprintf("failed to parse config file: %s", path), err)
 	}
 
@@ -229,11 +238,37 @@ func (c *Config) LoadFile(m coreio.Medium, path string) error {
 
 	// Keep the persisted and runtime views aligned with the same parsed data.
 	if err := c.file.MergeConfigMap(settings); err != nil {
+		c.mu.Unlock()
 		return coreerr.E("config.LoadFile", "failed to merge config into file settings", err)
 	}
 
 	if err := c.full.MergeConfigMap(settings); err != nil {
+		c.mu.Unlock()
 		return coreerr.E("config.LoadFile", "failed to merge config into full settings", err)
+	}
+
+	callbacks := append([]func(string, any){}, c.callbacks...)
+	attached := c.core
+	after := map[string]any{}
+	if notify && (len(callbacks) > 0 || attached != nil) {
+		after = c.snapshotAllLocked()
+	}
+	c.mu.Unlock()
+
+	if notify && (len(callbacks) > 0 || attached != nil) {
+		for _, change := range diffSnapshots(before, after) {
+			for _, fn := range callbacks {
+				fn(change.Key, change.Value)
+			}
+			if attached != nil {
+				attached.ACTION(ConfigChanged{
+					Key:      change.Key,
+					Value:    change.Value,
+					Previous: change.Previous,
+					Source:   "file",
+				})
+			}
+		}
 	}
 
 	return nil
@@ -359,6 +394,15 @@ func (c *Config) All() iter.Seq2[string, any] {
 			}
 		}
 	}
+}
+
+// snapshotAllLocked copies the current config state while c.mu is already held.
+func (c *Config) snapshotAllLocked() map[string]any {
+	out := make(map[string]any, len(c.full.AllKeys()))
+	for _, key := range c.full.AllKeys() {
+		out[key] = c.full.Get(key)
+	}
+	return out
 }
 
 // envPrefixOf returns the environment-variable prefix registered with viper
