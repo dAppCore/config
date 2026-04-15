@@ -146,6 +146,9 @@ func userCorePath(parts ...string) string {
 		if part == "" {
 			continue
 		}
+		if !isSafePathElement(part) {
+			return ""
+		}
 		elems = append(elems, part)
 	}
 	return core.Path(elems...)
@@ -426,6 +429,9 @@ func findProjectDirectory(medium coreio.Medium, start string, name string) strin
 	if medium == nil {
 		medium = coreio.Local
 	}
+	if !isSafePathElement(name) {
+		return ""
+	}
 	for _, dir := range projectCoreDirs(medium, start) {
 		candidate := core.Path(dir, name)
 		if medium.Exists(candidate) {
@@ -475,11 +481,17 @@ func WorkspaceSandboxPath(repo, branch string, parts ...string) string {
 		if part == "" {
 			continue
 		}
+		if !isSafePathElement(part) {
+			return ""
+		}
 		elems = append(elems, part)
 	}
 	for _, part := range parts {
 		if part == "" {
 			continue
+		}
+		if !isSafePathElement(part) {
+			return ""
 		}
 		elems = append(elems, part)
 	}

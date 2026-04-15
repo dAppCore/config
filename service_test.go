@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	core "dappco.re/go/core"
@@ -339,6 +340,32 @@ func TestService_LoadFile_Ugly(t *testing.T) {
 	err := svc.LoadFile(m, filepath.Join("tmp", "svc", "config.yaml"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "config paths must remain under .core/")
+}
+
+func TestService_LoadFile_RejectsSymlinkedCore(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink test is not portable on Windows in this environment")
+	}
+
+	projectRoot := t.TempDir()
+	externalCore := filepath.Join(t.TempDir(), "shared-core")
+	assert.NoError(t, os.MkdirAll(externalCore, 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(externalCore, "override.yaml"), []byte("dev:\n  shell: zsh\n"), 0600))
+	assert.NoError(t, os.Symlink(externalCore, filepath.Join(projectRoot, ".core")))
+	assert.NoError(t, os.WriteFile(filepath.Join(projectRoot, "config.yaml"), []byte("app:\n  name: svc\n"), 0600))
+
+	c := core.New()
+	svc := &Service{
+		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
+			Path:   filepath.Join(projectRoot, "config.yaml"),
+			Medium: coreio.Local,
+		}),
+	}
+	assert.True(t, svc.OnStartup(context.Background()).OK)
+
+	err := svc.LoadFile(coreio.Local, ".core/override.yaml")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "symlinked .core directories are not allowed")
 }
 
 func TestService_OnShutdown_StopsWatcher_Good(t *testing.T) {

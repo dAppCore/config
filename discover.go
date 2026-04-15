@@ -147,6 +147,9 @@ func FindManifest(medium coreio.Medium, start string, name string) string {
 	if medium == nil {
 		medium = coreio.Local
 	}
+	if !isSafePathElement(name) {
+		return ""
+	}
 	for _, dir := range CoreDirs(medium, start) {
 		candidate := core.Path(dir, name)
 		if medium.Exists(candidate) {

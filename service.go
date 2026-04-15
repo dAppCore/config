@@ -200,6 +200,9 @@ func isProjectCoreRelativePath(path string) bool {
 
 func resolveServiceLoadPath(candidatePath, coreAbs, absCandidate string) (string, string, error) {
 	resolvedCore := coreAbs
+	if info, err := os.Lstat(coreAbs); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", "", coreerr.E("config.validateServiceLoadPath", "symlinked .core directories are not allowed: "+coreAbs, nil)
+	}
 	if stat, err := os.Stat(coreAbs); err == nil && stat.IsDir() {
 		if realCore, err := filepath.EvalSymlinks(coreAbs); err == nil {
 			resolvedCore = realCore

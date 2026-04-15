@@ -247,6 +247,9 @@ func TestResolve_FindUserPath_Bad(t *testing.T) {
 	assert.Empty(t, FindUserSecretsDirectory(m))
 	assert.Empty(t, FindUserDaemonsDirectory(m))
 	assert.Empty(t, FindUserWorkspacesDirectory(m))
+	assert.Empty(t, FindUserPath(m, "..", FileAgent))
+	assert.Empty(t, FindUserPath(m, DirectoryImages, "../escape"))
+	assert.Empty(t, FindManifest(m, t.TempDir(), "../config.yaml"))
 }
 
 func TestResolve_ResolveUserManifests_Good(t *testing.T) {
@@ -395,6 +398,9 @@ func TestResolve_WorkspaceSandboxPath_Good(t *testing.T) {
 func TestResolve_WorkspaceSandboxPath_Ugly(t *testing.T) {
 	home := core.Env("DIR_HOME")
 	assert.Equal(t, filepath.Join(home, Directory, WorkspaceDirectory, "src"), WorkspaceSandboxPath("", "", "", "src", ""))
+	assert.Empty(t, WorkspaceSandboxPath("../repo", "dev"))
+	assert.Empty(t, WorkspaceSandboxPath("repo", "../dev"))
+	assert.Empty(t, WorkspaceSandboxPath("repo", "dev", "../secret"))
 }
 
 func TestResolve_ResolveConfigManifest_Good(t *testing.T) {
