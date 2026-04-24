@@ -19,9 +19,9 @@ import (
 	"strings"
 	"sync"
 
-	coreio "forge.lthn.ai/core/go-io"
-	coreerr "forge.lthn.ai/core/go-log"
-	core "forge.lthn.ai/core/go/pkg/core"
+	coreio "dappco.re/go/io"
+	coreerr "dappco.re/go/log"
+	core "dappco.re/go/core"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )

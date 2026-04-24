@@ -3,9 +3,9 @@ package config
 import (
 	"context"
 
-	coreio "forge.lthn.ai/core/go-io"
-	coreerr "forge.lthn.ai/core/go-log"
-	core "forge.lthn.ai/core/go/pkg/core"
+	coreio "dappco.re/go/io"
+	coreerr "dappco.re/go/log"
+	core "dappco.re/go/core"
 )
 
 // Service wraps Config as a framework service with lifecycle support.

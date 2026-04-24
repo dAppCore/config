@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	coreio "forge.lthn.ai/core/go-io"
-	core "forge.lthn.ai/core/go/pkg/core"
+	coreio "dappco.re/go/io"
+	core "dappco.re/go/core"
 )
 
 func TestConfig_Get_Good(t *testing.T) {
