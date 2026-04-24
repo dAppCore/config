@@ -1,4 +1,4 @@
-module dappco.re/go/core/config
+module dappco.re/go/config
 
 go 1.26.0
 
