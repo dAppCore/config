@@ -1,4 +1,4 @@
-module dappco.re/go/core/config
+module dappco.re/go/config
 
 go 1.26.0
 
@@ -18,8 +18,8 @@ require (
 
 require (
 	dappco.re/go/core v0.8.0-alpha.1
-	dappco.re/go/core/io v0.4.2
-	dappco.re/go/core/log v0.1.2
+	dappco.re/go/io v0.8.0-alpha.1
+	dappco.re/go/log v0.8.0-alpha.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect

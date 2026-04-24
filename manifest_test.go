@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	core "dappco.re/go/core"
-	coreio "dappco.re/go/core/io"
+	coreio "dappco.re/go/io"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )

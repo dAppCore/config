@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	coreio "dappco.re/go/core/io"
+	coreio "dappco.re/go/io"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	coreio "dappco.re/go/core/io"
+	coreio "dappco.re/go/io"
 )
 
 // isSafePathElement reports whether part is a single relative path element.

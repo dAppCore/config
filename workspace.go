@@ -2,7 +2,7 @@ package config
 
 import (
 	core "dappco.re/go/core"
-	coreio "dappco.re/go/core/io"
+	coreio "dappco.re/go/io"
 )
 
 // FindWorkspaceRoot returns the directory that contains the nearest
