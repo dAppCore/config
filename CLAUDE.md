@@ -7,10 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This project uses the Core CLI (`core` binary), not `go` directly.
 
 ```bash
-core go test                          # run all tests
-core go test --run TestConfig_Get_Good  # run a single test
-core go cov                           # test with coverage
-core go cov --open                    # coverage + open HTML report
+go test ./...                                    # run all tests
+go test -run TestConfig_Get_Good ./...           # run a single test
+go test -cover ./...                             # test with coverage
 
 core go qa                            # format, vet, lint, test
 core go qa full                       # adds race detector, vuln scan, security audit

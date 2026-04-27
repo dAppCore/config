@@ -263,7 +263,7 @@ func (c *Config) loadFile(m coreio.Medium, path string, notify bool) error {
 	content, err := m.Read(path)
 	if err != nil {
 		c.mu.Unlock()
-		return coreerr.E("config.LoadFile", core.Sprintf("failed to read config file: %s", path), err)
+		return coreerr.E("config.LoadFile", "failed to read config file: "+path, err)
 	}
 
 	parsed := viper.New()
