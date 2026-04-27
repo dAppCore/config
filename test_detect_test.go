@@ -37,7 +37,7 @@ func TestTestDetect_ResolveTestManifest_Good(t *testing.T) {
 			name:     "go module",
 			filename: "go.mod",
 			content:  "module example.com/repo\n",
-			expected: "go test ./...",
+			expected: "core go qa",
 		},
 		{
 			name:     "pytest ini",
@@ -67,21 +67,21 @@ func TestTestDetect_ResolveTestManifest_Good(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tmp := t.TempDir()
-			root := filepath.Join(tmp, "repo")
+			m := coreio.NewMockMedium()
+			root := filepath.Join("/", "repo", tc.name)
 			child := filepath.Join(root, "service")
 
-			assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(root, ".core")))
-			assert.NoError(t, coreio.Local.EnsureDir(child))
-			assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(root, ".git")))
+			assert.NoError(t, m.EnsureDir(filepath.Join(root, ".core")))
+			assert.NoError(t, m.EnsureDir(child))
+			assert.NoError(t, m.EnsureDir(filepath.Join(root, ".git")))
 
 			path := filepath.Join(root, tc.filename)
 			if tc.filename == FileTest {
 				path = filepath.Join(root, ".core", FileTest)
 			}
-			assert.NoError(t, coreio.Local.Write(path, tc.content))
+			assert.NoError(t, m.Write(path, tc.content))
 
-			manifest, err := ResolveTestManifest(coreio.Local, child)
+			manifest, err := ResolveTestManifest(m, child)
 			assert.NoError(t, err)
 			assert.NotNil(t, manifest)
 			assert.NotEmpty(t, manifest.Commands)
@@ -91,27 +91,27 @@ func TestTestDetect_ResolveTestManifest_Good(t *testing.T) {
 }
 
 func TestTestDetect_ResolveTestManifest_Bad(t *testing.T) {
-	tmp := t.TempDir()
-	root := filepath.Join(tmp, "repo")
+	m := coreio.NewMockMedium()
+	root := filepath.Join("/", "repo", "bad")
 	child := filepath.Join(root, "service")
 
-	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(root, ".git")))
-	assert.NoError(t, coreio.Local.EnsureDir(child))
-	assert.NoError(t, coreio.Local.Write(filepath.Join(root, "package.json"), `{"scripts":{"test":123}}`))
+	assert.NoError(t, m.EnsureDir(filepath.Join(root, ".git")))
+	assert.NoError(t, m.EnsureDir(child))
+	assert.NoError(t, m.Write(filepath.Join(root, "package.json"), `{"scripts":{"test":123}}`))
 
-	manifest, err := ResolveTestManifest(coreio.Local, child)
+	manifest, err := ResolveTestManifest(m, child)
 	assert.Nil(t, manifest)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid npm test script")
 }
 
 func TestTestDetect_ResolveTestManifest_Ugly(t *testing.T) {
-	tmp := t.TempDir()
-	root := filepath.Join(tmp, "repo")
+	m := coreio.NewMockMedium()
+	root := filepath.Join("/", "repo", "ugly")
 
-	assert.NoError(t, coreio.Local.EnsureDir(filepath.Join(root, ".git")))
+	assert.NoError(t, m.EnsureDir(filepath.Join(root, ".git")))
 
-	manifest, err := ResolveTestManifest(coreio.Local, root)
+	manifest, err := ResolveTestManifest(m, root)
 	assert.Nil(t, manifest)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no test command could be detected")

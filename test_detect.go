@@ -8,6 +8,8 @@ import (
 	coreerr "dappco.re/go/log"
 )
 
+const callerResolveTestManifest = "config.ResolveTestManifest"
+
 func detectTestCommand(medium coreio.Medium, start string) (string, bool, error) {
 	start = normalizeUpwardStart(medium, start)
 	for dir := start; ; dir = core.PathDir(dir) {
@@ -36,7 +38,7 @@ func detectTestCommandAtDir(medium coreio.Medium, dir string) (string, bool, err
 	case medium.Exists(core.Path(dir, "package.json")):
 		return detectJSONTestCommand(medium, core.Path(dir, "package.json"), "npm", "npm test")
 	case medium.Exists(core.Path(dir, "go.mod")):
-		return "go test ./...", true, nil
+		return "core go qa", true, nil
 	case medium.Exists(core.Path(dir, "pytest.ini")):
 		return "pytest", true, nil
 	case medium.Exists(core.Path(dir, "pyproject.toml")):
@@ -48,17 +50,17 @@ func detectTestCommandAtDir(medium coreio.Medium, dir string) (string, bool, err
 	}
 }
 
-func detectJSONTestCommand(medium coreio.Medium, path string, label string, fallback string) (string, bool, error) {
+func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) (string, bool, error) {
 	content, err := medium.Read(path)
 	if err != nil {
-		return "", false, coreerr.E("config.ResolveTestManifest", "failed to read "+label+" manifest: "+path, err)
+		return "", false, coreerr.E(callerResolveTestManifest, "failed to read "+label+" manifest: "+path, err)
 	}
 
 	var data struct {
 		Scripts map[string]json.RawMessage `json:"scripts"`
 	}
 	if err := json.Unmarshal([]byte(content), &data); err != nil {
-		return "", false, coreerr.E("config.ResolveTestManifest", "failed to parse "+label+" manifest: "+path, err)
+		return "", false, coreerr.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, err)
 	}
 
 	raw, ok := data.Scripts["test"]
@@ -68,7 +70,7 @@ func detectJSONTestCommand(medium coreio.Medium, path string, label string, fall
 
 	var script string
 	if err := json.Unmarshal(raw, &script); err != nil {
-		return "", false, coreerr.E("config.ResolveTestManifest", "invalid "+label+" test script: "+path, err)
+		return "", false, coreerr.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, err)
 	}
 	if script == "" {
 		return fallback, true, nil

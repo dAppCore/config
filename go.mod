@@ -33,3 +33,7 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 )
+
+replace dappco.re/go/io => github.com/dappcore/go-io v0.8.0-alpha.1
+
+replace dappco.re/go/log => github.com/dappcore/go-log v0.8.0-alpha.1

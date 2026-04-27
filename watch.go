@@ -15,9 +15,44 @@ const debounceWindow = 100 * time.Millisecond
 
 type fileWatcher struct {
 	mu      sync.Mutex
-	w       *fsnotify.Watcher
+	w       watchBackend
 	stop    chan struct{}
 	stopped bool
+}
+
+type watchBackend interface {
+	Add(string) error
+	Close() error
+	Events() <-chan fsnotify.Event
+	Errors() <-chan error
+}
+
+type fsnotifyBackend struct {
+	w *fsnotify.Watcher
+}
+
+func (b fsnotifyBackend) Add(path string) error {
+	return b.w.Add(path)
+}
+
+func (b fsnotifyBackend) Close() error {
+	return b.w.Close()
+}
+
+func (b fsnotifyBackend) Events() <-chan fsnotify.Event {
+	return b.w.Events
+}
+
+func (b fsnotifyBackend) Errors() <-chan error {
+	return b.w.Errors
+}
+
+var newWatchBackend = func() (watchBackend, error) {
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	return fsnotifyBackend{w: w}, nil
 }
 
 // Watch starts monitoring the config file for changes. When the file is modified,
@@ -33,7 +68,7 @@ func (c *Config) Watch() error {
 		c.mu.Unlock()
 		return nil
 	}
-	w, err := fsnotify.NewWatcher()
+	w, err := newWatchBackend()
 	if err != nil {
 		c.mu.Unlock()
 		return coreerr.E("config.Watch", "failed to create watcher", err)
@@ -76,12 +111,16 @@ func (c *Config) StopWatch() {
 }
 
 func (c *Config) watchLoop(fw *fileWatcher) {
-	var timer *time.Timer
+	reloadRequests := make(chan struct{}, 1)
+	done := make(chan struct{})
+	go c.watchReloadLoop(fw.stop, done, reloadRequests)
+	defer close(done)
+
 	for {
 		select {
 		case <-fw.stop:
 			return
-		case ev, ok := <-fw.w.Events:
+		case ev, ok := <-fw.w.Events():
 			if !ok {
 				return
 			}
@@ -95,22 +134,63 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 				c.mu.RLock()
 				path := c.path
 				c.mu.RUnlock()
-				// Best-effort: the new file may not exist yet during an atomic
-				// swap window. Add silently retries on the next event cycle.
+				// Best-effort for atomic-save editors: the replacement file may
+				// not exist during the swap. There is no automatic retry loop;
+				// another fsnotify event is required to attempt Add again.
 				_ = fw.w.Add(path)
 			}
-			if timer != nil {
-				timer.Stop()
-			}
-			timer = time.AfterFunc(debounceWindow, func() {
-				c.reloadAndNotify()
-			})
-		case _, ok := <-fw.w.Errors:
+			requestReload(reloadRequests)
+		case _, ok := <-fw.w.Errors():
 			if !ok {
 				return
 			}
 		}
 	}
+}
+
+func (c *Config) watchReloadLoop(stop, done <-chan struct{}, requests <-chan struct{}) {
+	timer := time.NewTimer(debounceWindow)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-stop:
+			return
+		case <-done:
+			return
+		case <-requests:
+			resetDebounceTimer(timer)
+		case <-timer.C:
+			select {
+			case <-stop:
+				return
+			case <-done:
+				return
+			default:
+				c.reloadAndNotify()
+			}
+		}
+	}
+}
+
+func requestReload(requests chan<- struct{}) {
+	select {
+	case requests <- struct{}{}:
+	default:
+	}
+}
+
+func resetDebounceTimer(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(debounceWindow)
 }
 
 // reloadAndNotify snapshots the current values, reloads the underlying file,
@@ -141,7 +221,7 @@ func (c *Config) reloadAndNotify() {
 				Key:      change.Key,
 				Value:    change.Value,
 				Previous: change.Previous,
-				Source:   "file",
+				Source:   configChangeSourceFile,
 			})
 		}
 	}

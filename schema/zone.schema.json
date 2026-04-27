@@ -1,55 +1,63 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
+  "required": ["zone"],
   "properties": {
     "zone": {
       "type": "object",
+      "required": ["name", "identity"],
       "properties": {
         "name": { "type": "string" },
         "identity": { "type": "string" },
         "chain": {
           "type": "object",
+          "required": ["mode", "daemon"],
           "properties": {
             "mode": { "type": "string" },
             "daemon": { "type": "string" }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         },
         "network": {
           "type": "object",
+          "required": ["wireguard"],
           "properties": {
             "wireguard": {
               "type": "object",
+              "required": ["interface", "listen"],
               "properties": {
                 "interface": { "type": "string" },
-                "listen": { "type": "integer" }
+                "listen": { "type": "integer", "minimum": 1, "maximum": 65535 }
               },
-              "additionalProperties": true
+              "additionalProperties": false
             }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         },
         "services": {
           "type": "object",
           "properties": {
             "vpn": {
               "type": "object",
+              "required": ["enabled"],
               "properties": {
                 "enabled": { "type": "boolean" },
-                "price": { "type": "number" },
-                "capacity": { "type": "integer" }
+                "price": { "type": "number", "minimum": 0 },
+                "capacity": { "type": "integer", "minimum": 0 }
               },
-              "additionalProperties": true
+              "additionalProperties": false
             },
             "dns": {
               "type": "object",
+              "required": ["enabled"],
               "properties": {
                 "enabled": { "type": "boolean" }
               },
-              "additionalProperties": true
+              "additionalProperties": false
             },
             "compute": {
               "type": "object",
+              "required": ["enabled", "models"],
               "properties": {
                 "enabled": { "type": "boolean" },
                 "models": {
@@ -57,22 +65,23 @@
                   "items": { "type": "string" }
                 }
               },
-              "additionalProperties": true
+              "additionalProperties": false
             }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         },
         "staking": {
           "type": "object",
+          "required": ["amount", "tier"],
           "properties": {
-            "amount": { "type": "integer" },
+            "amount": { "type": "integer", "minimum": 0 },
             "tier": { "type": "string" }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

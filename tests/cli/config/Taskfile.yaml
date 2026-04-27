@@ -3,24 +3,10 @@ version: "3"
 tasks:
   default:
     deps:
-      - build
-      - vet
-      - test
+      - qa
 
-  build:
-    desc: Compile every package in config.
+  qa:
+    desc: Run repository QA checks for config.
     dir: ../../..
     cmds:
-      - GOWORK=off go build ./...
-
-  vet:
-    desc: Run go vet across the module.
-    dir: ../../..
-    cmds:
-      - GOWORK=off go vet ./...
-
-  test:
-    desc: Run unit tests.
-    dir: ../../..
-    cmds:
-      - GOWORK=off go test -count=1 ./...
+      - GOWORK=off core go qa

@@ -1,9 +1,9 @@
 dappco.re/go/core v0.8.0-alpha.1 h1:gj7+Scv+L63Z7wMxbJYHhaRFkHJo2u4MMPuUSv/Dhtk=
 dappco.re/go/core v0.8.0-alpha.1/go.mod h1:f2/tBZ3+3IqDrg2F5F598llv0nmb/4gJVCFzM5geE4A=
-dappco.re/go/core/io v0.4.2 h1:SHNF/xMPyFnKWWYoFW5Y56eiuGVL/mFa1lfIw/530ls=
-dappco.re/go/core/io v0.4.2/go.mod h1:w71dukyunczLb8frT9JOd5B78PjwWQD3YAXiCt3AcPA=
-dappco.re/go/core/log v0.1.2 h1:pQSZxKD8VycdvjNJmatXbPSq2OxcP2xHbF20zgFIiZI=
-dappco.re/go/core/log v0.1.2/go.mod h1:Nkqb8gsXhZAO8VLpx7B8i1iAmohhzqA20b9Zr8VUcJs=
+github.com/dappcore/go-io v0.8.0-alpha.1 h1:Ssyc5Q/U0heRZSgiEm/tsLVerkN8QmgEvcVXvAwlfwI=
+github.com/dappcore/go-io v0.8.0-alpha.1/go.mod h1:491Lt0LOTK4/88EGWVWhrACuXAoxPXvXYu/iIwYc9C0=
+github.com/dappcore/go-log v0.8.0-alpha.1 h1:OqZ9Njhz4fr+2BCHOgWxZZcPj/T46jN2UlOCytOCr2Y=
+github.com/dappcore/go-log v0.8.0-alpha.1/go.mod h1:IC04Em9SfVTcXiWc1BqZDQfa1MtOuMDEermZkQcTz9c=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

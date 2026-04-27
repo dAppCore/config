@@ -97,9 +97,10 @@ func TestService_OnStartup_RegistersCommands_Good(t *testing.T) {
 }
 
 func TestService_OnStartup_MergesProjectOverGlobal_Good(t *testing.T) {
+	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
 
-	projectRoot := filepath.Join(t.TempDir(), "repo")
+	projectRoot := filepath.Join("/", "service-merge", "repo")
 	serviceDir := filepath.Join(projectRoot, "app")
 
 	for _, dir := range []string{
@@ -108,17 +109,17 @@ func TestService_OnStartup_MergesProjectOverGlobal_Good(t *testing.T) {
 		filepath.Join(projectRoot, ".git"),
 		serviceDir,
 	} {
-		assert.NoError(t, os.MkdirAll(dir, 0755))
+		assert.NoError(t, m.EnsureDir(dir))
 	}
 
-	assert.NoError(t, coreio.Local.Write(filepath.Join(home, ".core", FileConfig), "app:\n  name: global\nservices:\n  ollama:\n    url: http://global\n"))
-	assert.NoError(t, coreio.Local.Write(filepath.Join(projectRoot, ".core", FileConfig), "app:\n  name: project\n"))
+	assert.NoError(t, m.Write(filepath.Join(home, ".core", FileConfig), "app:\n  name: global\nservices:\n  ollama:\n    url: http://global\n"))
+	assert.NoError(t, m.Write(filepath.Join(projectRoot, ".core", FileConfig), "app:\n  name: project\n"))
 
 	c := core.New()
 	svc := &Service{
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
 			Path:   filepath.Join(projectRoot, ".core", FileConfig),
-			Medium: coreio.Local,
+			Medium: m,
 		}),
 	}
 

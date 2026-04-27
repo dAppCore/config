@@ -1,15 +1,24 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
-	"runtime"
+	"io/fs"
 	"testing"
+	"time"
 
+	core "dappco.re/go/core"
 	coreio "dappco.re/go/io"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type symlinkMockMedium struct {
+	*coreio.MockMedium
+	symlinks map[string]bool
+}
+
+func (m symlinkMockMedium) IsSymlink(path string) bool {
+	return m.symlinks[path]
+}
 
 func TestPaths_IsSafePathElement_Good(t *testing.T) {
 	for _, part := range []string{
@@ -51,24 +60,19 @@ func TestPaths_IsSafePathElement_Ugly(t *testing.T) {
 }
 
 func TestPaths_IsSymlinkedCoreDir_Good(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink test is not portable on Windows in this environment")
+	coreDir := core.Path("repo", ".core")
+	m := symlinkMockMedium{
+		MockMedium: coreio.NewMockMedium(),
+		symlinks:   map[string]bool{coreDir: true},
 	}
+	require.NoError(t, m.EnsureDir(coreDir))
 
-	tmp := t.TempDir()
-	realCore := filepath.Join(tmp, "real-core")
-	linkCore := filepath.Join(tmp, ".core")
-
-	require.NoError(t, os.MkdirAll(realCore, 0755))
-	require.NoError(t, os.Symlink(realCore, linkCore))
-
-	assert.True(t, isSymlinkedCoreDir(coreio.Local, linkCore))
+	assert.True(t, isSymlinkedCoreDir(m, coreDir))
 }
 
 func TestPaths_IsSymlinkedCoreDir_Bad(t *testing.T) {
 	m := coreio.NewMockMedium()
-	tmp := t.TempDir()
-	coreDir := filepath.Join(tmp, ".core")
+	coreDir := core.Path("repo", ".core")
 
 	require.NoError(t, m.EnsureDir(coreDir))
 
@@ -76,5 +80,14 @@ func TestPaths_IsSymlinkedCoreDir_Bad(t *testing.T) {
 }
 
 func TestPaths_IsSymlinkedCoreDir_Ugly(t *testing.T) {
-	assert.False(t, isSymlinkedCoreDir(coreio.Local, filepath.Join(t.TempDir(), ".core")))
+	previous := localLstat
+	localLstat = func(string) (fs.FileInfo, error) {
+		return coreio.NewFileInfo(".core", 0, fs.ModeSymlink, time.Now(), false), nil
+	}
+	t.Cleanup(func() {
+		localLstat = previous
+	})
+
+	assert.True(t, isSymlinkedCoreDir(coreio.Local, core.Path("local", ".core")))
+	assert.False(t, isSymlinkedCoreDir(coreio.NewMockMedium(), core.Path("local", ".core")))
 }

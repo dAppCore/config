@@ -24,7 +24,9 @@ func TestSchema_ValidateSchema_Bad(t *testing.T) {
 	}
 
 	err := validateSchema("/tmp/.core/build.yaml", raw)
-	assert.Error(t, err)
+	if err == nil {
+		t.Fatal("expected schema validation error")
+	}
 	assert.Contains(t, err.Error(), "schema validation failed")
 }
 

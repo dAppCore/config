@@ -28,6 +28,15 @@ import (
 // CORE_CONFIG_DEV_EDITOR resolves to "dev.editor" in viper.
 var envKeyReplacer = strings.NewReplacer(".", "_")
 
+const (
+	callerConfigNew          = "config.New"
+	callerConfigLoad         = "config.Load"
+	callerConfigLoadFile     = "config.LoadFile"
+	configChangeSourceFile   = "file"
+	configChangeSourceSet    = "set"
+	configChangeSourceCommit = "commit"
+)
+
 // ConfigChanged is broadcast on every Set() and Commit() call so other services
 // can react to runtime config updates without polling.
 //
@@ -195,7 +204,7 @@ func newConfig(loadFromPath bool, opts ...Option) (*Config, error) {
 	if c.path == "" {
 		home := core.Env("DIR_HOME")
 		if home == "" {
-			return nil, coreerr.E("config.New", "failed to determine home directory", nil)
+			return nil, coreerr.E(callerConfigNew, "failed to determine home directory", nil)
 		}
 		c.path = core.Path(home, ".core", "config.yaml")
 	}
@@ -205,12 +214,12 @@ func newConfig(loadFromPath bool, opts ...Option) (*Config, error) {
 	// Load existing config file if it exists.
 	if loadFromPath && c.medium.Exists(c.path) {
 		if err := c.loadFile(c.medium, c.path, false); err != nil {
-			return nil, coreerr.E("config.New", "failed to load config file", err)
+			return nil, coreerr.E(callerConfigNew, "failed to load config file", err)
 		}
 	}
 	if loadFromPath {
 		if err := c.loadStoreState(); err != nil {
-			return nil, coreerr.E("config.New", "failed to load config store state", err)
+			return nil, coreerr.E(callerConfigNew, "failed to load config store state", err)
 		}
 	}
 
@@ -254,67 +263,83 @@ func (c *Config) loadFile(m coreio.Medium, path string, notify bool) error {
 	c.mu.Lock()
 	before := c.snapshotAllLocked()
 
-	configType, err := configTypeForPath(path)
+	settings, err := readConfigSettings(m, path)
 	if err != nil {
 		c.mu.Unlock()
-		return coreerr.E("config.LoadFile", "failed to determine config file type: "+path, err)
+		return err
+	}
+	if err := c.mergeConfigSettingsLocked(settings); err != nil {
+		c.mu.Unlock()
+		return err
+	}
+
+	callbacks, attached, after := c.loadNotificationStateLocked(notify)
+	c.mu.Unlock()
+
+	if notify && (len(callbacks) > 0 || attached != nil) {
+		emitConfigChanges(callbacks, attached, diffSnapshots(before, after), configChangeSourceFile)
+	}
+
+	return nil
+}
+
+func readConfigSettings(m coreio.Medium, path string) (map[string]any, error) {
+	configType, err := configTypeForPath(path)
+	if err != nil {
+		return nil, coreerr.E(callerConfigLoadFile, "failed to determine config file type: "+path, err)
 	}
 
 	content, err := m.Read(path)
 	if err != nil {
-		c.mu.Unlock()
-		return coreerr.E("config.LoadFile", "failed to read config file: "+path, err)
+		return nil, coreerr.E(callerConfigLoadFile, "failed to read config file: "+path, err)
 	}
 
 	parsed := viper.New()
 	parsed.SetConfigType(configType)
 	if err := parsed.MergeConfig(core.NewReader(content)); err != nil {
-		c.mu.Unlock()
-		return coreerr.E("config.LoadFile", core.Sprintf("failed to parse config file: %s", path), err)
+		return nil, coreerr.E(callerConfigLoadFile, core.Sprintf("failed to parse config file: %s", path), err)
 	}
 
 	settings := parsed.AllSettings()
 	if err := validateSchema(path, settings); err != nil {
-		c.mu.Unlock()
-		return err
+		return nil, err
 	}
+	return settings, nil
+}
 
-	// Keep the persisted and runtime views aligned with the same parsed data.
+func (c *Config) mergeConfigSettingsLocked(settings map[string]any) error {
 	if err := c.file.MergeConfigMap(settings); err != nil {
-		c.mu.Unlock()
-		return coreerr.E("config.LoadFile", "failed to merge config into file settings", err)
+		return coreerr.E(callerConfigLoadFile, "failed to merge config into file settings", err)
 	}
-
 	if err := c.full.MergeConfigMap(settings); err != nil {
-		c.mu.Unlock()
-		return coreerr.E("config.LoadFile", "failed to merge config into full settings", err)
+		return coreerr.E(callerConfigLoadFile, "failed to merge config into full settings", err)
 	}
+	return nil
+}
 
+func (c *Config) loadNotificationStateLocked(notify bool) ([]func(string, any), *core.Core, map[string]any) {
 	callbacks := append([]func(string, any){}, c.callbacks...)
 	attached := c.core
-	after := map[string]any{}
-	if notify && (len(callbacks) > 0 || attached != nil) {
-		after = c.snapshotAllLocked()
+	if !notify || (len(callbacks) == 0 && attached == nil) {
+		return callbacks, attached, nil
 	}
-	c.mu.Unlock()
+	return callbacks, attached, c.snapshotAllLocked()
+}
 
-	if notify && (len(callbacks) > 0 || attached != nil) {
-		for _, change := range diffSnapshots(before, after) {
-			for _, fn := range callbacks {
-				fn(change.Key, change.Value)
-			}
-			if attached != nil {
-				attached.ACTION(ConfigChanged{
-					Key:      change.Key,
-					Value:    change.Value,
-					Previous: change.Previous,
-					Source:   "file",
-				})
-			}
+func emitConfigChanges(callbacks []func(string, any), attached *core.Core, changes []configChange, source string) {
+	for _, change := range changes {
+		for _, fn := range callbacks {
+			fn(change.Key, change.Value)
+		}
+		if attached != nil {
+			attached.ACTION(ConfigChanged{
+				Key:      change.Key,
+				Value:    change.Value,
+				Previous: change.Previous,
+				Source:   source,
+			})
 		}
 	}
-
-	return nil
 }
 
 // Get retrieves a configuration value by dot-notation key and stores it in out.
@@ -377,7 +402,7 @@ func (c *Config) Set(key string, v any) error {
 		fn(key, v)
 	}
 	if attached != nil {
-		attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: "set"})
+		attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: configChangeSourceSet})
 	}
 	persistToStore(store, key, v)
 	return nil
@@ -400,7 +425,7 @@ func (c *Config) Commit() error {
 		return coreerr.E("config.Commit", "failed to save config", err)
 	}
 	if attached != nil {
-		attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: "commit"})
+		attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: configChangeSourceCommit})
 	}
 	return nil
 }
@@ -532,7 +557,7 @@ func (c *Config) MergeFrom(source *Config) {
 	}
 }
 
-func flattenSettings(dst map[string]any, settings map[string]any) map[string]any {
+func flattenSettings(dst, settings map[string]any) map[string]any {
 	if dst == nil {
 		dst = map[string]any{}
 	}
@@ -605,13 +630,13 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 		// dotenv sources are also supported by the RFC contract.
 	default:
 		if core.PathBase(path) != ".env" {
-			return nil, coreerr.E("config.Load", "unsupported config file type: "+path, nil)
+			return nil, coreerr.E(callerConfigLoad, "unsupported config file type: "+path, nil)
 		}
 	}
 
 	content, err := m.Read(path)
 	if err != nil {
-		return nil, coreerr.E("config.Load", "failed to read config file: "+path, err)
+		return nil, coreerr.E(callerConfigLoad, "failed to read config file: "+path, err)
 	}
 
 	v := viper.New()
@@ -622,7 +647,7 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 		v.SetConfigType("yaml")
 	}
 	if err := v.ReadConfig(core.NewReader(content)); err != nil {
-		return nil, coreerr.E("config.Load", "failed to parse config file: "+path, err)
+		return nil, coreerr.E(callerConfigLoad, "failed to parse config file: "+path, err)
 	}
 
 	return v.AllSettings(), nil

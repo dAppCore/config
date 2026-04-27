@@ -7,8 +7,8 @@
     "name": { "type": "string" },
     "sign": { "type": "string" },
     "title": { "type": "string" },
-    "width": { "type": "integer" },
-    "height": { "type": "integer" },
+    "width": { "type": "integer", "minimum": 0 },
+    "height": { "type": "integer", "minimum": 0 },
     "resizable": { "type": "boolean" },
     "layout": { "type": "string" },
     "slots": {

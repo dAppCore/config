@@ -10,7 +10,7 @@
         "properties": {
           "name": { "type": "string" },
           "image": { "type": "string" },
-          "port": { "type": "integer" },
+          "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "env": {
             "type": "object",
             "additionalProperties": { "type": "string" }
@@ -23,7 +23,7 @@
       "type": "object",
       "properties": {
         "command": { "type": "string" },
-        "port": { "type": "integer" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "watch": {
           "type": "array",
           "items": { "type": "string" }

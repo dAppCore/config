@@ -15,6 +15,8 @@ var (
 	conclaveRoot = defaultConclaveRoot
 )
 
+const callerForConclave = "config.ForConclave"
+
 // ConclaveRootFunc resolves the on-disk root directory for a Conclave by name.
 //
 //	config.SetConclaveRootFunc(func(name string) (string, error) {
@@ -56,13 +58,13 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 
 	root, err := resolver(name)
 	if err != nil {
-		return nil, coreerr.E("config.ForConclave", "failed to resolve conclave root: "+name, err)
+		return nil, coreerr.E(callerForConclave, "failed to resolve conclave root: "+name, err)
 	}
 	if root == "" {
-		return nil, coreerr.E("config.ForConclave", "failed to resolve conclave root: "+name, nil)
+		return nil, coreerr.E(callerForConclave, "failed to resolve conclave root: "+name, nil)
 	}
 	if isSymlinkedCoreDir(coreio.Local, core.Path(root, ".core")) {
-		return nil, coreerr.E("config.ForConclave", "symlinked conclave .core directory rejected: "+root, nil)
+		return nil, coreerr.E(callerForConclave, "symlinked conclave .core directory rejected: "+root, nil)
 	}
 
 	conclaveOpts := append([]Option{}, opts...)
@@ -74,12 +76,12 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 	// the final fallback layer.
 	base, err := Discover(opts...)
 	if err != nil {
-		return nil, coreerr.E("config.ForConclave", "failed to discover base config: "+name, err)
+		return nil, coreerr.E(callerForConclave, "failed to discover base config: "+name, err)
 	}
 
 	conclaveCfg, err := New(conclaveOpts...)
 	if err != nil {
-		return nil, coreerr.E("config.ForConclave", "failed to load conclave config: "+name, err)
+		return nil, coreerr.E(callerForConclave, "failed to load conclave config: "+name, err)
 	}
 
 	// Conclave wins over base — MergeFrom only fills gaps.

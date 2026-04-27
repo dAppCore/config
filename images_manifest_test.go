@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -18,19 +17,30 @@ type failingImagesWriteMedium struct {
 	*coreio.MockMedium
 }
 
+func withDefaultImagesManifestMedium(t *testing.T, medium coreio.Medium) {
+	t.Helper()
+	previous := defaultImagesManifestMedium
+	defaultImagesManifestMedium = func() coreio.Medium {
+		return medium
+	}
+	t.Cleanup(func() {
+		defaultImagesManifestMedium = previous
+	})
+}
+
 func (m failingImagesWriteMedium) WriteMode(string, string, fs.FileMode) error {
 	return errors.New("write failed")
 }
 
 func TestImagesManifest_LoadSave_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
 
 	manifest := &ImagesManifest{
 		Images: map[string]ImageInfo{
 			"core-dev": {
 				Version:    "1.2.3",
-				SHA256:     "abc123",
+				SHA256:     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 				Downloaded: time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC),
 				Source:     "github",
 			},
@@ -55,7 +65,7 @@ func TestImagesManifest_ResolveMissing_Good(t *testing.T) {
 
 func TestImagesManifest_LoadImagesManifest_Missing_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
 
 	manifest, err := LoadImagesManifest(m, path)
 	require.NoError(t, err)
@@ -64,9 +74,10 @@ func TestImagesManifest_LoadImagesManifest_Missing_Good(t *testing.T) {
 }
 
 func TestImagesManifest_LoadImagesManifest_NilMedium_Good(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(`{"images":{}}`), 0o600))
+	m := coreio.NewMockMedium()
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
+	withDefaultImagesManifestMedium(t, m)
+	require.NoError(t, m.Write(path, `{"images":{}}`))
 
 	manifest, err := LoadImagesManifest(nil, path)
 	require.NoError(t, err)
@@ -76,7 +87,7 @@ func TestImagesManifest_LoadImagesManifest_NilMedium_Good(t *testing.T) {
 
 func TestImagesManifest_SaveImagesManifest_Nil_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
 
 	require.NoError(t, SaveImagesManifest(m, path, nil))
 
@@ -90,18 +101,20 @@ func TestImagesManifest_SaveImagesManifest_Nil_Good(t *testing.T) {
 }
 
 func TestImagesManifest_SaveImagesManifest_NilMedium_Good(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	m := coreio.NewMockMedium()
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
+	withDefaultImagesManifestMedium(t, m)
 
 	require.NoError(t, SaveImagesManifest(nil, path, &ImagesManifest{}))
 
-	content, err := os.ReadFile(path)
+	content, err := m.Read(path)
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"images":{}}`, string(content))
+	assert.JSONEq(t, `{"images":{}}`, content)
 }
 
 func TestImagesManifest_SaveImagesManifest_Bad(t *testing.T) {
 	m := failingImagesWriteMedium{MockMedium: coreio.NewMockMedium()}
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
 
 	err := SaveImagesManifest(m, path, &ImagesManifest{})
 	assert.Error(t, err)
@@ -110,7 +123,7 @@ func TestImagesManifest_SaveImagesManifest_Bad(t *testing.T) {
 
 func TestImagesManifest_LoadImagesManifest_Bad(t *testing.T) {
 	m := coreio.NewMockMedium()
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
 	require.NoError(t, m.EnsureDir(filepath.Dir(path)))
 	require.NoError(t, m.Write(path, "{not-json"))
 
@@ -122,7 +135,7 @@ func TestImagesManifest_LoadImagesManifest_Bad(t *testing.T) {
 
 func TestImagesManifest_LoadImagesManifest_Ugly(t *testing.T) {
 	m := coreio.NewMockMedium()
-	path := filepath.Join(t.TempDir(), ".core", DirectoryImages, FileImagesManifest)
+	path := filepath.Join("home", ".core", DirectoryImages, FileImagesManifest)
 	require.NoError(t, m.EnsureDir(filepath.Dir(path)))
 	bad := map[string]any{
 		"images": map[string]any{

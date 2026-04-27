@@ -8,6 +8,8 @@ import (
 	coreerr "dappco.re/go/log"
 )
 
+const callerDiscoverFrom = "config.DiscoverFrom"
+
 // Discover walks from the current working directory upward, collecting every
 // `.core/` directory found, and returns a merged Config with closest-wins
 // precedence. Walks stop at the filesystem root or when a `.git/` directory
@@ -32,7 +34,7 @@ func Discover(opts ...Option) (*Config, error) {
 func DiscoverFrom(start string, opts ...Option) (*Config, error) {
 	base, err := newConfig(false, opts...)
 	if err != nil {
-		return nil, coreerr.E("config.DiscoverFrom", "failed to initialise base config", err)
+		return nil, coreerr.E(callerDiscoverFrom, "failed to initialise base config", err)
 	}
 	medium := base.medium
 	if medium == nil {
@@ -50,12 +52,12 @@ func DiscoverFrom(start string, opts ...Option) (*Config, error) {
 		}
 		layer, err := New(layerOpts...)
 		if err != nil {
-			return nil, coreerr.E("config.DiscoverFrom", "failed to load discovered config: "+p, err)
+			return nil, coreerr.E(callerDiscoverFrom, "failed to load discovered config: "+p, err)
 		}
 		base.MergeFrom(layer)
 	}
 	if err := base.loadStoreState(); err != nil {
-		return nil, coreerr.E("config.DiscoverFrom", "failed to load config store state", err)
+		return nil, coreerr.E(callerDiscoverFrom, "failed to load config store state", err)
 	}
 
 	return base, nil

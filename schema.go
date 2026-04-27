@@ -29,6 +29,8 @@ var manifestSchemas = map[string]string{
 	FileZone:      "schema/zone.schema.json",
 }
 
+const callerValidateSchema = "config.validateSchema"
+
 // validateSchema applies an embedded JSON schema when the current filename has
 // one. Empty documents are treated as absent config and skip validation so
 // blank files remain a non-error baseline.
@@ -44,12 +46,12 @@ func validateSchema(path string, raw map[string]any) error {
 
 	schemaBody, err := schemaFS.ReadFile(schemaPath)
 	if err != nil {
-		return coreerr.E("config.validateSchema", "failed to read embedded schema: "+schemaPath, err)
+		return coreerr.E(callerValidateSchema, "failed to read embedded schema: "+schemaPath, err)
 	}
 
 	documentBody, err := json.Marshal(raw)
 	if err != nil {
-		return coreerr.E("config.validateSchema", "failed to encode config for schema validation: "+path, err)
+		return coreerr.E(callerValidateSchema, "failed to encode config for schema validation: "+path, err)
 	}
 
 	result, err := gojsonschema.Validate(
@@ -57,7 +59,7 @@ func validateSchema(path string, raw map[string]any) error {
 		gojsonschema.NewBytesLoader(documentBody),
 	)
 	if err != nil {
-		return coreerr.E("config.validateSchema", "schema validation failed: "+path, err)
+		return coreerr.E(callerValidateSchema, "schema validation failed: "+path, err)
 	}
 	if result.Valid() {
 		return nil
@@ -68,7 +70,7 @@ func validateSchema(path string, raw map[string]any) error {
 		problems = append(problems, issue.String())
 	}
 	return coreerr.E(
-		"config.validateSchema",
+		callerValidateSchema,
 		"schema validation failed: "+path+": "+strings.Join(problems, "; "),
 		nil,
 	)

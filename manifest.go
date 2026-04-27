@@ -64,6 +64,24 @@ const (
 	LinuxKitDirectory = "linuxkit"
 )
 
+const (
+	callerLoadManifest                  = "config.LoadManifest"
+	callerTrustedManifestPublicKeys     = "config.trustedManifestPublicKeys"
+	callerValidateViewManifestSignature = "config.ValidateViewManifestSignature"
+	callerVerifyViewManifestSignature   = "config.VerifyViewManifestSignature"
+	callerSignViewManifest              = "config.SignViewManifest"
+	callerSignPackageManifest           = "config.SignPackageManifest"
+	callerVerifyPackageManifest         = "config.VerifyPackageManifest"
+	callerParseManifestPublicKey        = "config.parseManifestPublicKey"
+
+	errCanonicalMarshalFailed = "canonical marshal failed"
+	errDecodeTrustedKeyFailed = "decode trusted key failed"
+)
+
+var manifestHomeDir = func() string {
+	return core.Env("DIR_HOME")
+}
+
 // KnownFiles enumerates the canonical .core/ file names in discovery order.
 //
 //	for _, name := range config.KnownFiles { /* check existence */ }
@@ -623,13 +641,15 @@ func (l *buildManifestLDFlags) UnmarshalYAML(value *yaml.Node) error {
 		}
 		*l = append([]string(nil), values...)
 		return nil
-	case yaml.MappingNode, yaml.AliasNode:
+	case yaml.AliasNode:
 		var values []string
 		if err := value.Decode(&values); err != nil {
 			return err
 		}
 		*l = append([]string(nil), values...)
 		return nil
+	case yaml.MappingNode:
+		return coreerr.E("config.buildManifestLDFlags.UnmarshalYAML", "unsupported ldflags mapping", nil)
 	default:
 		*l = nil
 		return nil
@@ -711,17 +731,17 @@ type ReposRepo struct {
 func LoadManifest(m coreio.Medium, path string, out any) error {
 	content, err := m.Read(path)
 	if err != nil {
-		return coreerr.E("config.LoadManifest", "failed to read manifest: "+path, err)
+		return coreerr.E(callerLoadManifest, "failed to read manifest: "+path, err)
 	}
 	var raw map[string]any
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
-		return coreerr.E("config.LoadManifest", "failed to parse manifest: "+path, err)
+		return coreerr.E(callerLoadManifest, "failed to parse manifest: "+path, err)
 	}
 	if err := validateSchema(path, raw); err != nil {
 		return err
 	}
 	if err := yaml.Unmarshal([]byte(content), out); err != nil {
-		return coreerr.E("config.LoadManifest", "failed to decode manifest: "+path, err)
+		return coreerr.E(callerLoadManifest, "failed to decode manifest: "+path, err)
 	}
 	if err := validateManifest(path, out, raw); err != nil {
 		return err
@@ -753,17 +773,17 @@ func validateManifest(path string, out any, raw map[string]any) error {
 
 func validateLoadedViewManifest(path string, view *ViewManifest, raw map[string]any) error {
 	if missingOrEmptyStringField(raw, "sign", view.Sign) {
-		return coreerr.E("config.LoadManifest", "unsigned view manifest rejected: "+path, nil)
+		return coreerr.E(callerLoadManifest, "unsigned view manifest rejected: "+path, nil)
 	}
 	if err := ValidateViewManifestSignature(view); err != nil {
 		msg := err.Error()
 		switch {
 		case strings.Contains(msg, "not ed25519-sized"):
-			return coreerr.E("config.LoadManifest", "view manifest signature is not ed25519-sized: "+path, nil)
+			return coreerr.E(callerLoadManifest, "view manifest signature is not ed25519-sized: "+path, nil)
 		case strings.Contains(msg, "unsigned"):
-			return coreerr.E("config.LoadManifest", "unsigned view manifest rejected: "+path, nil)
+			return coreerr.E(callerLoadManifest, "unsigned view manifest rejected: "+path, nil)
 		default:
-			return coreerr.E("config.LoadManifest", "invalid view manifest signature: "+path, err)
+			return coreerr.E(callerLoadManifest, "invalid view manifest signature: "+path, err)
 		}
 	}
 	return nil
@@ -771,30 +791,30 @@ func validateLoadedViewManifest(path string, view *ViewManifest, raw map[string]
 
 func verifyLoadedPackageManifest(path string, pkg *PackageManifest, raw map[string]any) error {
 	if missingOrEmptyStringField(raw, "sign", pkg.Sign) {
-		return coreerr.E("config.LoadManifest", "unsigned package manifest rejected: "+path, nil)
+		return coreerr.E(callerLoadManifest, "unsigned package manifest rejected: "+path, nil)
 	}
 	if missingOrEmptyStringField(raw, "sign_key", pkg.SignKey) {
-		return coreerr.E("config.LoadManifest", "missing package sign_key: "+path, nil)
+		return coreerr.E(callerLoadManifest, "missing package sign_key: "+path, nil)
 	}
 	if err := VerifyPackageManifest(pkg); err != nil {
 		msg := err.Error()
 		switch {
 		case strings.Contains(msg, "missing package sign_key"):
-			return coreerr.E("config.LoadManifest", "missing package sign_key: "+path, nil)
+			return coreerr.E(callerLoadManifest, "missing package sign_key: "+path, nil)
 		case strings.Contains(msg, "not an ed25519 public key"):
-			return coreerr.E("config.LoadManifest", "package sign_key is not an ed25519 public key: "+path, nil)
+			return coreerr.E(callerLoadManifest, "package sign_key is not an ed25519 public key: "+path, nil)
 		case strings.Contains(msg, "not trusted"):
-			return coreerr.E("config.LoadManifest", "package sign_key is not trusted: "+path, nil)
+			return coreerr.E(callerLoadManifest, "package sign_key is not trusted: "+path, nil)
 		case strings.Contains(msg, "not ed25519-sized"):
-			return coreerr.E("config.LoadManifest", "package manifest signature is not ed25519-sized: "+path, nil)
+			return coreerr.E(callerLoadManifest, "package manifest signature is not ed25519-sized: "+path, nil)
 		case strings.Contains(msg, "signature mismatch"):
-			return coreerr.E("config.LoadManifest", "package manifest signature mismatch: "+path, nil)
-		case strings.Contains(msg, "canonical marshal failed"):
-			return coreerr.E("config.LoadManifest", "canonical marshal failed: "+path, err)
+			return coreerr.E(callerLoadManifest, "package manifest signature mismatch: "+path, nil)
+		case strings.Contains(msg, errCanonicalMarshalFailed):
+			return coreerr.E(callerLoadManifest, errCanonicalMarshalFailed+": "+path, err)
 		case strings.Contains(msg, "decode package sign_key failed"):
-			return coreerr.E("config.LoadManifest", "decode package sign_key failed: "+path, err)
+			return coreerr.E(callerLoadManifest, "decode package sign_key failed: "+path, err)
 		default:
-			return coreerr.E("config.LoadManifest", "invalid package manifest signature: "+path, err)
+			return coreerr.E(callerLoadManifest, "invalid package manifest signature: "+path, err)
 		}
 	}
 	return nil
@@ -817,15 +837,7 @@ func trustedManifestTrustedEnvKeys() ([]ed25519.PublicKey, error) {
 	if fromEnv == "" {
 		return nil, nil
 	}
-	var keys []ed25519.PublicKey
-	for _, raw := range splitManifestTrustedKeys(fromEnv) {
-		pub, err := parseManifestPublicKey(raw)
-		if err != nil {
-			return nil, coreerr.E("config.trustedManifestPublicKeys", "decode trusted key failed", err)
-		}
-		keys = append(keys, pub)
-	}
-	return dedupeManifestKeys(keys), nil
+	return parseTrustedManifestKeyList(fromEnv)
 }
 
 func decodeManifestSignature(value string) ([]byte, error) {
@@ -846,14 +858,14 @@ func CanonicalViewManifestBytes(view *ViewManifest) ([]byte, error) {
 //	if err := config.ValidateViewManifestSignature(&view); err != nil { ... }
 func ValidateViewManifestSignature(view *ViewManifest) error {
 	if view == nil || strings.TrimSpace(view.Sign) == "" {
-		return coreerr.E("config.ValidateViewManifestSignature", "unsigned view manifest rejected", nil)
+		return coreerr.E(callerValidateViewManifestSignature, "unsigned view manifest rejected", nil)
 	}
 	sig, err := decodeManifestSignature(view.Sign)
 	if err != nil {
-		return coreerr.E("config.ValidateViewManifestSignature", "invalid view manifest signature", err)
+		return coreerr.E(callerValidateViewManifestSignature, "invalid view manifest signature", err)
 	}
 	if len(sig) != ed25519.SignatureSize {
-		return coreerr.E("config.ValidateViewManifestSignature", "view manifest signature is not ed25519-sized", nil)
+		return coreerr.E(callerValidateViewManifestSignature, "view manifest signature is not ed25519-sized", nil)
 	}
 	return nil
 }
@@ -867,18 +879,18 @@ func VerifyViewManifestSignature(view *ViewManifest, publicKey ed25519.PublicKey
 		return err
 	}
 	if len(publicKey) != ed25519.PublicKeySize {
-		return coreerr.E("config.VerifyViewManifestSignature", "view manifest public key is not an ed25519 public key", nil)
+		return coreerr.E(callerVerifyViewManifestSignature, "view manifest public key is not an ed25519 public key", nil)
 	}
 	body, err := CanonicalViewManifestBytes(view)
 	if err != nil {
-		return coreerr.E("config.VerifyViewManifestSignature", "canonical marshal failed", err)
+		return coreerr.E(callerVerifyViewManifestSignature, errCanonicalMarshalFailed, err)
 	}
 	sig, err := decodeManifestSignature(view.Sign)
 	if err != nil {
-		return coreerr.E("config.VerifyViewManifestSignature", "invalid view manifest signature", err)
+		return coreerr.E(callerVerifyViewManifestSignature, "invalid view manifest signature", err)
 	}
 	if !ed25519.Verify(publicKey, body, sig) {
-		return coreerr.E("config.VerifyViewManifestSignature", "view manifest signature mismatch", nil)
+		return coreerr.E(callerVerifyViewManifestSignature, "view manifest signature mismatch", nil)
 	}
 	return nil
 }
@@ -889,14 +901,14 @@ func VerifyViewManifestSignature(view *ViewManifest, publicKey ed25519.PublicKey
 //	_ = config.SignViewManifest(&view, priv)
 func SignViewManifest(view *ViewManifest, privateKey ed25519.PrivateKey) error {
 	if view == nil {
-		return coreerr.E("config.SignViewManifest", "nil view manifest", nil)
+		return coreerr.E(callerSignViewManifest, "nil view manifest", nil)
 	}
 	if len(privateKey) != ed25519.PrivateKeySize {
-		return coreerr.E("config.SignViewManifest", "view manifest private key is not an ed25519 private key", nil)
+		return coreerr.E(callerSignViewManifest, "view manifest private key is not an ed25519 private key", nil)
 	}
 	body, err := CanonicalViewManifestBytes(view)
 	if err != nil {
-		return coreerr.E("config.SignViewManifest", "canonical marshal failed", err)
+		return coreerr.E(callerSignViewManifest, errCanonicalMarshalFailed, err)
 	}
 	view.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, body))
 	return nil
@@ -925,19 +937,19 @@ func CanonicalPackageManifestBytes(pkg *PackageManifest) ([]byte, error) {
 //	_ = config.SignPackageManifest(&pkg, priv)
 func SignPackageManifest(pkg *PackageManifest, privateKey ed25519.PrivateKey) error {
 	if pkg == nil {
-		return coreerr.E("config.SignPackageManifest", "nil package manifest", nil)
+		return coreerr.E(callerSignPackageManifest, "nil package manifest", nil)
 	}
 	if len(privateKey) != ed25519.PrivateKeySize {
-		return coreerr.E("config.SignPackageManifest", "package manifest private key is not an ed25519 private key", nil)
+		return coreerr.E(callerSignPackageManifest, "package manifest private key is not an ed25519 private key", nil)
 	}
 	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
 	if !ok || len(publicKey) != ed25519.PublicKeySize {
-		return coreerr.E("config.SignPackageManifest", "derive package manifest public key failed", nil)
+		return coreerr.E(callerSignPackageManifest, "derive package manifest public key failed", nil)
 	}
 	pkg.SignKey = hex.EncodeToString(publicKey)
 	body, err := CanonicalPackageManifestBytes(pkg)
 	if err != nil {
-		return coreerr.E("config.SignPackageManifest", "canonical marshal failed", err)
+		return coreerr.E(callerSignPackageManifest, errCanonicalMarshalFailed, err)
 	}
 	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, body))
 	return nil
@@ -958,42 +970,42 @@ func packageManifestBytes(pkg *PackageManifest) ([]byte, error) {
 //	if err := config.VerifyPackageManifest(&pkg); err != nil { ... }
 func VerifyPackageManifest(pkg *PackageManifest) error {
 	if pkg == nil || strings.TrimSpace(pkg.Sign) == "" {
-		return coreerr.E("config.VerifyPackageManifest", "unsigned package manifest rejected", nil)
+		return coreerr.E(callerVerifyPackageManifest, "unsigned package manifest rejected", nil)
 	}
 	if strings.TrimSpace(pkg.SignKey) == "" {
-		return coreerr.E("config.VerifyPackageManifest", "missing package sign_key", nil)
+		return coreerr.E(callerVerifyPackageManifest, "missing package sign_key", nil)
 	}
 
 	pub, err := hex.DecodeString(strings.TrimSpace(pkg.SignKey))
 	if err != nil {
-		return coreerr.E("config.VerifyPackageManifest", "decode package sign_key failed", err)
+		return coreerr.E(callerVerifyPackageManifest, "decode package sign_key failed", err)
 	}
 	if len(pub) != ed25519.PublicKeySize {
-		return coreerr.E("config.VerifyPackageManifest", "package sign_key is not an ed25519 public key", nil)
+		return coreerr.E(callerVerifyPackageManifest, "package sign_key is not an ed25519 public key", nil)
 	}
 
 	trustedKeys, err := trustedManifestVerificationKeys()
 	if err != nil {
-		return coreerr.E("config.VerifyPackageManifest", "load trusted manifest public keys failed", err)
+		return coreerr.E(callerVerifyPackageManifest, "load trusted manifest public keys failed", err)
 	}
 	if len(trustedKeys) > 0 && !manifestKeyTrusted(ed25519.PublicKey(pub), trustedKeys) {
-		return coreerr.E("config.VerifyPackageManifest", "package sign_key is not trusted", nil)
+		return coreerr.E(callerVerifyPackageManifest, "package sign_key is not trusted", nil)
 	}
 
 	sig, err := decodeManifestSignature(pkg.Sign)
 	if err != nil {
-		return coreerr.E("config.VerifyPackageManifest", "invalid package manifest signature", err)
+		return coreerr.E(callerVerifyPackageManifest, "invalid package manifest signature", err)
 	}
 	if len(sig) != ed25519.SignatureSize {
-		return coreerr.E("config.VerifyPackageManifest", "package manifest signature is not ed25519-sized", nil)
+		return coreerr.E(callerVerifyPackageManifest, "package manifest signature is not ed25519-sized", nil)
 	}
 
 	body, err := CanonicalPackageManifestBytes(pkg)
 	if err != nil {
-		return coreerr.E("config.VerifyPackageManifest", "canonical marshal failed", err)
+		return coreerr.E(callerVerifyPackageManifest, errCanonicalMarshalFailed, err)
 	}
 	if !ed25519.Verify(ed25519.PublicKey(pub), body, sig) {
-		return coreerr.E("config.VerifyPackageManifest", "package manifest signature mismatch", nil)
+		return coreerr.E(callerVerifyPackageManifest, "package manifest signature mismatch", nil)
 	}
 	return nil
 }
@@ -1007,70 +1019,86 @@ func TrustedManifestPublicKeys() ([]ed25519.PublicKey, error) {
 }
 
 func trustedManifestPublicKeys() ([]ed25519.PublicKey, error) {
-	var keys []ed25519.PublicKey
 	if fromEnv := strings.TrimSpace(core.Env("CORE_MANIFEST_TRUST_KEYS")); fromEnv != "" {
-		for _, raw := range splitManifestTrustedKeys(fromEnv) {
-			pub, err := parseManifestPublicKey(raw)
-			if err != nil {
-				return nil, coreerr.E("config.trustedManifestPublicKeys", "decode trusted key failed", err)
-			}
+		return parseTrustedManifestKeyList(fromEnv)
+	}
+
+	return trustedManifestPublicKeysFromDisk(manifestHomeDir())
+}
+
+func parseTrustedManifestKeyList(raw string) ([]ed25519.PublicKey, error) {
+	var keys []ed25519.PublicKey
+	for _, item := range splitManifestTrustedKeys(raw) {
+		pub, err := parseManifestPublicKey(item)
+		if err != nil {
+			return nil, coreerr.E(callerTrustedManifestPublicKeys, errDecodeTrustedKeyFailed, err)
+		}
+		keys = append(keys, pub)
+	}
+	return dedupeManifestKeys(keys), nil
+}
+
+func trustedManifestPublicKeysFromDisk(home string) ([]ed25519.PublicKey, error) {
+	if home == "" {
+		return nil, nil
+	}
+
+	coreDir := filepath.Join(home, ".core")
+	keyDir := filepath.Join(coreDir, "keys")
+	if isSymlinkedCoreDir(coreio.Local, coreDir) {
+		return nil, coreerr.E(callerTrustedManifestPublicKeys, "symlinked .core directory rejected: "+coreDir, nil)
+	}
+	if isSymlinkedLocalPath(keyDir) {
+		return nil, coreerr.E(callerTrustedManifestPublicKeys, "symlinked trusted keys directory rejected: "+keyDir, nil)
+	}
+
+	entries, err := os.ReadDir(keyDir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, coreerr.E(callerTrustedManifestPublicKeys, "read trusted keys directory failed", err)
+	}
+	return trustedManifestKeysFromEntries(keyDir, entries)
+}
+
+func trustedManifestKeysFromEntries(keyDir string, entries []os.DirEntry) ([]ed25519.PublicKey, error) {
+	keys := make([]ed25519.PublicKey, 0, len(entries))
+	for _, entry := range entries {
+		pub, ok, err := trustedManifestPublicKeyFromEntry(keyDir, entry)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			keys = append(keys, pub)
 		}
-		return dedupeManifestKeys(keys), nil
 	}
-
-	home := core.Env("DIR_HOME")
-	if home != "" {
-		keyDir := filepath.Join(home, ".core", "keys")
-		if isSymlinkedCoreDir(coreio.Local, filepath.Join(home, ".core")) {
-			return nil, coreerr.E("config.trustedManifestPublicKeys", "symlinked .core directory rejected: "+filepath.Join(home, ".core"), nil)
-		}
-		if isSymlinkedLocalPath(keyDir) {
-			return nil, coreerr.E("config.trustedManifestPublicKeys", "symlinked trusted keys directory rejected: "+keyDir, nil)
-		}
-		if entries, err := os.ReadDir(keyDir); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
-					continue
-				}
-				entryPath := filepath.Join(keyDir, entry.Name())
-				if isSymlinkedLocalPath(entryPath) {
-					return nil, coreerr.E("config.trustedManifestPublicKeys", "symlinked trusted key rejected: "+entry.Name(), nil)
-				}
-				body, err := os.ReadFile(entryPath)
-				if err != nil {
-					return nil, coreerr.E("config.trustedManifestPublicKeys", "read trusted key file failed: "+entry.Name(), err)
-				}
-				pub, err := parseManifestPublicKey(strings.TrimSpace(string(body)))
-				if err != nil {
-					return nil, coreerr.E("config.trustedManifestPublicKeys", "decode trusted key failed: "+entry.Name(), err)
-				}
-				keys = append(keys, pub)
-			}
-		} else if !os.IsNotExist(err) {
-			return nil, coreerr.E("config.trustedManifestPublicKeys", "read trusted keys directory failed", err)
-		}
-	}
-
 	return dedupeManifestKeys(keys), nil
+}
+
+func trustedManifestPublicKeyFromEntry(keyDir string, entry os.DirEntry) (ed25519.PublicKey, bool, error) {
+	if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".pub") {
+		return nil, false, nil
+	}
+
+	entryPath := filepath.Join(keyDir, entry.Name())
+	if isSymlinkedLocalPath(entryPath) {
+		return nil, false, coreerr.E(callerTrustedManifestPublicKeys, "symlinked trusted key rejected: "+entry.Name(), nil)
+	}
+	body, err := os.ReadFile(entryPath)
+	if err != nil {
+		return nil, false, coreerr.E(callerTrustedManifestPublicKeys, "read trusted key file failed: "+entry.Name(), err)
+	}
+	pub, err := parseManifestPublicKey(strings.TrimSpace(string(body)))
+	if err != nil {
+		return nil, false, coreerr.E(callerTrustedManifestPublicKeys, errDecodeTrustedKeyFailed+": "+entry.Name(), err)
+	}
+	return pub, true, nil
 }
 
 func trustedManifestVerificationKeys() ([]ed25519.PublicKey, error) {
 	if _, ok := os.LookupEnv("CORE_MANIFEST_TRUST_KEYS"); ok {
-		fromEnv := strings.TrimSpace(core.Env("CORE_MANIFEST_TRUST_KEYS"))
-		if fromEnv == "" {
-			return nil, nil
-		}
-
-		var keys []ed25519.PublicKey
-		for _, raw := range splitManifestTrustedKeys(fromEnv) {
-			pub, err := parseManifestPublicKey(raw)
-			if err != nil {
-				return nil, coreerr.E("config.trustedManifestPublicKeys", "decode trusted key failed", err)
-			}
-			keys = append(keys, pub)
-		}
-		return dedupeManifestKeys(keys), nil
+		return trustedManifestTrustedEnvKeys()
 	}
 
 	return trustedManifestPublicKeys()
@@ -1085,14 +1113,14 @@ func splitManifestTrustedKeys(raw string) []string {
 func parseManifestPublicKey(raw string) (ed25519.PublicKey, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return nil, coreerr.E("config.parseManifestPublicKey", "empty manifest public key", nil)
+		return nil, coreerr.E(callerParseManifestPublicKey, "empty manifest public key", nil)
 	}
 	pub, err := hex.DecodeString(trimmed)
 	if err != nil {
-		return nil, coreerr.E("config.parseManifestPublicKey", "decode manifest public key failed", err)
+		return nil, coreerr.E(callerParseManifestPublicKey, "decode manifest public key failed", err)
 	}
 	if len(pub) != ed25519.PublicKeySize {
-		return nil, coreerr.E("config.parseManifestPublicKey", "manifest public key has invalid size", nil)
+		return nil, coreerr.E(callerParseManifestPublicKey, "manifest public key has invalid size", nil)
 	}
 	return ed25519.PublicKey(pub), nil
 }

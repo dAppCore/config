@@ -18,7 +18,7 @@ type mockConfigStore struct {
 	failWith error
 }
 
-func (s *mockConfigStore) Set(bucket string, key string, value string) error {
+func (s *mockConfigStore) Set(bucket, key, value string) error {
 	s.calls++
 	s.bucket = bucket
 	s.key = key
@@ -268,7 +268,8 @@ func TestConfig_AttachCore_Ugly(t *testing.T) {
 
 func TestConfig_PersistToStore_Good(t *testing.T) {
 	store := &mockConfigStore{}
-	cfg, err := New(WithStore(store))
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
 	assert.NoError(t, err)
 
 	assert.NoError(t, cfg.Set("app.name", "core"))
@@ -281,7 +282,8 @@ func TestConfig_PersistToStore_Good(t *testing.T) {
 
 func TestConfig_PersistToStore_Bad(t *testing.T) {
 	store := &mockConfigStore{failWith: errors.New("store write failed")}
-	cfg, err := New(WithStore(store))
+	m := coreio.NewMockMedium()
+	cfg, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
 	assert.NoError(t, err)
 
 	assert.NoError(t, cfg.Set("app.name", "core"))
@@ -290,7 +292,8 @@ func TestConfig_PersistToStore_Bad(t *testing.T) {
 
 func TestConfig_PersistToStore_Ugly(t *testing.T) {
 	store := &mockConfigStore{}
-	_, err := New(WithStore(store))
+	m := coreio.NewMockMedium()
+	_, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
 	assert.NoError(t, err)
 
 	assert.NotPanics(t, func() {

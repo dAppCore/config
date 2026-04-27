@@ -8,7 +8,12 @@
         "type": "object",
         "properties": {
           "version": { "type": "string" },
-          "sha256": { "type": "string" },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[A-Fa-f0-9]{64}$",
+            "minLength": 64,
+            "maxLength": 64
+          },
           "downloaded": { "type": "string", "format": "date-time" },
           "source": { "type": "string" }
         },

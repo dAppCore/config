@@ -4,9 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
-	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	core "dappco.re/go/core"
@@ -223,7 +221,7 @@ func TestResolve_FindUserPath_Good(t *testing.T) {
 	}
 
 	require.NoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: true\n"))
-	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n"))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n"))
 	require.NoError(t, m.Write(filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), "{\"images\":{}}"))
 
 	assert.Equal(t, filepath.Join(home, ".core", FileAgent), FindUserManifest(m, FileAgent))
@@ -255,19 +253,17 @@ func TestResolve_FindUserPath_Bad(t *testing.T) {
 }
 
 func TestResolve_FindUserPath_Ugly(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink test is not portable on Windows in this environment")
+	home := core.Env("DIR_HOME")
+	coreDir := filepath.Join(home, ".core")
+	m := symlinkMockMedium{
+		MockMedium: coreio.NewMockMedium(),
+		symlinks:   map[string]bool{coreDir: true},
 	}
+	require.NoError(t, m.EnsureDir(coreDir))
+	require.NoError(t, m.Write(filepath.Join(coreDir, FileAgent), "daemon:\n  enabled: true\n"))
 
-	home := t.TempDir()
-	externalCore := filepath.Join(t.TempDir(), "shared-core")
-
-	t.Setenv("DIR_HOME", home)
-	require.NoError(t, os.MkdirAll(externalCore, 0755))
-	require.NoError(t, os.Symlink(externalCore, filepath.Join(home, ".core")))
-
-	assert.Empty(t, FindUserPath(coreio.Local, FileAgent))
-	assert.Empty(t, FindUserManifest(coreio.Local, FileAgent))
+	assert.Empty(t, FindUserPath(m, FileAgent))
+	assert.Empty(t, FindUserManifest(m, FileAgent))
 }
 
 func TestResolve_ResolveUserManifests_Good(t *testing.T) {
@@ -276,7 +272,7 @@ func TestResolve_ResolveUserManifests_Good(t *testing.T) {
 
 	require.NoError(t, m.EnsureDir(filepath.Join(home, ".core")))
 	require.NoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: true\nagents:\n  worker:\n    total: 2\n"))
-	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n  services:\n    vpn:\n      enabled: true\n"))
+	require.NoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n  services:\n    vpn:\n      enabled: true\n"))
 
 	agent, err := ResolveAgentManifest(m)
 	require.NoError(t, err)
@@ -410,19 +406,15 @@ func TestResolve_FindWorkspaceRegistryManifest_Bad(t *testing.T) {
 }
 
 func TestResolve_FindWorkspaceRegistryManifest_Ugly(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink test is not portable on Windows in this environment")
+	home := core.Env("DIR_HOME")
+	coreDir := filepath.Join(home, "Code", Directory)
+	start := filepath.Join("workspace", "repo", "service")
+	m := symlinkMockMedium{
+		MockMedium: coreio.NewMockMedium(),
+		symlinks:   map[string]bool{coreDir: true},
 	}
-
-	m := coreio.NewMockMedium()
-	home := t.TempDir()
-	externalCore := filepath.Join(t.TempDir(), "shared-core")
-	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
-
-	t.Setenv("DIR_HOME", home)
-	require.NoError(t, os.MkdirAll(filepath.Join(home, "Code"), 0755))
-	require.NoError(t, os.MkdirAll(externalCore, 0755))
-	require.NoError(t, os.Symlink(externalCore, filepath.Join(home, "Code", Directory)))
+	require.NoError(t, m.EnsureDir(coreDir))
+	require.NoError(t, m.Write(filepath.Join(coreDir, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
 
 	assert.Empty(t, FindWorkspaceRegistryManifest(m, start))
 }

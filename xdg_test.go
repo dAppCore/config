@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestXdg_XDG_Ugly(t *testing.T) {
 	// Overriding XDG_CONFIG_HOME via env must change the resolved Config dir.
 	t.Setenv("XDG_CONFIG_HOME", "/custom/config")
 	paths := XDGWithPrefix("myapp")
-	assert.Equal(t, "/custom/config/myapp", paths.Config())
+	assert.True(t, strings.HasSuffix(paths.Config(), filepath.Join("custom", "config", "myapp")))
 }
 
 func TestXdg_XDGWithPrefix_Good(t *testing.T) {

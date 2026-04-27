@@ -220,7 +220,7 @@ func ResolveTestManifest(medium coreio.Medium, start string) (*TestManifest, err
 		}, nil
 	}
 
-	return nil, coreerr.E("config.ResolveTestManifest", "no test command could be detected", nil)
+	return nil, coreerr.E(callerResolveTestManifest, "no test command could be detected", nil)
 }
 
 // FindReleaseManifest returns the nearest project-local .core/release.yaml.
@@ -526,6 +526,9 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 	}
 
 	if home := core.Env("DIR_HOME"); home != "" {
+		// Fallback to the conventional ~/Code/.core/repos.yaml location used by
+		// the federated monorepo workspace convention when no repos.yaml is found
+		// in the upward walk.
 		coreDir := core.Path(home, "Code", Directory)
 		candidate := core.Path(coreDir, FileRepos)
 		if medium.Exists(candidate) && !isSymlinkedCoreDir(medium, coreDir) {

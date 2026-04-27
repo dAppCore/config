@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	core "dappco.re/go/core"
 	coreio "dappco.re/go/io"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
@@ -96,6 +95,17 @@ func TestManifest_MissingOrEmptyStringField_Ugly(t *testing.T) {
 	assert.True(t, missingOrEmptyStringField(raw, "sign", "abc"))
 }
 
+func setManifestHomeDir(t *testing.T, home string) {
+	t.Helper()
+	previous := manifestHomeDir
+	manifestHomeDir = func() string {
+		return home
+	}
+	t.Cleanup(func() {
+		manifestHomeDir = previous
+	})
+}
+
 func TestManifest_TrustedManifestPublicKeys_Good(t *testing.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
@@ -115,7 +125,7 @@ func TestManifest_TrustedManifestPublicKeys_Bad(t *testing.T) {
 
 func TestManifest_TrustedManifestPublicKeys_Ugly(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("DIR_HOME", home)
+	setManifestHomeDir(t, home)
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 
 	keysDir := filepath.Join(home, ".core", "keys")
@@ -135,15 +145,9 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedCore_Bad(t *testing.T) {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
-	home := core.Env("DIR_HOME")
-	if home == "" {
-		t.Skip("DIR_HOME is empty in this environment")
-	}
-
+	home := t.TempDir()
+	setManifestHomeDir(t, home)
 	coreDir := filepath.Join(home, ".core")
-	if _, err := os.Lstat(coreDir); err == nil {
-		t.Skip("DIR_HOME/.core already exists in this environment")
-	}
 
 	realCore := filepath.Join(t.TempDir(), "real-core")
 	assert.NoError(t, os.MkdirAll(realCore, 0o755))
@@ -160,16 +164,14 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedKeysDir_Bad(t *testing.T) {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
-	home := core.Env("DIR_HOME")
+	home := t.TempDir()
+	setManifestHomeDir(t, home)
 	realKeys := filepath.Join(t.TempDir(), "real-keys")
 
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 
 	coreDir := filepath.Join(home, ".core")
 	keysDir := filepath.Join(coreDir, "keys")
-	if _, err := os.Lstat(keysDir); err == nil {
-		t.Skip("DIR_HOME/.core/keys already exists in this environment")
-	}
 	assert.NoError(t, os.MkdirAll(coreDir, 0o755))
 	assert.NoError(t, os.MkdirAll(realKeys, 0o755))
 	assert.NoError(t, os.Symlink(realKeys, keysDir))
@@ -185,7 +187,8 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedKeyFile_Bad(t *testing.T) {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
-	home := core.Env("DIR_HOME")
+	home := t.TempDir()
+	setManifestHomeDir(t, home)
 	realKeys := filepath.Join(t.TempDir(), "real-keys")
 	pub, _, err := ed25519.GenerateKey(nil)
 	assert.NoError(t, err)
@@ -661,7 +664,7 @@ func TestManifest_LoadManifest_Release_Good(t *testing.T) {
 
 func TestManifest_LoadManifest_Agent_Good(t *testing.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/home/.core/agent.yaml"] = "daemon:\n  enabled: true\n  watch:\n    - ~/Code/core/\n  schedule:\n    - cron: '*/5 * * * *'\n      action: health.check\n  mcp:\n    port: 0\n  api:\n    port: 8099\n    bind: 127.0.0.1\nagents:\n  codex:\n    total: 2\n  claude:\n    total: 1\n"
+	m.Files["/home/.core/agent.yaml"] = "daemon:\n  enabled: true\n  watch:\n    - ~/Code/core/\n  schedule:\n    - cron: '*/5 * * * *'\n      action: health.check\n  mcp:\n    port: 8080\n  api:\n    port: 8099\n    bind: 127.0.0.1\nagents:\n  codex:\n    total: 2\n  claude:\n    total: 1\n"
 
 	var agent AgentManifest
 	err := LoadManifest(m, "/home/.core/agent.yaml", &agent)
