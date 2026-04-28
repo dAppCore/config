@@ -1,7 +1,7 @@
 package config
 
 import (
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 )
 

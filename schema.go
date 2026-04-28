@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	coreerr "dappco.re/go/log"
 	"github.com/xeipuuv/gojsonschema"
 )

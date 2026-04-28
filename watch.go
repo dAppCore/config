@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"sync"
@@ -79,7 +80,9 @@ func (c *Config) Watch() error {
 	c.mu.Unlock()
 
 	if err := w.Add(path); err != nil {
-		_ = w.Close()
+		if closeErr := w.Close(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		c.mu.Lock()
 		c.watcher = nil
 		c.mu.Unlock()
@@ -105,7 +108,9 @@ func (c *Config) StopWatch() {
 	if !fw.stopped {
 		fw.stopped = true
 		close(fw.stop)
-		_ = fw.w.Close()
+		if err := fw.w.Close(); err != nil {
+			// StopWatch is best-effort; callers cannot act on watcher close errors.
+		}
 	}
 	fw.mu.Unlock()
 }
@@ -137,7 +142,9 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 				// Best-effort for atomic-save editors: the replacement file may
 				// not exist during the swap. There is no automatic retry loop;
 				// another fsnotify event is required to attempt Add again.
-				_ = fw.w.Add(path)
+				if err := fw.w.Add(path); err != nil {
+					// The current filesystem event still requests a reload below.
+				}
 			}
 			requestReload(reloadRequests)
 		case _, ok := <-fw.w.Errors():

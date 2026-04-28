@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 	coreerr "dappco.re/go/log"
 )
@@ -69,7 +69,7 @@ func NewConfigService(c *core.Core) core.Result {
 	svc := &Service{
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{}),
 	}
-	return core.Result{Value: svc, OK: true}
+	return core.Ok(svc)
 }
 
 // NewConfigServiceWith returns a service factory pre-populated with the given
@@ -85,7 +85,7 @@ func NewConfigServiceWith(opts ServiceOptions) func(*core.Core) core.Result {
 		svc := &Service{
 			ServiceRuntime: core.NewServiceRuntime(c, opts),
 		}
-		return core.Result{Value: svc, OK: true}
+		return core.Ok(svc)
 	}
 }
 
@@ -116,7 +116,7 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 
 	cfg, err := newServiceConfig(opts, configOpts)
 	if err != nil {
-		return core.Result{Value: coreerr.E("config.Service.OnStartup", "failed to create config", err), OK: false}
+		return core.Fail(coreerr.E("config.Service.OnStartup", "failed to create config", err))
 	}
 
 	s.config = cfg
@@ -131,7 +131,7 @@ func (s *Service) OnStartup(_ context.Context) core.Result {
 		s.registerCommands(c)
 	}
 
-	return core.Result{OK: true}
+	return core.Ok(nil)
 }
 
 func newServiceConfig(opts ServiceOptions, configOpts []Option) (*Config, error) {
@@ -155,7 +155,7 @@ func (s *Service) OnShutdown(_ context.Context) core.Result {
 	if s.config != nil {
 		s.config.StopWatch()
 	}
-	return core.Result{OK: true}
+	return core.Ok(nil)
 }
 
 func resolveValidatedServiceLoadPath(basePath, path string) (string, error) {
@@ -311,7 +311,7 @@ func (s *Service) runConfigOperation(c *core.Core, name string, opts core.Option
 		return result
 	}
 	if s.config == nil {
-		return core.Result{Value: coreerr.E(name, errConfigNotLoaded, nil), OK: false}
+		return core.Fail(coreerr.E(name, errConfigNotLoaded, nil))
 	}
 	return op(s, s.config, opts)
 }
@@ -320,40 +320,40 @@ func configGetOperation(_ *Service, cfg *Config, opts core.Options) core.Result 
 	key := opts.String("key")
 	var value any
 	if err := cfg.Get(key, &value); err != nil {
-		return core.Result{Value: err, OK: false}
+		return core.Fail(err)
 	}
-	return core.Result{Value: value, OK: true}
+	return core.Ok(value)
 }
 
 func configSetOperation(_ *Service, cfg *Config, opts core.Options) core.Result {
 	key := opts.String("key")
 	r := opts.Get("value")
 	if err := cfg.Set(key, r.Value); err != nil {
-		return core.Result{Value: err, OK: false}
+		return core.Fail(err)
 	}
-	return core.Result{OK: true}
+	return core.Ok(nil)
 }
 
 func configCommitOperation(_ *Service, cfg *Config, _ core.Options) core.Result {
 	if err := cfg.Commit(); err != nil {
-		return core.Result{Value: err, OK: false}
+		return core.Fail(err)
 	}
-	return core.Result{OK: true}
+	return core.Ok(nil)
 }
 
 func configLoadOperation(s *Service, cfg *Config, opts core.Options) core.Result {
 	if err := s.LoadFile(cfg.medium, opts.String("path")); err != nil {
-		return core.Result{Value: err, OK: false}
+		return core.Fail(err)
 	}
-	return core.Result{OK: true}
+	return core.Ok(nil)
 }
 
 func configAllOperation(_ *Service, cfg *Config, _ core.Options) core.Result {
-	return core.Result{Value: configValues(cfg), OK: true}
+	return core.Ok(configValues(cfg))
 }
 
 func configPathOperation(_ *Service, cfg *Config, _ core.Options) core.Result {
-	return core.Result{Value: cfg.Path(), OK: true}
+	return core.Ok(cfg.Path())
 }
 
 func configValues(cfg *Config) map[string]any {
@@ -411,12 +411,12 @@ func (s *Service) LoadFile(m coreio.Medium, path string) error {
 
 func ensureConfigEntitlement(c *core.Core, action string) core.Result {
 	if c == nil {
-		return core.Result{Value: coreerr.E(action, "core not available", nil), OK: false}
+		return core.Fail(coreerr.E(action, "core not available", nil))
 	}
 	if e := c.Entitled(action); !e.Allowed {
-		return core.Result{Value: coreerr.E(action, "not entitled: "+action+": "+e.Reason, nil), OK: false}
+		return core.Fail(coreerr.E(action, "not entitled: "+action+": "+e.Reason, nil))
 	}
-	return core.Result{OK: true}
+	return core.Ok(nil)
 }
 
 // Config returns the underlying Config instance for advanced operations.

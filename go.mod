@@ -3,9 +3,9 @@ module dappco.re/go/config
 go 1.26.0
 
 require (
+	dappco.re/go v0.9.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/spf13/viper v1.21.0
-	github.com/stretchr/testify v1.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -17,13 +17,11 @@ require (
 )
 
 require (
-	dappco.re/go/core v0.8.0-alpha.1
+	dappco.re/go/core v0.8.0-alpha.1 // indirect
 	dappco.re/go/io v0.8.0-alpha.1
 	dappco.re/go/log v0.8.0-alpha.1
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
