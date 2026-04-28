@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"sync"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 )
 
 // featurePrefix is the environment variable prefix for feature flag overrides.

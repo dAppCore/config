@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 	coreerr "dappco.re/go/log"
 	"github.com/xeipuuv/gojsonschema"

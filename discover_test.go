@@ -1,189 +1,248 @@
 package config
 
 import (
-	"testing"
+	"os"
+	"path/filepath"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	coreio "dappco.re/go/io"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestDiscover_DiscoverFrom_Good(t *testing.T) {
+func TestDiscover_DiscoverFrom_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	repo := core.Path("repo")
 	sub := core.Path(repo, "service")
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(sub, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".git")))
-	assert.NoError(t, m.EnsureDir(sub))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(sub, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
+	core.AssertNoError(t, m.EnsureDir(sub))
 
-	assert.NoError(t, m.Write(core.Path(repo, ".core", "config.yaml"), "dev:\n  editor: vim\napp:\n  name: repo\n"))
-	assert.NoError(t, m.Write(core.Path(sub, ".core", "config.yaml"), "app:\n  name: service\n"))
+	core.AssertNoError(t, m.Write(core.Path(repo, ".core", "config.yaml"), "dev:\n  editor: vim\napp:\n  name: repo\n"))
+	core.AssertNoError(t, m.Write(core.Path(sub, ".core", "config.yaml"), "app:\n  name: service\n"))
 
 	cfg, err := DiscoverFrom(sub, WithMedium(m), WithPath(core.Path(sub, ".core", "config.yaml")))
-	assert.NoError(t, err)
+	core.AssertNoError(t, err)
 
 	// Closest (service) wins on app.name.
 	var name string
-	assert.NoError(t, cfg.Get("app.name", &name))
-	assert.Equal(t, "service", name)
+	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertEqual(t, "service", name)
 
 	// Parent fills the gap on dev.editor.
 	var editor string
-	assert.NoError(t, cfg.Get("dev.editor", &editor))
-	assert.Equal(t, "vim", editor)
+	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
+	core.AssertEqual(t, "vim", editor)
 }
 
-func TestDiscover_DiscoverFrom_Bad(t *testing.T) {
+func TestDiscover_DiscoverFrom_Bad(t *core.T) {
 	// A .core/config.yaml with malformed YAML makes the layered load fail.
 	m := coreio.NewMockMedium()
 	root := core.Path("bad-repo")
-	assert.NoError(t, m.EnsureDir(core.Path(root, ".core")))
-	assert.NoError(t, m.Write(core.Path(root, ".core", "config.yaml"), "invalid: [yaml"))
+	core.AssertNoError(t, m.EnsureDir(core.Path(root, ".core")))
+	core.AssertNoError(t, m.Write(core.Path(root, ".core", "config.yaml"), "invalid: [yaml"))
 
 	_, err := DiscoverFrom(root, WithMedium(m))
-	assert.Error(t, err)
+	core.AssertError(t, err)
 }
 
-func TestDiscover_DiscoverFrom_Ugly(t *testing.T) {
+func TestDiscover_DiscoverFrom_Ugly(t *core.T) {
 	// Empty start directory — uses filesystem root walk, should still return a
 	// usable (but empty) config rather than panicking.
 	m := coreio.NewMockMedium()
 	cfg, err := DiscoverFrom("/nonexistent/path", WithMedium(m), WithPath("/nonexistent/path/config.yaml"))
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
+	core.AssertNoError(t, err)
+	core.AssertNotNil(t, cfg)
 }
 
-func TestDiscover_CoreDirs_Good(t *testing.T) {
+func TestDiscover_CoreDirs_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	repo := core.Path("dirs-repo")
 	sub := core.Path(repo, "service")
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(sub, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".git")))
-	assert.NoError(t, m.EnsureDir(sub))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(sub, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
+	core.AssertNoError(t, m.EnsureDir(sub))
 
 	dirs := CoreDirs(m, sub)
 	// Closest first: sub/.core, then repo/.core. Walk stops at repo (.git boundary).
-	assert.GreaterOrEqual(t, len(dirs), 2)
-	assert.Equal(t, core.Path(sub, ".core"), dirs[0])
-	assert.Equal(t, core.Path(repo, ".core"), dirs[1])
+	core.AssertGreaterOrEqual(t, len(dirs), 2)
+	core.AssertEqual(t, core.Path(sub, ".core"), dirs[0])
+	core.AssertEqual(t, core.Path(repo, ".core"), dirs[1])
 }
 
-func TestDiscover_CoreDirs_Bad(t *testing.T) {
+func TestDiscover_CoreDirs_Bad(t *core.T) {
 	// A directory tree with no .core anywhere just returns the home layer (if any).
 	m := coreio.NewMockMedium()
 	root := core.Path("empty-repo")
-	assert.NoError(t, m.EnsureDir(root))
+	core.AssertNoError(t, m.EnsureDir(root))
 	dirs := CoreDirs(m, root)
 	for _, dir := range dirs {
-		assert.NotContains(t, dir, root)
+		core.AssertNotContains(t, dir, root)
 	}
 }
 
-func TestDiscover_FindManifest_Good(t *testing.T) {
+func TestDiscover_FindManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	repo := core.Path("manifest-repo")
 	sub := core.Path(repo, "service")
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(sub, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".git")))
-	assert.NoError(t, m.EnsureDir(sub))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(sub, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
+	core.AssertNoError(t, m.EnsureDir(sub))
 	// Only the repo-level .core/ has build.yaml.
-	assert.NoError(t, m.Write(core.Path(repo, ".core", "build.yaml"), "name: core\n"))
+	core.AssertNoError(t, m.Write(core.Path(repo, ".core", "build.yaml"), "name: core\n"))
 
 	path := FindManifest(m, sub, FileBuild)
-	assert.Equal(t, core.Path(repo, ".core", "build.yaml"), path)
+	core.AssertEqual(t, core.Path(repo, ".core", "build.yaml"), path)
 }
 
-func TestDiscover_FindManifest_Ugly(t *testing.T) {
+func TestDiscover_FindManifest_Ugly(t *core.T) {
 	// Missing file returns empty string, not an error.
 	m := coreio.NewMockMedium()
-	assert.Empty(t, FindManifest(m, core.Path("missing-repo"), FileBuild))
+	start := core.Path("missing-repo")
+	got := FindManifest(m, start, FileBuild)
+	core.AssertEmpty(t, got)
 }
 
-func TestDiscover_EnvOverridesDiscovered_Good(t *testing.T) {
+func TestDiscover_EnvOverridesDiscovered_Good(t *core.T) {
 	// .core/ convention §5.3: "Env vars override everything."
 	// A discovered file value must be shadowed by CORE_CONFIG_* at Get time.
 	m := coreio.NewMockMedium()
 	root := core.Path("env-repo")
 	t.Setenv("CORE_CONFIG_APP_NAME", "env-wins")
 
-	assert.NoError(t, m.EnsureDir(core.Path(root, ".core")))
-	assert.NoError(t, m.Write(
+	core.AssertNoError(t, m.EnsureDir(core.Path(root, ".core")))
+	core.AssertNoError(t, m.Write(
 		core.Path(root, ".core", "config.yaml"),
 		"app:\n  name: fromfile\n",
 	))
 
 	cfg, err := DiscoverFrom(root, WithMedium(m))
-	assert.NoError(t, err)
+	core.AssertNoError(t, err)
 
 	var name string
-	assert.NoError(t, cfg.Get("app.name", &name))
-	assert.Equal(t, "env-wins", name)
+	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertEqual(t, "env-wins", name)
 }
 
-func TestDiscover_MergeFillsGaps_Good(t *testing.T) {
+func TestDiscover_MergeFillsGaps_Good(t *core.T) {
 	// Project .core/ wins over global .core/ — global only fills gaps.
 	m := coreio.NewMockMedium()
 	repo := core.Path("merge-repo")
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".git")))
-	assert.NoError(t, m.Write(
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
+	core.AssertNoError(t, m.Write(
 		core.Path(repo, ".core", "config.yaml"),
 		"app:\n  name: project\n",
 	))
 
 	cfg, err := DiscoverFrom(repo, WithMedium(m))
-	assert.NoError(t, err)
+	core.AssertNoError(t, err)
 
 	var name string
-	assert.NoError(t, cfg.Get("app.name", &name))
-	assert.Equal(t, "project", name)
+	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertEqual(t, "project", name)
 }
 
-func TestDiscover_CommitDoesNotLeakInherited_Good(t *testing.T) {
+func TestDiscover_CommitDoesNotLeakInherited_Good(t *core.T) {
 	// Regression guard: Commit on a discovered Config must only persist the
 	// owning file's keys + Set() calls, never inherited layer values — or
 	// global ~/.core/ secrets would spray into every project config.
 	m := coreio.NewMockMedium()
 	repo := core.Path("commit-repo")
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".core")))
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".git")))
-	assert.NoError(t, m.Write(
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
+	core.AssertNoError(t, m.Write(
 		core.Path(repo, ".core", "config.yaml"),
 		"secret:\n  token: GLOBAL_ONLY\n",
 	))
 
 	commitPath := core.Path("commit-repo", "newcfg.yaml")
 	cfg, err := DiscoverFrom(repo, WithMedium(m), WithPath(commitPath))
-	assert.NoError(t, err)
+	core.AssertNoError(t, err)
 
 	// Set our own key then Commit; the inherited GLOBAL_ONLY must NOT appear.
-	assert.NoError(t, cfg.Set("dev.shell", "zsh"))
-	assert.NoError(t, cfg.Commit())
+	core.AssertNoError(t, cfg.Set("dev.shell", "zsh"))
+	core.AssertNoError(t, cfg.Commit())
 
 	body, err := m.Read(commitPath)
-	assert.NoError(t, err)
-	assert.Contains(t, body, "dev:")
-	assert.Contains(t, body, "shell: zsh")
-	assert.NotContains(t, body, "GLOBAL_ONLY")
-	assert.NotContains(t, body, "secret:")
+	core.AssertNoError(t, err)
+	core.AssertContains(t, body, "dev:")
+	core.AssertContains(t, body, "shell: zsh")
+	core.AssertNotContains(t, body, "GLOBAL_ONLY")
+	core.AssertNotContains(t, body, "secret:")
 }
 
-func TestDiscover_DiscoverFrom_GlobalFallback_Good(t *testing.T) {
+func TestDiscover_DiscoverFrom_GlobalFallback_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	repo := core.Path("global-repo")
 	home := core.Env("DIR_HOME")
 
-	assert.NoError(t, m.EnsureDir(core.Path(repo, ".git")))
-	assert.NoError(t, m.EnsureDir(core.Path(home, ".core")))
-	assert.NoError(t, m.Write(core.Path(home, ".core", "config.yaml"), "app:\n  name: global\n"))
+	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
+	core.AssertNoError(t, m.EnsureDir(core.Path(home, ".core")))
+	core.AssertNoError(t, m.Write(core.Path(home, ".core", "config.yaml"), "app:\n  name: global\n"))
 
 	cfg, err := DiscoverFrom(repo, WithMedium(m))
-	assert.NoError(t, err)
+	core.AssertNoError(t, err)
 
 	var name string
-	assert.NoError(t, cfg.Get("app.name", &name))
-	assert.Equal(t, "global", name)
+	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertEqual(t, "global", name)
+}
+
+func TestDiscover_Discover_Good(t *core.T) {
+	root := t.TempDir()
+	coreDir := filepath.Join(root, ".core")
+	core.RequireNoError(t, os.MkdirAll(coreDir, 0o755))
+	core.RequireNoError(t, os.WriteFile(filepath.Join(coreDir, FileConfig), []byte("app:\n  name: discovered\n"), 0o600))
+	previous, err := os.Getwd()
+	core.RequireNoError(t, err)
+	core.RequireNoError(t, os.Chdir(root))
+	t.Cleanup(func() { core.AssertNoError(t, os.Chdir(previous)) })
+
+	cfg, err := Discover()
+	core.RequireNoError(t, err)
+	var got string
+	core.AssertNoError(t, cfg.Get("app.name", &got))
+	core.AssertEqual(t, "discovered", got)
+}
+
+func TestDiscover_Discover_Bad(t *core.T) {
+	root := t.TempDir()
+	coreDir := filepath.Join(root, ".core")
+	core.RequireNoError(t, os.MkdirAll(coreDir, 0o755))
+	core.RequireNoError(t, os.WriteFile(filepath.Join(coreDir, FileConfig), []byte("bad: [yaml"), 0o600))
+	previous, err := os.Getwd()
+	core.RequireNoError(t, err)
+	core.RequireNoError(t, os.Chdir(root))
+	t.Cleanup(func() { core.AssertNoError(t, os.Chdir(previous)) })
+
+	cfg, err := Discover()
+	core.AssertNil(t, cfg)
+	core.AssertError(t, err)
+}
+
+func TestDiscover_Discover_Ugly(t *core.T) {
+	root := t.TempDir()
+	previous, err := os.Getwd()
+	core.RequireNoError(t, err)
+	core.RequireNoError(t, os.Chdir(root))
+	t.Cleanup(func() { core.AssertNoError(t, os.Chdir(previous)) })
+
+	cfg, err := Discover()
+	core.RequireNoError(t, err)
+	core.AssertError(t, cfg.Get("missing", new(string)))
+}
+
+func TestDiscover_CoreDirs_Ugly(t *core.T) {
+	m := coreio.NewMockMedium()
+	start := core.Path("lonely", "service")
+	got := CoreDirs(m, start)
+	core.AssertEmpty(t, got)
+}
+
+func TestDiscover_FindManifest_Bad(t *core.T) {
+	m := coreio.NewMockMedium()
+	got := FindManifest(m, core.Path("repo"), "../config.yaml")
+	core.AssertEqual(t, "", got)
 }

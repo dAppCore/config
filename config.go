@@ -17,7 +17,7 @@ import (
 	"strings"
 	"sync"
 
-	core "dappco.re/go/core"
+	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 	coreerr "dappco.re/go/log"
 	"github.com/spf13/viper"
@@ -44,7 +44,7 @@ const (
 //	    if cc, ok := msg.(config.ConfigChanged); ok {
 //	        // react to cc.Key / cc.Value
 //	    }
-//	    return core.Result{}
+//	    return core.Ok(nil)
 //	})
 type ConfigChanged struct {
 	Key      string
@@ -694,7 +694,9 @@ func persistToStore(store ConfigStoreWriter, key string, value any) {
 	if store == nil || key == "" {
 		return
 	}
-	_ = store.Set("config", key, core.JSONMarshalString(value))
+	if err := store.Set("config", key, core.JSONMarshalString(value)); err != nil {
+		return
+	}
 }
 
 func (c *Config) loadStoreState() error {

@@ -1,12 +1,8 @@
 package config
 
-import (
-	"testing"
+import core "dappco.re/go"
 
-	"github.com/stretchr/testify/assert"
-)
-
-func TestEnv_Env_Good(t *testing.T) {
+func TestEnv_Env_Good(t *core.T) {
 	t.Setenv("CORE_CONFIG_APP_NAME", "core")
 	t.Setenv("CORE_CONFIG_DEV_EDITOR", "vim")
 
@@ -15,19 +11,20 @@ func TestEnv_Env_Good(t *testing.T) {
 		got[key] = value.(string)
 	}
 
-	assert.Equal(t, map[string]string{
+	core.AssertEqual(t, map[string]string{
 		"app.name":   "core",
 		"dev.editor": "vim",
 	}, got)
 }
 
-func TestEnv_LoadEnv_Bad(t *testing.T) {
+func TestEnv_LoadEnv_Bad(t *core.T) {
 	t.Setenv("MYAPP_FEATURE_FLAG", "true")
 
-	assert.Empty(t, LoadEnv("CORE_CONFIG"))
+	got := LoadEnv("CORE_CONFIG")
+	core.AssertEmpty(t, got)
 }
 
-func TestEnv_Env_Ugly(t *testing.T) {
+func TestEnv_Env_Ugly(t *core.T) {
 	// Prefix normalisation accepts the trailing underscore form too.
 	t.Setenv("MYAPP_FOO_BAR", "baz")
 
@@ -36,23 +33,47 @@ func TestEnv_Env_Ugly(t *testing.T) {
 		keys = append(keys, key)
 	}
 
-	assert.Equal(t, []string{"foo.bar"}, keys)
+	core.AssertEqual(t, []string{"foo.bar"}, keys)
 }
 
-func TestEnv_normaliseEnvPrefix_Good(t *testing.T) {
+func TestEnv_normaliseEnvPrefix_Good(t *core.T) {
 	got := normaliseEnvPrefix("CORE_CONFIG")
-	assert.Equal(t, "CORE_CONFIG_", got)
+	core.AssertEqual(t, "CORE_CONFIG_", got)
 
 	got = normaliseEnvPrefix("CORE_CONFIG_")
-	assert.Equal(t, "CORE_CONFIG_", got)
+	core.AssertEqual(t, "CORE_CONFIG_", got)
 }
 
-func TestEnv_normaliseEnvPrefix_Bad(t *testing.T) {
-	assert.Equal(t, "", normaliseEnvPrefix(""))
+func TestEnv_normaliseEnvPrefix_Bad(t *core.T) {
+	got := normaliseEnvPrefix("")
+	core.AssertEqual(t, "", got)
+	core.AssertFalse(t, core.HasSuffix(got, "_"))
 }
 
-func TestEnv_normaliseEnvPrefix_Ugly(t *testing.T) {
+func TestEnv_normaliseEnvPrefix_Ugly(t *core.T) {
 	// A nil-like value is still normalised consistently.
 	got := normaliseEnvPrefix("my_app")
-	assert.Equal(t, "my_app_", got)
+	core.AssertEqual(t, "my_app_", got)
+	core.AssertTrue(t, core.HasSuffix(got, "_"))
+}
+
+func TestEnv_Env_Bad(t *core.T) {
+	t.Setenv("AX7_OTHER_NAME", "codex")
+	got := map[string]any{}
+	for key, value := range Env("AX7_CONFIG") {
+		got[key] = value
+	}
+	core.AssertEmpty(t, got)
+}
+
+func TestEnv_LoadEnv_Good(t *core.T) {
+	t.Setenv("AX7_LOAD_NAME", "codex")
+	got := LoadEnv("AX7_LOAD")
+	core.AssertEqual(t, "codex", got["name"])
+}
+
+func TestEnv_LoadEnv_Ugly(t *core.T) {
+	t.Setenv("AX7_EMPTY_VALUE", "")
+	got := LoadEnv("AX7_EMPTY")
+	core.AssertEqual(t, "", got["value"])
 }
