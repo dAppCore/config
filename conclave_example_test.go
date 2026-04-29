@@ -6,12 +6,13 @@ import (
 )
 
 func ExampleSetConclaveRootFunc() {
-	SetConclaveRootFunc(func(name string) (string, error) {
-		return core.PathJoin("/", "conclaves", name), nil
+	SetConclaveRootFunc(func(name string) core.Result {
+		return core.Ok(core.PathJoin("/", "conclaves", name))
 	})
 	defer SetConclaveRootFunc(nil)
-	root, err := conclaveRoot("alpha")
-	core.Println(err == nil, root)
+	result := conclaveRoot("alpha")
+	root, _ := core.Cast[string](result)
+	core.Println(result.OK, root)
 	// Output: true /conclaves/alpha
 }
 
@@ -20,14 +21,15 @@ func ExampleForConclave() {
 	root := core.PathJoin("/", "conclaves", "alpha")
 	_ = m.EnsureDir(core.PathJoin(root, ".core"))
 	_ = m.Write(core.PathJoin(root, ".core", FileConfig), "app:\n  name: alpha\n")
-	SetConclaveRootFunc(func(string) (string, error) {
-		return root, nil
+	SetConclaveRootFunc(func(string) core.Result {
+		return core.Ok(root)
 	})
 	defer SetConclaveRootFunc(nil)
 
-	cfg, err := ForConclave("alpha", WithMedium(m))
+	result := ForConclave("alpha", WithMedium(m))
+	cfg, _ := core.Cast[*Config](result)
 	var name string
 	_ = cfg.Get("app.name", &name)
-	core.Println(err == nil, name)
+	core.Println(result.OK, name)
 	// Output: true alpha
 }

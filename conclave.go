@@ -19,10 +19,10 @@ const callerForConclave = "config.ForConclave"
 
 // ConclaveRootFunc resolves the on-disk root directory for a Conclave by name.
 //
-//	config.SetConclaveRootFunc(func(name string) (string, error) {
-//	    return session.ConclaveRoot(name)
+//	config.SetConclaveRootFunc(func(name string) core.Result {
+//	    return core.Ok(session.ConclaveRoot(name))
 //	})
-type ConclaveRootFunc func(name string) (string, error)
+type ConclaveRootFunc func(name string) core.Result
 
 // SetConclaveRootFunc installs a resolver that maps a Conclave name to its
 // on-disk root directory. Passing nil restores the default resolver.
@@ -51,20 +51,21 @@ func SetConclaveRootFunc(fn ConclaveRootFunc) {
 //
 //     alpha, _ := config.ForConclave("workspace-alpha")
 //     alpha.Get("theme", &theme)
-func ForConclave(name string, opts ...Option) (*Config, error) {
+func ForConclave(name string, opts ...Option) core.Result {
 	conclaveMu.RLock()
 	resolver := conclaveRoot
 	conclaveMu.RUnlock()
 
-	root, err := resolver(name)
-	if err != nil {
-		return nil, coreerr.E(callerForConclave, "failed to resolve conclave root: "+name, err)
+	rootResult := resolver(name)
+	if !rootResult.OK {
+		return core.Fail(coreerr.E(callerForConclave, "failed to resolve conclave root: "+name, resultCause(rootResult).(error)))
 	}
+	root := rootResult.Value.(string)
 	if root == "" {
-		return nil, coreerr.E(callerForConclave, "failed to resolve conclave root: "+name, nil)
+		return core.Fail(coreerr.E(callerForConclave, "failed to resolve conclave root: "+name, nil))
 	}
 	if isSymlinkedCoreDir(coreio.Local, core.Path(root, ".core")) {
-		return nil, coreerr.E(callerForConclave, "symlinked conclave .core directory rejected: "+root, nil)
+		return core.Fail(coreerr.E(callerForConclave, "symlinked conclave .core directory rejected: "+root, nil))
 	}
 
 	conclaveOpts := append([]Option{}, opts...)
@@ -74,24 +75,26 @@ func ForConclave(name string, opts ...Option) (*Config, error) {
 	// not the conclave root — the conclave usually sits outside the project
 	// tree (e.g. under XDG config/conclaves/). Discover() handles ~/.core/ as
 	// the final fallback layer.
-	base, err := Discover(opts...)
-	if err != nil {
-		return nil, coreerr.E(callerForConclave, "failed to discover base config: "+name, err)
+	baseResult := Discover(opts...)
+	if !baseResult.OK {
+		return core.Fail(coreerr.E(callerForConclave, "failed to discover base config: "+name, resultCause(baseResult).(error)))
 	}
+	base := baseResult.Value.(*Config)
 
-	conclaveCfg, err := New(conclaveOpts...)
-	if err != nil {
-		return nil, coreerr.E(callerForConclave, "failed to load conclave config: "+name, err)
+	conclaveResult := New(conclaveOpts...)
+	if !conclaveResult.OK {
+		return core.Fail(coreerr.E(callerForConclave, "failed to load conclave config: "+name, resultCause(conclaveResult).(error)))
 	}
+	conclaveCfg := conclaveResult.Value.(*Config)
 
 	// Conclave wins over base — MergeFrom only fills gaps.
 	conclaveCfg.MergeFrom(base)
-	return conclaveCfg, nil
+	return core.Ok(conclaveCfg)
 }
 
-func defaultConclaveRoot(name string) (string, error) {
+func defaultConclaveRoot(name string) core.Result {
 	if !isSafePathElement(name) {
-		return "", coreerr.E("config.defaultConclaveRoot", "invalid conclave name: "+name, nil)
+		return core.Fail(coreerr.E("config.defaultConclaveRoot", "invalid conclave name: "+name, nil))
 	}
-	return core.Path(XDG().Config(), "conclaves", name), nil
+	return core.Ok(core.Path(XDG().Config(), "conclaves", name))
 }

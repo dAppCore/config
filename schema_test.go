@@ -11,7 +11,7 @@ func TestSchema_validateSchema_Good(t *core.T) {
 		},
 	}
 
-	core.AssertNoError(t, validateSchema("/tmp/.core/config.yaml", raw))
+	core.AssertNoError(t, resultError(validateSchema("/tmp/.core/config.yaml", raw)))
 }
 
 func TestSchema_validateSchema_Bad(t *core.T) {
@@ -19,7 +19,7 @@ func TestSchema_validateSchema_Bad(t *core.T) {
 		"targets": 42,
 	}
 
-	err := validateSchema("/tmp/.core/build.yaml", raw)
+	err := resultError(validateSchema("/tmp/.core/build.yaml", raw))
 	if err == nil {
 		t.Fatal("expected schema validation error")
 	}
@@ -29,6 +29,6 @@ func TestSchema_validateSchema_Bad(t *core.T) {
 func TestSchema_validateSchema_Ugly(t *core.T) {
 	unknownErr := validateSchema("/tmp/.core/notes.txt", map[string]any{"anything": "goes"})
 	emptyErr := validateSchema("/tmp/.core/config.yaml", map[string]any{})
-	core.AssertNoError(t, unknownErr)
-	core.AssertNoError(t, emptyErr)
+	core.AssertNoError(t, resultError(unknownErr))
+	core.AssertNoError(t, resultError(emptyErr))
 }

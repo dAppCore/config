@@ -14,11 +14,11 @@ func ExampleFeature() {
 }
 
 func ExampleFeatureFromConfig() {
-	cfg, _ := New(
+	cfg, _ := configResult(New(
 		WithMedium(coreio.NewMockMedium()),
 		WithPath("/example/config.yaml"),
 		WithDefaults(map[string]any{"features.dark-mode": true}),
-	)
+	))
 	core.Println(FeatureFromConfig(cfg, "dark-mode"))
 	// Output: true
 }
@@ -26,11 +26,11 @@ func ExampleFeatureFromConfig() {
 func ExampleSetFeatureSource() {
 	resetFeatureRegistry()
 	defer resetFeatureRegistry()
-	cfg, _ := New(
+	cfg, _ := configResult(New(
 		WithMedium(coreio.NewMockMedium()),
 		WithPath("/example/config.yaml"),
 		WithDefaults(map[string]any{"features.beta": true}),
-	)
+	))
 	SetFeatureSource(cfg)
 	core.Println(Feature("beta"))
 	// Output: true

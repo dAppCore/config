@@ -19,44 +19,45 @@ func (s *exampleConfigStore) Set(bucket, key, value string) error {
 
 func ExampleWithMedium() {
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/example/config.yaml"))
-	core.Println(err == nil && cfg.Medium() == m)
+	cfg := core.MustCast[*Config](New(WithMedium(m), WithPath("/example/config.yaml")))
+	core.Println(cfg.Medium() == m)
 	// Output: true
 }
 
 func ExampleWithPath() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/app.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/app.yaml")))
 	core.Println(cfg.Path())
 	// Output: /example/app.yaml
 }
 
 func ExampleWithEnvPrefix() {
-	cfg, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"), WithEnvPrefix("APP"))
-	core.Println(err == nil && cfg != nil)
+	result := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"), WithEnvPrefix("APP"))
+	cfg, _ := core.Cast[*Config](result)
+	core.Println(result.OK && cfg != nil)
 	// Output: true
 }
 
 func ExampleWithCore() {
 	c := core.New()
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"), WithCore(c))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"), WithCore(c)))
 	core.Println(cfg.core == c)
 	// Output: true
 }
 
 func ExampleWithStore() {
 	store := &exampleConfigStore{}
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"), WithStore(store))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"), WithStore(store)))
 	_ = cfg.Set("agent.name", "codex")
 	core.Println(store.values["config.agent.name"])
 	// Output: "codex"
 }
 
 func ExampleWithDefaults() {
-	cfg, _ := New(
+	cfg := core.MustCast[*Config](New(
 		WithMedium(coreio.NewMockMedium()),
 		WithPath("/example/config.yaml"),
 		WithDefaults(map[string]any{"app.name": "core"}),
-	)
+	))
 	var name string
 	_ = cfg.Get("app.name", &name)
 	core.Println(name)
@@ -64,7 +65,7 @@ func ExampleWithDefaults() {
 }
 
 func ExampleConfig_AttachCore() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	c := core.New()
 	cfg.AttachCore(c)
 	core.Println(cfg.core == c)
@@ -72,15 +73,16 @@ func ExampleConfig_AttachCore() {
 }
 
 func ExampleNew() {
-	cfg, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
-	core.Println(err == nil && cfg != nil)
+	result := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg, _ := core.Cast[*Config](result)
+	core.Println(result.OK && cfg != nil)
 	// Output: true
 }
 
 func ExampleConfig_LoadFile() {
 	m := coreio.NewMockMedium()
 	_ = m.Write("/example/extra.yaml", "app:\n  name: loaded\n")
-	cfg, _ := New(WithMedium(m), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(m), WithPath("/example/config.yaml")))
 	_ = cfg.LoadFile(m, "/example/extra.yaml")
 	var name string
 	_ = cfg.Get("app.name", &name)
@@ -89,7 +91,7 @@ func ExampleConfig_LoadFile() {
 }
 
 func ExampleConfig_Get() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	_ = cfg.Set("dev.editor", "vim")
 	var editor string
 	_ = cfg.Get("dev.editor", &editor)
@@ -98,7 +100,7 @@ func ExampleConfig_Get() {
 }
 
 func ExampleConfig_SetDefault() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	cfg.SetDefault("feature.beta", true)
 	var beta bool
 	_ = cfg.Get("feature.beta", &beta)
@@ -107,7 +109,7 @@ func ExampleConfig_SetDefault() {
 }
 
 func ExampleConfig_Set() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	_ = cfg.Set("dev.shell", "zsh")
 	var shell string
 	_ = cfg.Get("dev.shell", &shell)
@@ -117,7 +119,7 @@ func ExampleConfig_Set() {
 
 func ExampleConfig_Commit() {
 	m := coreio.NewMockMedium()
-	cfg, _ := New(WithMedium(m), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(m), WithPath("/example/config.yaml")))
 	_ = cfg.Set("app.name", "core")
 	_ = cfg.Commit()
 	core.Println(m.Exists("/example/config.yaml"))
@@ -125,7 +127,7 @@ func ExampleConfig_Commit() {
 }
 
 func ExampleConfig_All() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	_ = cfg.Set("app.name", "core")
 	found := false
 	for key := range cfg.All() {
@@ -138,22 +140,22 @@ func ExampleConfig_All() {
 }
 
 func ExampleConfig_Path() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	core.Println(cfg.Path())
 	// Output: /example/config.yaml
 }
 
 func ExampleConfig_Medium() {
 	m := coreio.NewMockMedium()
-	cfg, _ := New(WithMedium(m), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(m), WithPath("/example/config.yaml")))
 	core.Println(cfg.Medium() == m)
 	// Output: true
 }
 
 func ExampleConfig_MergeFrom() {
-	base, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/base.yaml"))
+	base := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/base.yaml")))
 	_ = base.Set("app.name", "base")
-	layer, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/layer.yaml"))
+	layer := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/layer.yaml")))
 	_ = layer.Set("dev.editor", "vim")
 	base.MergeFrom(layer)
 	var editor string
@@ -163,7 +165,7 @@ func ExampleConfig_MergeFrom() {
 }
 
 func ExampleConfig_OnChange() {
-	cfg, _ := New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml"))
+	cfg := core.MustCast[*Config](New(WithMedium(coreio.NewMockMedium()), WithPath("/example/config.yaml")))
 	seen := ""
 	cfg.OnChange(func(key string, value any) {
 		seen = key + "=" + value.(string)
@@ -176,14 +178,15 @@ func ExampleConfig_OnChange() {
 func ExampleLoad() {
 	m := coreio.NewMockMedium()
 	_ = m.Write("/example/config.yaml", "app:\n  name: core\n")
-	data, err := Load(m, "/example/config.yaml")
-	core.Println(err == nil, data["app"].(map[string]any)["name"])
+	result := Load(m, "/example/config.yaml")
+	data, _ := core.Cast[map[string]any](result)
+	core.Println(result.OK, data["app"].(map[string]any)["name"])
 	// Output: true core
 }
 
 func ExampleSave() {
 	m := coreio.NewMockMedium()
-	err := Save(m, "/example/config.yaml", map[string]any{"app": map[string]any{"name": "core"}})
-	core.Println(err == nil && m.Exists("/example/config.yaml"))
+	result := Save(m, "/example/config.yaml", map[string]any{"app": map[string]any{"name": "core"}})
+	core.Println(result.OK && m.Exists("/example/config.yaml"))
 	// Output: true
 }

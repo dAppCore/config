@@ -9,8 +9,8 @@ import (
 
 func TestConclave_ForConclave_Good(t *core.T) {
 	tmp := t.TempDir()
-	SetConclaveRootFunc(func(name string) (string, error) {
-		return core.PathJoin(tmp, name), nil
+	SetConclaveRootFunc(func(name string) core.Result {
+		return core.Ok(core.PathJoin(tmp, name))
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
@@ -18,35 +18,33 @@ func TestConclave_ForConclave_Good(t *core.T) {
 	core.AssertNoError(t, coreio.Local.EnsureDir(root))
 	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(root, "config.yaml"), "theme: dark\n"))
 
-	cfg, err := ForConclave("alpha", WithMedium(coreio.Local))
-	core.AssertNoError(t, err)
+	cfg := requireResultValue[*Config](t, ForConclave("alpha", WithMedium(coreio.Local)))
 
 	var theme string
-	core.AssertNoError(t, cfg.Get("theme", &theme))
+	core.AssertNoError(t, resultError(cfg.Get("theme", &theme)))
 	core.AssertEqual(t, "dark", theme)
 }
 
 func TestConclave_ForConclave_Bad(t *core.T) {
-	SetConclaveRootFunc(func(_ string) (string, error) {
-		return "", assertResolverError()
+	SetConclaveRootFunc(func(_ string) core.Result {
+		return core.Fail(assertResolverError())
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
-	_, err := ForConclave("missing")
+	err := resultError(ForConclave("missing"))
 	core.AssertError(t, err)
 }
 
 func TestConclave_ForConclave_Ugly(t *core.T) {
 	// Nil resolver should fall back to the default — no panic.
 	SetConclaveRootFunc(nil)
-	cfg, err := ForConclave("test-conclave")
-	core.AssertNoError(t, err)
+	cfg := requireResultValue[*Config](t, ForConclave("test-conclave"))
 	core.AssertNotNil(t, cfg)
 }
 
 func TestConclave_ForConclave_InvalidName_Bad(t *core.T) {
 	SetConclaveRootFunc(nil)
-	_, err := ForConclave("../escape")
+	err := resultError(ForConclave("../escape"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "invalid conclave name")
 }
@@ -65,12 +63,12 @@ func TestConclave_ForConclave_SymlinkedCore_Bad(t *core.T) {
 	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(realCore, "config.yaml"), "theme: dark\n"))
 	testSymlink(t, realCore, core.PathJoin(conclaveDir, ".core"))
 
-	SetConclaveRootFunc(func(_ string) (string, error) {
-		return conclaveDir, nil
+	SetConclaveRootFunc(func(_ string) core.Result {
+		return core.Ok(conclaveDir)
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
-	_, err := ForConclave("alpha")
+	err := resultError(ForConclave("alpha"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "symlinked conclave .core directory rejected")
 }
@@ -95,8 +93,8 @@ func TestConclave_ForConclave_InheritsProject_Good(t *core.T) {
 		"app:\n  name: conclave\n",
 	))
 
-	SetConclaveRootFunc(func(_ string) (string, error) {
-		return conclaveDir, nil
+	SetConclaveRootFunc(func(_ string) core.Result {
+		return core.Ok(conclaveDir)
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
@@ -105,23 +103,22 @@ func TestConclave_ForConclave_InheritsProject_Good(t *core.T) {
 	testChdir(t, projectDir)
 	t.Cleanup(func() { testChdir(t, prev) })
 
-	cfg, err := ForConclave("alpha", WithMedium(coreio.Local))
-	core.AssertNoError(t, err)
+	cfg := requireResultValue[*Config](t, ForConclave("alpha", WithMedium(coreio.Local)))
 
 	// Conclave wins on app.name.
 	var name string
-	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
 	core.AssertEqual(t, "conclave", name)
 
 	// Project fills the gap on dev.editor.
 	var editor string
-	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
+	core.AssertNoError(t, resultError(cfg.Get("dev.editor", &editor)))
 	core.AssertEqual(t, "vim", editor)
 }
 
 func TestConclave_SetConclaveRootFunc_Good(t *core.T) {
-	SetConclaveRootFunc(func(name string) (string, error) {
-		return "/custom/" + name, nil
+	SetConclaveRootFunc(func(name string) core.Result {
+		return core.Ok("/custom/" + name)
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
@@ -129,12 +126,11 @@ func TestConclave_SetConclaveRootFunc_Good(t *core.T) {
 	resolver := conclaveRoot
 	conclaveMu.RUnlock()
 
-	root, err := resolver("a")
-	core.AssertNoError(t, err)
+	root := requireResultValue[string](t, resolver("a"))
 	core.AssertEqual(t, "/custom/a", root)
 }
 
-func TestConclaveIsolationGood(t *core.T) {
+func TestConclave_ForConclave_Isolation_Good(t *core.T) {
 	// RFC §12.3: "Writes are isolated to the Conclave's .core/ directory.
 	// alpha.Set("theme", "dark"), beta.Get("theme", &t) // unchanged"
 	//
@@ -142,22 +138,20 @@ func TestConclaveIsolationGood(t *core.T) {
 	// alpha is invisible to beta, and each Commit writes only to its own
 	// .core/config.yaml.
 	tmp := t.TempDir()
-	SetConclaveRootFunc(func(name string) (string, error) {
-		return core.PathJoin(tmp, name), nil
+	SetConclaveRootFunc(func(name string) core.Result {
+		return core.Ok(core.PathJoin(tmp, name))
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
-	alpha, err := ForConclave("workspace-alpha", WithMedium(coreio.Local))
-	core.AssertNoError(t, err)
-	beta, err := ForConclave("workspace-beta", WithMedium(coreio.Local))
-	core.AssertNoError(t, err)
+	alpha := requireResultValue[*Config](t, ForConclave("workspace-alpha", WithMedium(coreio.Local)))
+	beta := requireResultValue[*Config](t, ForConclave("workspace-beta", WithMedium(coreio.Local)))
 
-	core.AssertNoError(t, alpha.Set("theme", "dark"))
-	core.AssertNoError(t, alpha.Commit())
+	core.AssertNoError(t, resultError(alpha.Set("theme", "dark")))
+	core.AssertNoError(t, resultError(alpha.Commit()))
 
 	// beta was created before alpha's Set — its in-memory view is untouched.
 	var betaTheme string
-	err = beta.Get("theme", &betaTheme)
+	err := resultError(beta.Get("theme", &betaTheme))
 	core.AssertError(t, err)
 
 	// Alpha's on-disk config contains theme; beta's root has no config file yet.
@@ -186,19 +180,21 @@ func TestConclave_SetConclaveRootFunc_Bad(t *core.T) {
 	conclaveMu.RLock()
 	resolver := conclaveRoot
 	conclaveMu.RUnlock()
-	got, err := resolver("alpha")
-	core.AssertNoError(t, err)
+	r := resolver("alpha")
+	core.AssertNoError(t, resultError(r))
+	got := resultValue[string](r)
 	core.AssertContains(t, got, core.PathJoin("conclaves", "alpha"))
 }
 
 func TestConclave_SetConclaveRootFunc_Ugly(t *core.T) {
 	want := core.NewError("resolver refused")
-	SetConclaveRootFunc(func(string) (string, error) { return "", want })
+	SetConclaveRootFunc(func(string) core.Result { return core.Fail(want) })
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 	conclaveMu.RLock()
 	resolver := conclaveRoot
 	conclaveMu.RUnlock()
-	got, err := resolver("alpha")
+	r := resolver("alpha")
+	got := resultValue[string](r)
 	core.AssertEqual(t, "", got)
-	core.AssertErrorIs(t, err, want)
+	core.AssertErrorIs(t, resultError(r), want)
 }

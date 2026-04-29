@@ -158,10 +158,10 @@ func userCorePath(parts ...string) string {
 // ResolveConfigManifest loads the nearest .core/config.yaml found while
 // walking upward from start. Unlike the other manifest helpers, config.yaml is
 // also valid at ~/.core/config.yaml, so it uses the broader manifest search.
-func ResolveConfigManifest(medium coreio.Medium, start string) (*Config, error) {
+func ResolveConfigManifest(medium coreio.Medium, start string) core.Result {
 	path := FindManifest(medium, start, FileConfig)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveConfigManifest", "no config manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveConfigManifest", "no config manifest could be detected", nil))
 	}
 	return New(WithMedium(medium), WithPath(path))
 }
@@ -178,17 +178,17 @@ func FindBuildManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveBuildManifest loads the nearest project-local .core/build.yaml.
-func ResolveBuildManifest(medium coreio.Medium, start string) (*BuildManifest, error) {
+func ResolveBuildManifest(medium coreio.Medium, start string) core.Result {
 	path := FindBuildManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveBuildManifest", "no build manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveBuildManifest", "no build manifest could be detected", nil))
 	}
 
 	var build BuildManifest
-	if err := LoadManifest(medium, path, &build); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &build); !r.OK {
+		return r
 	}
-	return &build, nil
+	return core.Ok(&build)
 }
 
 // FindTestManifest returns the nearest project-local .core/test.yaml.
@@ -198,27 +198,30 @@ func FindTestManifest(medium coreio.Medium, start string) string {
 
 // ResolveTestManifest loads the nearest project-local .core/test.yaml or falls
 // back to auto-detecting a test command from the repository contents.
-func ResolveTestManifest(medium coreio.Medium, start string) (*TestManifest, error) {
+func ResolveTestManifest(medium coreio.Medium, start string) core.Result {
 	if path := FindTestManifest(medium, start); path != "" {
 		var test TestManifest
-		if err := LoadManifest(medium, path, &test); err != nil {
-			return nil, err
+		if r := LoadManifest(medium, path, &test); !r.OK {
+			return r
 		}
-		return &test, nil
+		return core.Ok(&test)
 	}
 
-	if command, ok, err := detectTestCommand(medium, start); err != nil {
-		return nil, err
-	} else if ok {
-		return &TestManifest{
+	detectedResult := detectTestCommand(medium, start)
+	if !detectedResult.OK {
+		return detectedResult
+	}
+	detected := detectedResult.Value.(detectedTestCommand)
+	if detected.Found {
+		return core.Ok(&TestManifest{
 			Version: 1,
 			Commands: []TestCommand{
-				{Name: "test", Run: command},
+				{Name: "test", Run: detected.Command},
 			},
-		}, nil
+		})
 	}
 
-	return nil, coreerr.E(callerResolveTestManifest, "no test command could be detected", nil)
+	return core.Fail(coreerr.E(callerResolveTestManifest, "no test command could be detected", nil))
 }
 
 // FindReleaseManifest returns the nearest project-local .core/release.yaml.
@@ -227,17 +230,17 @@ func FindReleaseManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveReleaseManifest loads the nearest project-local .core/release.yaml.
-func ResolveReleaseManifest(medium coreio.Medium, start string) (*ReleaseManifest, error) {
+func ResolveReleaseManifest(medium coreio.Medium, start string) core.Result {
 	path := FindReleaseManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveReleaseManifest", "no release manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveReleaseManifest", "no release manifest could be detected", nil))
 	}
 
 	var release ReleaseManifest
-	if err := LoadManifest(medium, path, &release); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &release); !r.OK {
+		return r
 	}
-	return &release, nil
+	return core.Ok(&release)
 }
 
 // FindRunManifest returns the nearest project-local .core/run.yaml.
@@ -246,17 +249,17 @@ func FindRunManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveRunManifest loads the nearest project-local .core/run.yaml.
-func ResolveRunManifest(medium coreio.Medium, start string) (*RunManifest, error) {
+func ResolveRunManifest(medium coreio.Medium, start string) core.Result {
 	path := FindRunManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveRunManifest", "no run manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveRunManifest", "no run manifest could be detected", nil))
 	}
 
 	var run RunManifest
-	if err := LoadManifest(medium, path, &run); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &run); !r.OK {
+		return r
 	}
-	return &run, nil
+	return core.Ok(&run)
 }
 
 // FindViewManifest returns the nearest project-local .core/view.yaml.
@@ -265,17 +268,17 @@ func FindViewManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveViewManifest loads the nearest project-local .core/view.yaml.
-func ResolveViewManifest(medium coreio.Medium, start string) (*ViewManifest, error) {
+func ResolveViewManifest(medium coreio.Medium, start string) core.Result {
 	path := FindViewManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveViewManifest", "no view manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveViewManifest", "no view manifest could be detected", nil))
 	}
 
 	var view ViewManifest
-	if err := LoadManifest(medium, path, &view); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &view); !r.OK {
+		return r
 	}
-	return &view, nil
+	return core.Ok(&view)
 }
 
 // FindPackageManifest returns the nearest project-local .core/manifest.yaml.
@@ -284,17 +287,17 @@ func FindPackageManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolvePackageManifest loads the nearest project-local .core/manifest.yaml.
-func ResolvePackageManifest(medium coreio.Medium, start string) (*PackageManifest, error) {
+func ResolvePackageManifest(medium coreio.Medium, start string) core.Result {
 	path := FindPackageManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolvePackageManifest", "no package manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolvePackageManifest", "no package manifest could be detected", nil))
 	}
 
 	var pkg PackageManifest
-	if err := LoadManifest(medium, path, &pkg); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &pkg); !r.OK {
+		return r
 	}
-	return &pkg, nil
+	return core.Ok(&pkg)
 }
 
 // FindAgentManifest returns the user-global ~/.core/agent.yaml when it exists.
@@ -307,17 +310,17 @@ func FindAgentManifest(medium coreio.Medium) string {
 // ResolveAgentManifest loads the user-global ~/.core/agent.yaml.
 //
 //	agent, err := config.ResolveAgentManifest(io.Local)
-func ResolveAgentManifest(medium coreio.Medium) (*AgentManifest, error) {
+func ResolveAgentManifest(medium coreio.Medium) core.Result {
 	path := FindAgentManifest(medium)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveAgentManifest", "no agent manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveAgentManifest", "no agent manifest could be detected", nil))
 	}
 
 	var agent AgentManifest
-	if err := LoadManifest(medium, path, &agent); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &agent); !r.OK {
+		return r
 	}
-	return &agent, nil
+	return core.Ok(&agent)
 }
 
 // FindZoneManifest returns the user-global ~/.core/zone.yaml when it exists.
@@ -330,17 +333,17 @@ func FindZoneManifest(medium coreio.Medium) string {
 // ResolveZoneManifest loads the user-global ~/.core/zone.yaml.
 //
 //	zone, err := config.ResolveZoneManifest(io.Local)
-func ResolveZoneManifest(medium coreio.Medium) (*ZoneManifest, error) {
+func ResolveZoneManifest(medium coreio.Medium) core.Result {
 	path := FindZoneManifest(medium)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveZoneManifest", "no zone manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveZoneManifest", "no zone manifest could be detected", nil))
 	}
 
 	var zone ZoneManifest
-	if err := LoadManifest(medium, path, &zone); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &zone); !r.OK {
+		return r
 	}
-	return &zone, nil
+	return core.Ok(&zone)
 }
 
 // FindWorkspaceManifest returns the nearest project-local .core/workspace.yaml.
@@ -349,17 +352,17 @@ func FindWorkspaceManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveWorkspaceManifest loads the nearest project-local .core/workspace.yaml.
-func ResolveWorkspaceManifest(medium coreio.Medium, start string) (*WorkspaceManifest, error) {
+func ResolveWorkspaceManifest(medium coreio.Medium, start string) core.Result {
 	path := FindWorkspaceManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveWorkspaceManifest", "no workspace manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveWorkspaceManifest", "no workspace manifest could be detected", nil))
 	}
 
 	var ws WorkspaceManifest
-	if err := LoadManifest(medium, path, &ws); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &ws); !r.OK {
+		return r
 	}
-	return &ws, nil
+	return core.Ok(&ws)
 }
 
 // FindIDEManifest returns the nearest project-local .core/ide.yaml.
@@ -368,17 +371,17 @@ func FindIDEManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveIDEManifest loads the nearest project-local .core/ide.yaml.
-func ResolveIDEManifest(medium coreio.Medium, start string) (*IDEManifest, error) {
+func ResolveIDEManifest(medium coreio.Medium, start string) core.Result {
 	path := FindIDEManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveIDEManifest", "no ide manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveIDEManifest", "no ide manifest could be detected", nil))
 	}
 
 	var ide IDEManifest
-	if err := LoadManifest(medium, path, &ide); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &ide); !r.OK {
+		return r
 	}
-	return &ide, nil
+	return core.Ok(&ide)
 }
 
 // FindLinuxKitDirectory returns the nearest project-local .core/linuxkit/
@@ -411,17 +414,17 @@ func FindLinuxKitManifest(medium coreio.Medium, start string) string {
 // the .core registry but intentionally stay schema-light in this package.
 //
 //	lk, err := config.ResolveLinuxKitManifest(io.Local, cwd)
-func ResolveLinuxKitManifest(medium coreio.Medium, start string) (map[string]any, error) {
+func ResolveLinuxKitManifest(medium coreio.Medium, start string) core.Result {
 	path := FindLinuxKitManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveLinuxKitManifest", "no linuxkit manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveLinuxKitManifest", "no linuxkit manifest could be detected", nil))
 	}
 
-	manifest, err := Load(medium, path)
-	if err != nil {
-		return nil, err
+	manifestResult := Load(medium, path)
+	if !manifestResult.OK {
+		return manifestResult
 	}
-	return manifest, nil
+	return manifestResult
 }
 
 // findProjectDirectory returns the nearest project-local .core/{name}/
@@ -545,23 +548,23 @@ func FindWorkspaceRegistryManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolveReposManifest loads the workspace-root .core/repos.yaml.
-func ResolveReposManifest(medium coreio.Medium, start string) (*ReposManifest, error) {
+func ResolveReposManifest(medium coreio.Medium, start string) core.Result {
 	path := FindReposManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolveReposManifest", "no repos manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolveReposManifest", "no repos manifest could be detected", nil))
 	}
 
 	var repos ReposManifest
-	if err := LoadManifest(medium, path, &repos); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &repos); !r.OK {
+		return r
 	}
-	return &repos, nil
+	return core.Ok(&repos)
 }
 
 // ResolveWorkspaceRegistryManifest loads the workspace-root .core/repos.yaml.
 // It mirrors ResolveReposManifest for callers that prefer the RFC-aligned
 // workspace-registry naming.
-func ResolveWorkspaceRegistryManifest(medium coreio.Medium, start string) (*ReposManifest, error) {
+func ResolveWorkspaceRegistryManifest(medium coreio.Medium, start string) core.Result {
 	return ResolveReposManifest(medium, start)
 }
 
@@ -571,15 +574,15 @@ func FindPHPManifest(medium coreio.Medium, start string) string {
 }
 
 // ResolvePHPManifest loads the nearest project-local .core/php.yaml.
-func ResolvePHPManifest(medium coreio.Medium, start string) (*PHPManifest, error) {
+func ResolvePHPManifest(medium coreio.Medium, start string) core.Result {
 	path := FindPHPManifest(medium, start)
 	if path == "" {
-		return nil, coreerr.E("config.ResolvePHPManifest", "no php manifest could be detected", nil)
+		return core.Fail(coreerr.E("config.ResolvePHPManifest", "no php manifest could be detected", nil))
 	}
 
 	var php PHPManifest
-	if err := LoadManifest(medium, path, &php); err != nil {
-		return nil, err
+	if r := LoadManifest(medium, path, &php); !r.OK {
+		return r
 	}
-	return &php, nil
+	return core.Ok(&php)
 }

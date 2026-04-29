@@ -18,14 +18,14 @@ func exampleDiscoveryMedium() (*coreio.MockMedium, string) {
 }
 
 func ExampleDiscover() {
-	cfg, err := Discover(WithMedium(coreio.NewMockMedium()))
+	cfg, err := configResult(Discover(WithMedium(coreio.NewMockMedium())))
 	core.Println(err == nil && cfg != nil)
 	// Output: true
 }
 
 func ExampleDiscoverFrom() {
 	m, child := exampleDiscoveryMedium()
-	cfg, err := DiscoverFrom(child, WithMedium(m))
+	cfg, err := configResult(DiscoverFrom(child, WithMedium(m)))
 	var name string
 	_ = cfg.Get("app.name", &name)
 	core.Println(err == nil, name)

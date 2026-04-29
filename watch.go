@@ -22,38 +22,46 @@ type fileWatcher struct {
 }
 
 type watchBackend interface {
-	Add(string) error
-	Close() error
+	Add(string) core.Result
+	Close() core.Result
 	Events() <-chan fsnotify.Event
-	Errors() <-chan error
+	Errors() <-chan core.Result
 }
 
 type fsnotifyBackend struct {
-	w *fsnotify.Watcher
+	w      *fsnotify.Watcher
+	errors <-chan core.Result
 }
 
-func (b fsnotifyBackend) Add(path string) configError {
-	return b.w.Add(path)
+func (b fsnotifyBackend) Add(path string) core.Result {
+	return core.ResultOf(nil, b.w.Add(path))
 }
 
-func (b fsnotifyBackend) Close() configError {
-	return b.w.Close()
+func (b fsnotifyBackend) Close() core.Result {
+	return core.ResultOf(nil, b.w.Close())
 }
 
 func (b fsnotifyBackend) Events() <-chan fsnotify.Event {
 	return b.w.Events
 }
 
-func (b fsnotifyBackend) Errors() <-chan (error) {
-	return b.w.Errors
+func (b fsnotifyBackend) Errors() <-chan core.Result {
+	return b.errors
 }
 
-var newWatchBackend = func() (watchBackend, error) {
+var newWatchBackend = func() core.Result {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, err
+		return core.Fail(err)
 	}
-	return fsnotifyBackend{w: w}, nil
+	errors := make(chan core.Result)
+	go func() {
+		defer close(errors)
+		for err := range w.Errors {
+			errors <- core.Fail(err)
+		}
+	}()
+	return core.Ok(fsnotifyBackend{w: w, errors: errors})
 }
 
 // Watch starts monitoring the config file for changes. When the file is modified,
@@ -63,34 +71,36 @@ var newWatchBackend = func() (watchBackend, error) {
 //
 //	cfg.Watch()
 //	defer cfg.StopWatch()
-func (c *Config) Watch() configError {
+func (c *Config) Watch() core.Result {
 	c.mu.Lock()
 	if c.watcher != nil {
 		c.mu.Unlock()
-		return nil
+		return core.Ok(nil)
 	}
-	w, err := newWatchBackend()
-	if err != nil {
+	wResult := newWatchBackend()
+	if !wResult.OK {
 		c.mu.Unlock()
-		return coreerr.E("config.Watch", "failed to create watcher", err)
+		return core.Fail(coreerr.E("config.Watch", "failed to create watcher", resultCause(wResult).(error)))
 	}
+	w := wResult.Value.(watchBackend)
 	path := c.path
 	fw := &fileWatcher{w: w, stop: make(chan struct{})}
 	c.watcher = fw
 	c.mu.Unlock()
 
-	if err := w.Add(path); err != nil {
-		if closeErr := w.Close(); closeErr != nil {
-			err = core.ErrorJoin(err, closeErr)
+	if r := w.Add(path); !r.OK {
+		watchErr := resultCause(r).(error)
+		if closeResult := w.Close(); !closeResult.OK {
+			watchErr = core.ErrorJoin(watchErr, resultCause(closeResult).(error))
 		}
 		c.mu.Lock()
 		c.watcher = nil
 		c.mu.Unlock()
-		return coreerr.E("config.Watch", "failed to watch path: "+path, err)
+		return core.Fail(coreerr.E("config.Watch", "failed to watch path: "+path, watchErr))
 	}
 
 	go c.watchLoop(fw)
-	return nil
+	return core.Ok(nil)
 }
 
 // StopWatch stops the filesystem watcher if one is running.
@@ -108,7 +118,7 @@ func (c *Config) StopWatch() {
 	if !fw.stopped {
 		fw.stopped = true
 		close(fw.stop)
-		if err := fw.w.Close(); err != nil {
+		if r := fw.w.Close(); !r.OK {
 			// StopWatch is best-effort; callers cannot act on watcher close errors.
 		}
 	}
@@ -142,7 +152,7 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 				// Best-effort for atomic-save editors: the replacement file may
 				// not exist during the swap. There is no automatic retry loop;
 				// another fsnotify event is required to attempt Add again.
-				if err := fw.w.Add(path); err != nil {
+				if r := fw.w.Add(path); !r.OK {
 					// The current filesystem event still requests a reload below.
 				}
 			}
@@ -207,7 +217,7 @@ func resetDebounceTimer(timer *time.Timer) {
 func (c *Config) reloadAndNotify() {
 	before := c.snapshotAll()
 
-	if err := c.loadFile(c.medium, c.path, false); err != nil {
+	if r := c.loadFile(c.medium, c.path, false); !r.OK {
 		return
 	}
 

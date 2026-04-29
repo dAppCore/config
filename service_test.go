@@ -24,7 +24,7 @@ func TestService_OnStartup_Good(t *core.T) {
 	core.AssertTrue(t, result.OK)
 
 	var name string
-	core.AssertNoError(t, svc.Get("app.name", &name))
+	core.AssertNoError(t, resultError(svc.Get("app.name", &name)))
 	core.AssertEqual(t, "svc", name)
 }
 
@@ -122,11 +122,11 @@ func TestService_OnStartup_MergesProjectOverGlobal_Good(t *core.T) {
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
 	var name string
-	core.AssertNoError(t, svc.Get("app.name", &name))
+	core.AssertNoError(t, resultError(svc.Get("app.name", &name)))
 	core.AssertEqual(t, "project", name)
 
 	var ollamaURL string
-	core.AssertNoError(t, svc.Get("services.ollama.url", &ollamaURL))
+	core.AssertNoError(t, resultError(svc.Get("services.ollama.url", &ollamaURL)))
 	core.AssertEqual(t, "http://global", ollamaURL)
 }
 
@@ -153,7 +153,7 @@ func TestService_Get_Bad(t *core.T) {
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{}),
 	}
 	var v string
-	err := svc.Get("anything", &v)
+	err := resultError(svc.Get("anything", &v))
 	core.AssertError(t, err)
 }
 
@@ -186,7 +186,7 @@ func TestService_NewConfigServiceWith_Good(t *core.T) {
 	}
 
 	var name string
-	core.AssertNoError(t, svc.Get("app.name", &name))
+	core.AssertNoError(t, resultError(svc.Get("app.name", &name)))
 	core.AssertEqual(t, "custom", name)
 }
 
@@ -230,11 +230,11 @@ func TestService_LoadFile_RejectsUnsafePaths(t *core.T) {
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
-	err := svc.LoadFile(m, "../../etc/passwd")
+	err := resultError(svc.LoadFile(m, "../../etc/passwd"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "path traversal rejected")
 
-	err = svc.LoadFile(m, "/etc/passwd")
+	err = resultError(svc.LoadFile(m, "/etc/passwd"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "absolute config paths are not allowed")
 }
@@ -252,17 +252,17 @@ func TestService_Set_Good(t *core.T) {
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
-	core.AssertNoError(t, svc.Set("dev.editor", "vim"))
+	core.AssertNoError(t, resultError(svc.Set("dev.editor", "vim")))
 
 	var editor string
-	core.AssertNoError(t, svc.Get("dev.editor", &editor))
+	core.AssertNoError(t, resultError(svc.Get("dev.editor", &editor)))
 	core.AssertEqual(t, "vim", editor)
 }
 
 func TestService_Set_Bad(t *core.T) {
 	svc := &Service{}
 
-	err := svc.Set("dev.editor", "vim")
+	err := resultError(svc.Set("dev.editor", "vim"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "config not loaded")
 }
@@ -279,9 +279,9 @@ func TestService_Commit_Good(t *core.T) {
 		}),
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
-	core.AssertNoError(t, svc.Set("dev.editor", "vim"))
+	core.AssertNoError(t, resultError(svc.Set("dev.editor", "vim")))
 
-	core.AssertNoError(t, svc.Commit())
+	core.AssertNoError(t, resultError(svc.Commit()))
 	body, err := m.Read("/tmp/svc/config.yaml")
 	core.AssertNoError(t, err)
 	core.AssertContains(t, body, "editor: vim")
@@ -290,7 +290,7 @@ func TestService_Commit_Good(t *core.T) {
 func TestService_Commit_Bad(t *core.T) {
 	svc := &Service{}
 
-	err := svc.Commit()
+	err := resultError(svc.Commit())
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "config not loaded")
 }
@@ -309,17 +309,17 @@ func TestService_LoadFile_Good(t *core.T) {
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
-	core.AssertNoError(t, svc.LoadFile(m, ".core/override.yaml"))
+	core.AssertNoError(t, resultError(svc.LoadFile(m, ".core/override.yaml")))
 
 	var shell string
-	core.AssertNoError(t, svc.Get("dev.shell", &shell))
+	core.AssertNoError(t, resultError(svc.Get("dev.shell", &shell)))
 	core.AssertEqual(t, "zsh", shell)
 }
 
 func TestService_LoadFile_Bad_NoConfig(t *core.T) {
 	svc := &Service{}
 
-	err := svc.LoadFile(coreio.NewMockMedium(), ".core/override.yaml")
+	err := resultError(svc.LoadFile(coreio.NewMockMedium(), ".core/override.yaml"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "config not loaded")
 }
@@ -337,7 +337,7 @@ func TestService_LoadFile_Ugly(t *core.T) {
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
-	err := svc.LoadFile(m, core.PathJoin("tmp", "svc", "config.yaml"))
+	err := resultError(svc.LoadFile(m, core.PathJoin("tmp", "svc", "config.yaml")))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "config paths must remain under .core/")
 }
@@ -363,7 +363,7 @@ func TestService_LoadFile_RejectsSymlinkedCore(t *core.T) {
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
-	err := svc.LoadFile(coreio.Local, ".core/override.yaml")
+	err := resultError(svc.LoadFile(coreio.Local, ".core/override.yaml"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "symlinked .core directories are not allowed")
 }
@@ -378,7 +378,7 @@ func TestService_resolveValidatedServiceLoadPath_Good(t *core.T) {
 	testWriteFile(t, configPath, []byte("app:\n  name: svc\n"), 0600)
 	testWriteFile(t, overridePath, []byte("dev:\n  editor: vim\n"), 0600)
 
-	resolved, err := resolveValidatedServiceLoadPath(configPath, ".core/override.yaml")
+	resolved, err := stringResult(resolveValidatedServiceLoadPath(configPath, ".core/override.yaml"))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, overridePath, resolved)
 }
@@ -402,7 +402,7 @@ func TestService_resolveValidatedServiceLoadPath_Bad(t *core.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *core.T) {
-			resolved, err := resolveValidatedServiceLoadPath(configPath, tc.path)
+			resolved, err := stringResult(resolveValidatedServiceLoadPath(configPath, tc.path))
 			core.AssertEmpty(t, resolved)
 			core.AssertError(t, err)
 			core.AssertContains(t, err.Error(), tc.want)
@@ -423,7 +423,7 @@ func TestService_resolveValidatedServiceLoadPath_Ugly(t *core.T) {
 	testWriteFile(t, configPath, []byte("app:\n  name: svc\n"), 0600)
 	testSymlink(t, externalCore, core.PathJoin(projectRoot, ".core"))
 
-	resolved, err := resolveValidatedServiceLoadPath(configPath, ".core/override.yaml")
+	resolved, err := stringResult(resolveValidatedServiceLoadPath(configPath, ".core/override.yaml"))
 	core.AssertEmpty(t, resolved)
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "symlinked .core directories are not allowed")
@@ -446,7 +446,7 @@ func TestService_resolveServiceLoadPath_Good(t *core.T) {
 	absCorePath := testPathAbs(t, coreDir)
 	absCandidate := testPathAbs(t, symlinkFile)
 
-	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(symlinkFile, absCorePath, absCandidate)
+	resolvedCandidate, resolvedCore, err := serviceLoadPathResult(resolveServiceLoadPath(symlinkFile, absCorePath, absCandidate))
 	core.AssertNoError(t, err)
 	realCandidate := testPathEvalSymlinks(t, realFile)
 	realCore := testPathEvalSymlinks(t, coreDir)
@@ -469,7 +469,7 @@ func TestService_resolveServiceLoadPath_Bad(t *core.T) {
 	absCorePath := testPathAbs(t, core.PathJoin(projectRoot, ".core"))
 	absCandidate := testPathAbs(t, candidatePath)
 
-	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(candidatePath, absCorePath, absCandidate)
+	resolvedCandidate, resolvedCore, err := serviceLoadPathResult(resolveServiceLoadPath(candidatePath, absCorePath, absCandidate))
 	core.AssertEmpty(t, resolvedCandidate)
 	core.AssertEmpty(t, resolvedCore)
 	core.AssertError(t, err)
@@ -489,7 +489,7 @@ func TestService_OnShutdown_StopsWatcher_Good(t *core.T) {
 		}),
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
-	core.AssertNoError(t, svc.Config().Watch())
+	core.AssertNoError(t, resultError(svc.Config().Watch()))
 	core.AssertNotNil(t, svc.Config().watcher)
 
 	result := svc.OnShutdown(context.Background())
@@ -497,7 +497,7 @@ func TestService_OnShutdown_StopsWatcher_Good(t *core.T) {
 	core.AssertNil(t, svc.Config().watcher)
 }
 
-func TestServiceRegistersActionsAndCommandsGood(t *core.T) {
+func TestService_Service_OnStartup_RegistersActionsAndCommands_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
 	m.Files["/tmp/svc/.core/loaded.yaml"] = "dev:\n  editor: nano\n"
@@ -585,7 +585,7 @@ func TestServiceReadCommandsRequireEntitlement(t *core.T) {
 	}
 }
 
-func TestServiceReadActionsRequireEntitlementBad(t *core.T) {
+func TestService_Service_OnStartup_ReadActionsRequireEntitlement_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
 
@@ -655,10 +655,14 @@ func TestService_NewConfigServiceWith_Ugly(t *core.T) {
 	core.AssertEqual(t, "/ax7/config.yaml", svc.Options().Path)
 }
 
-func TestServiceServiceOnStartupGood(t *core.T) {
-	svc, _, _ := axServiceFixture(t)
+func TestService_Service_OnStartup_LoadsConfig_Good(t *core.T) {
+	m := coreio.NewMockMedium()
+	path := "/ax7/service/config.yaml"
+	m.Files[path] = "app:\n  name: svc\n"
+	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{Path: path, Medium: m})}
+	core.RequireTrue(t, svc.OnStartup(context.Background()).OK)
 	var got string
-	err := svc.Get("app.name", &got)
+	err := resultError(svc.Get("app.name", &got))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "svc", got)
 }
@@ -704,14 +708,14 @@ func TestService_Service_OnShutdown_Ugly(t *core.T) {
 func TestService_Service_Get_Good(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
 	var got string
-	err := svc.Get("app.name", &got)
+	err := resultError(svc.Get("app.name", &got))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "svc", got)
 }
 
 func TestService_Service_Get_Bad(t *core.T) {
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{})}
-	err := svc.Get("missing", new(string))
+	err := resultError(svc.Get("missing", new(string)))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), errConfigNotLoaded)
 }
@@ -719,43 +723,43 @@ func TestService_Service_Get_Bad(t *core.T) {
 func TestService_Service_Get_Ugly(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
 	var got map[string]any
-	err := svc.Get("", &got)
+	err := resultError(svc.Get("", &got))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "svc", got["app"].(map[string]any)["name"])
 }
 
 func TestService_Service_Set_Good(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
-	err := svc.Set("dev.editor", "vim")
+	err := resultError(svc.Set("dev.editor", "vim"))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "vim", configValues(svc.Config())["dev.editor"])
 }
 
 func TestService_Service_Set_Bad(t *core.T) {
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{})}
-	err := svc.Set("dev.editor", "vim")
+	err := resultError(svc.Set("dev.editor", "vim"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), errConfigNotLoaded)
 }
 
 func TestService_Service_Set_Ugly(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
-	err := svc.Set("", "root")
+	err := resultError(svc.Set("", "root"))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "root", svc.Config().file.Get(""))
 }
 
 func TestService_Service_Commit_Good(t *core.T) {
 	svc, m, path := axServiceFixture(t)
-	core.RequireNoError(t, svc.Set("dev.editor", "vim"))
-	err := svc.Commit()
+	core.RequireNoError(t, resultError(svc.Set("dev.editor", "vim")))
+	err := resultError(svc.Commit())
 	core.AssertNoError(t, err)
 	core.AssertTrue(t, m.Exists(path))
 }
 
 func TestService_Service_Commit_Bad(t *core.T) {
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{})}
-	err := svc.Commit()
+	err := resultError(svc.Commit())
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), errConfigNotLoaded)
 }
@@ -763,7 +767,7 @@ func TestService_Service_Commit_Bad(t *core.T) {
 func TestService_Service_Commit_Ugly(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
 	svc.Config().path = "/ax7/config.json"
-	err := svc.Commit()
+	err := resultError(svc.Commit())
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "unsupported config file type")
 }
@@ -771,21 +775,21 @@ func TestService_Service_Commit_Ugly(t *core.T) {
 func TestService_Service_LoadFile_Good(t *core.T) {
 	svc, m, _ := axServiceFixture(t)
 	core.RequireNoError(t, m.Write("/ax7/service/.core/override.yaml", "dev:\n  shell: zsh\n"))
-	err := svc.LoadFile(m, ".core/override.yaml")
+	err := resultError(svc.LoadFile(m, ".core/override.yaml"))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "zsh", configValues(svc.Config())["dev.shell"])
 }
 
 func TestService_Service_LoadFile_Bad(t *core.T) {
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{})}
-	err := svc.LoadFile(coreio.NewMockMedium(), ".core/override.yaml")
+	err := resultError(svc.LoadFile(coreio.NewMockMedium(), ".core/override.yaml"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), errConfigNotLoaded)
 }
 
 func TestService_Service_LoadFile_Ugly(t *core.T) {
 	svc, m, _ := axServiceFixture(t)
-	err := svc.LoadFile(m, "../escape.yaml")
+	err := resultError(svc.LoadFile(m, "../escape.yaml"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "path traversal")
 }
@@ -804,7 +808,7 @@ func TestService_Service_Config_Bad(t *core.T) {
 
 func TestService_Service_Config_Ugly(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
-	replacement, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/replacement.yaml"))
+	replacement, err := configResult(New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/replacement.yaml")))
 	core.RequireNoError(t, err)
 	svc.config = replacement
 	core.AssertSame(t, replacement, svc.Config())

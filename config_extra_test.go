@@ -28,27 +28,27 @@ func (s *mockConfigStore) Set(bucket, key, value string) error {
 
 func TestConfig_MergeFrom_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	base, err := New(WithMedium(m), WithPath("/base.yaml"))
+	base, err := configResult(New(WithMedium(m), WithPath("/base.yaml")))
 	core.AssertNoError(t, err)
-	core.AssertNoError(t, base.Set("app.name", "base"))
+	core.AssertNoError(t, resultError(base.Set("app.name", "base")))
 
-	src, err := New(WithMedium(m), WithPath("/src.yaml"))
+	src, err := configResult(New(WithMedium(m), WithPath("/src.yaml")))
 	core.AssertNoError(t, err)
-	core.AssertNoError(t, src.Set("app.name", "src"))
-	core.AssertNoError(t, src.Set("dev.editor", "vim"))
+	core.AssertNoError(t, resultError(src.Set("app.name", "src")))
+	core.AssertNoError(t, resultError(src.Set("dev.editor", "vim")))
 
 	base.MergeFrom(src)
 
 	var name, editor string
-	core.AssertNoError(t, base.Get("app.name", &name))
+	core.AssertNoError(t, resultError(base.Get("app.name", &name)))
 	core.AssertEqual(t, "base", name) // closest wins — base not overridden
-	core.AssertNoError(t, base.Get("dev.editor", &editor))
+	core.AssertNoError(t, resultError(base.Get("dev.editor", &editor)))
 	core.AssertEqual(t, "vim", editor) // gap filled from src
 }
 
 func TestConfig_MergeFrom_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	base, err := New(WithMedium(m), WithPath("/base.yaml"))
+	base, err := configResult(New(WithMedium(m), WithPath("/base.yaml")))
 	core.AssertNoError(t, err)
 
 	// Nil source is a no-op, not a panic.
@@ -57,7 +57,7 @@ func TestConfig_MergeFrom_Bad(t *core.T) {
 
 func TestConfig_OnChange_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/cb.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/cb.yaml")))
 	core.AssertNoError(t, err)
 
 	var mu sync.Mutex
@@ -68,7 +68,7 @@ func TestConfig_OnChange_Good(t *core.T) {
 		seen[key] = value
 	})
 
-	core.AssertNoError(t, cfg.Set("dev.editor", "vim"))
+	core.AssertNoError(t, resultError(cfg.Set("dev.editor", "vim")))
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -77,12 +77,12 @@ func TestConfig_OnChange_Good(t *core.T) {
 
 func TestConfig_OnChange_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/cb.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/cb.yaml")))
 	core.AssertNoError(t, err)
 
 	// Nil callback is silently ignored, not stored.
 	cfg.OnChange(nil)
-	core.AssertNoError(t, cfg.Set("dev.editor", "vim"))
+	core.AssertNoError(t, resultError(cfg.Set("dev.editor", "vim")))
 }
 
 func TestConfig_Set_BroadcastsConfigChanged_Good(t *core.T) {
@@ -100,10 +100,10 @@ func TestConfig_Set_BroadcastsConfigChanged_Good(t *core.T) {
 		return core.Ok(nil)
 	})
 
-	cfg, err := New(WithMedium(m), WithPath("/b.yaml"), WithCore(c))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/b.yaml"), WithCore(c)))
 	core.AssertNoError(t, err)
 
-	core.AssertNoError(t, cfg.Set("dev.editor", "vim"))
+	core.AssertNoError(t, resultError(cfg.Set("dev.editor", "vim")))
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -115,7 +115,7 @@ func TestConfig_Set_BroadcastsConfigChanged_Good(t *core.T) {
 
 func TestConfig_Medium_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/medium.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/medium.yaml")))
 	core.AssertNoError(t, err)
 	core.AssertSame(t, m, cfg.Medium())
 }
@@ -124,13 +124,13 @@ func TestConfig_SetDefault_Good(t *core.T) {
 	// SetDefault installs a runtime default — visible only while no other
 	// source has set the key.
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/d.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/d.yaml")))
 	core.AssertNoError(t, err)
 
 	cfg.SetDefault("feature.beta", true)
 
 	var beta bool
-	core.AssertNoError(t, cfg.Get("feature.beta", &beta))
+	core.AssertNoError(t, resultError(cfg.Get("feature.beta", &beta)))
 	core.AssertTrue(t, beta)
 }
 
@@ -150,7 +150,7 @@ func TestConfig_SetDefault_Ugly(t *core.T) {
 		return core.Ok(nil)
 	})
 
-	cfg, err := New(WithMedium(m), WithPath("/d.yaml"), WithCore(c))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/d.yaml"), WithCore(c)))
 	core.AssertNoError(t, err)
 
 	cfg.SetDefault("feature.beta", true)
@@ -165,15 +165,15 @@ func TestConfig_WithDefaults_FileWins_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/defaults.yaml"] = "dev:\n  editor: nano\n"
 
-	cfg, err := New(
+	cfg, err := configResult(New(
 		WithMedium(m),
 		WithPath("/defaults.yaml"),
 		WithDefaults(map[string]any{"dev.editor": "vim"}),
-	)
+	))
 	core.AssertNoError(t, err)
 
 	var editor string
-	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
+	core.AssertNoError(t, resultError(cfg.Get("dev.editor", &editor)))
 	core.AssertEqual(t, "nano", editor)
 }
 
@@ -182,7 +182,7 @@ func TestConfig_AttachCore_Good(t *core.T) {
 	// calls must broadcast ConfigChanged, even though the Config was created
 	// without WithCore.
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/attach.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/attach.yaml")))
 	core.AssertNoError(t, err)
 
 	c := core.New()
@@ -198,7 +198,7 @@ func TestConfig_AttachCore_Good(t *core.T) {
 	})
 
 	// Before AttachCore, Set() does not broadcast.
-	core.AssertNoError(t, cfg.Set("before.attach", "silent"))
+	core.AssertNoError(t, resultError(cfg.Set("before.attach", "silent")))
 	mu.Lock()
 	core.AssertEmpty(t, events)
 	mu.Unlock()
@@ -206,7 +206,7 @@ func TestConfig_AttachCore_Good(t *core.T) {
 	cfg.AttachCore(c)
 
 	// After AttachCore, Set() broadcasts.
-	core.AssertNoError(t, cfg.Set("after.attach", "noisy"))
+	core.AssertNoError(t, resultError(cfg.Set("after.attach", "noisy")))
 	mu.Lock()
 	defer mu.Unlock()
 	core.AssertGreaterOrEqual(t, len(events), 1)
@@ -218,20 +218,20 @@ func TestConfig_AttachCore_Ugly(t *core.T) {
 	// AttachCore is safe to call with nil — it simply leaves the Config in
 	// pre-attach state with no panics on subsequent Set() calls.
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath("/attach.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/attach.yaml")))
 	core.AssertNoError(t, err)
 
 	cfg.AttachCore(nil)
-	core.AssertNoError(t, cfg.Set("quiet", "ok"))
+	core.AssertNoError(t, resultError(cfg.Set("quiet", "ok")))
 }
 
-func TestConfigPersistToStoreGood(t *core.T) {
+func TestConfig_Config_Set_PersistToStore_Good(t *core.T) {
 	store := &mockConfigStore{}
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
+	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath("/store.yaml")))
 	core.AssertNoError(t, err)
 
-	core.AssertNoError(t, cfg.Set("app.name", "core"))
+	core.AssertNoError(t, resultError(cfg.Set("app.name", "core")))
 
 	core.AssertEqual(t, 1, store.calls)
 	core.AssertEqual(t, "config", store.bucket)
@@ -239,20 +239,20 @@ func TestConfigPersistToStoreGood(t *core.T) {
 	core.AssertEqual(t, "\"core\"", store.value)
 }
 
-func TestConfigPersistToStoreBad(t *core.T) {
+func TestConfig_Config_Set_PersistToStore_Bad(t *core.T) {
 	store := &mockConfigStore{failWith: core.NewError("store write failed")}
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
+	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath("/store.yaml")))
 	core.AssertNoError(t, err)
 
-	core.AssertNoError(t, cfg.Set("app.name", "core"))
+	core.AssertNoError(t, resultError(cfg.Set("app.name", "core")))
 	core.AssertEqual(t, 1, store.calls)
 }
 
-func TestConfigPersistToStoreUgly(t *core.T) {
+func TestConfig_persistToStore_Ugly(t *core.T) {
 	store := &mockConfigStore{}
 	m := coreio.NewMockMedium()
-	_, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
+	_, err := configResult(New(WithStore(store), WithMedium(m), WithPath("/store.yaml")))
 	core.AssertNoError(t, err)
 
 	core.AssertNotPanics(t, func() {

@@ -17,17 +17,17 @@ func TestDiscover_DiscoverFrom_Good(t *core.T) {
 	core.AssertNoError(t, m.Write(core.Path(repo, ".core", "config.yaml"), "dev:\n  editor: vim\napp:\n  name: repo\n"))
 	core.AssertNoError(t, m.Write(core.Path(sub, ".core", "config.yaml"), "app:\n  name: service\n"))
 
-	cfg, err := DiscoverFrom(sub, WithMedium(m), WithPath(core.Path(sub, ".core", "config.yaml")))
+	cfg, err := configResult(DiscoverFrom(sub, WithMedium(m), WithPath(core.Path(sub, ".core", "config.yaml"))))
 	core.AssertNoError(t, err)
 
 	// Closest (service) wins on app.name.
 	var name string
-	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
 	core.AssertEqual(t, "service", name)
 
 	// Parent fills the gap on dev.editor.
 	var editor string
-	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
+	core.AssertNoError(t, resultError(cfg.Get("dev.editor", &editor)))
 	core.AssertEqual(t, "vim", editor)
 }
 
@@ -38,7 +38,7 @@ func TestDiscover_DiscoverFrom_Bad(t *core.T) {
 	core.AssertNoError(t, m.EnsureDir(core.Path(root, ".core")))
 	core.AssertNoError(t, m.Write(core.Path(root, ".core", "config.yaml"), "invalid: [yaml"))
 
-	_, err := DiscoverFrom(root, WithMedium(m))
+	_, err := configResult(DiscoverFrom(root, WithMedium(m)))
 	core.AssertError(t, err)
 }
 
@@ -46,7 +46,7 @@ func TestDiscover_DiscoverFrom_Ugly(t *core.T) {
 	// Empty start directory — uses filesystem root walk, should still return a
 	// usable (but empty) config rather than panicking.
 	m := coreio.NewMockMedium()
-	cfg, err := DiscoverFrom("/nonexistent/path", WithMedium(m), WithPath("/nonexistent/path/config.yaml"))
+	cfg, err := configResult(DiscoverFrom("/nonexistent/path", WithMedium(m), WithPath("/nonexistent/path/config.yaml")))
 	core.AssertNoError(t, err)
 	core.AssertNotNil(t, cfg)
 }
@@ -101,7 +101,7 @@ func TestDiscover_FindManifest_Ugly(t *core.T) {
 	core.AssertEmpty(t, got)
 }
 
-func TestDiscoverEnvOverridesDiscoveredGood(t *core.T) {
+func TestDiscover_DiscoverFrom_EnvOverridesDiscovered_Good(t *core.T) {
 	// .core/ convention §5.3: "Env vars override everything."
 	// A discovered file value must be shadowed by CORE_CONFIG_* at Get time.
 	m := coreio.NewMockMedium()
@@ -114,15 +114,15 @@ func TestDiscoverEnvOverridesDiscoveredGood(t *core.T) {
 		"app:\n  name: fromfile\n",
 	))
 
-	cfg, err := DiscoverFrom(root, WithMedium(m))
+	cfg, err := configResult(DiscoverFrom(root, WithMedium(m)))
 	core.AssertNoError(t, err)
 
 	var name string
-	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
 	core.AssertEqual(t, "env-wins", name)
 }
 
-func TestDiscoverMergeFillsGapsGood(t *core.T) {
+func TestDiscover_DiscoverFrom_MergeFillsGaps_Good(t *core.T) {
 	// Project .core/ wins over global .core/ — global only fills gaps.
 	m := coreio.NewMockMedium()
 	repo := core.Path("merge-repo")
@@ -133,15 +133,15 @@ func TestDiscoverMergeFillsGapsGood(t *core.T) {
 		"app:\n  name: project\n",
 	))
 
-	cfg, err := DiscoverFrom(repo, WithMedium(m))
+	cfg, err := configResult(DiscoverFrom(repo, WithMedium(m)))
 	core.AssertNoError(t, err)
 
 	var name string
-	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
 	core.AssertEqual(t, "project", name)
 }
 
-func TestDiscoverCommitDoesNotLeakInheritedGood(t *core.T) {
+func TestDiscover_DiscoverFrom_CommitDoesNotLeakInherited_Good(t *core.T) {
 	// Regression guard: Commit on a discovered Config must only persist the
 	// owning file's keys + Set() calls, never inherited layer values — or
 	// global ~/.core/ secrets would spray into every project config.
@@ -155,12 +155,12 @@ func TestDiscoverCommitDoesNotLeakInheritedGood(t *core.T) {
 	))
 
 	commitPath := core.Path("commit-repo", "newcfg.yaml")
-	cfg, err := DiscoverFrom(repo, WithMedium(m), WithPath(commitPath))
+	cfg, err := configResult(DiscoverFrom(repo, WithMedium(m), WithPath(commitPath)))
 	core.AssertNoError(t, err)
 
 	// Set our own key then Commit; the inherited GLOBAL_ONLY must NOT appear.
-	core.AssertNoError(t, cfg.Set("dev.shell", "zsh"))
-	core.AssertNoError(t, cfg.Commit())
+	core.AssertNoError(t, resultError(cfg.Set("dev.shell", "zsh")))
+	core.AssertNoError(t, resultError(cfg.Commit()))
 
 	body, err := m.Read(commitPath)
 	core.AssertNoError(t, err)
@@ -179,11 +179,11 @@ func TestDiscover_DiscoverFrom_GlobalFallback_Good(t *core.T) {
 	core.AssertNoError(t, m.EnsureDir(core.Path(home, ".core")))
 	core.AssertNoError(t, m.Write(core.Path(home, ".core", "config.yaml"), "app:\n  name: global\n"))
 
-	cfg, err := DiscoverFrom(repo, WithMedium(m))
+	cfg, err := configResult(DiscoverFrom(repo, WithMedium(m)))
 	core.AssertNoError(t, err)
 
 	var name string
-	core.AssertNoError(t, cfg.Get("app.name", &name))
+	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
 	core.AssertEqual(t, "global", name)
 }
 
@@ -196,10 +196,10 @@ func TestDiscover_Discover_Good(t *core.T) {
 	testChdir(t, root)
 	t.Cleanup(func() { testChdir(t, previous) })
 
-	cfg, err := Discover()
+	cfg, err := configResult(Discover())
 	core.RequireNoError(t, err)
 	var got string
-	core.AssertNoError(t, cfg.Get("app.name", &got))
+	core.AssertNoError(t, resultError(cfg.Get("app.name", &got)))
 	core.AssertEqual(t, "discovered", got)
 }
 
@@ -212,7 +212,7 @@ func TestDiscover_Discover_Bad(t *core.T) {
 	testChdir(t, root)
 	t.Cleanup(func() { testChdir(t, previous) })
 
-	cfg, err := Discover()
+	cfg, err := configResult(Discover())
 	core.AssertNil(t, cfg)
 	core.AssertError(t, err)
 }
@@ -223,7 +223,7 @@ func TestDiscover_Discover_Ugly(t *core.T) {
 	testChdir(t, root)
 	t.Cleanup(func() { testChdir(t, previous) })
 
-	cfg, err := Discover()
+	cfg, err := configResult(Discover())
 	core.RequireNoError(t, err)
 	core.AssertError(t, cfg.Get("missing", new(string)))
 }

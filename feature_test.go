@@ -44,7 +44,7 @@ func TestFeature_SetFeature_Good(t *core.T) {
 	core.AssertNotContains(t, flags, "verbose-logging")
 }
 
-func TestFeatureFromConfigLoadsConfigGood(t *core.T) {
+func TestFeature_FeatureFromConfig_LoadsConfig_Good(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
 
@@ -53,7 +53,7 @@ func TestFeatureFromConfigLoadsConfigGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/cfg.yaml"] = "features:\n  dark-mode: true\n  beta-api: false\n"
 
-	cfg, err := New(WithMedium(m), WithPath("/cfg.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/cfg.yaml")))
 	core.AssertNoError(t, err)
 
 	core.AssertTrue(t, FeatureFromConfig(cfg, "dark-mode"))
@@ -61,7 +61,7 @@ func TestFeatureFromConfigLoadsConfigGood(t *core.T) {
 	core.AssertFalse(t, FeatureFromConfig(cfg, "never-declared"))
 }
 
-func TestFeatureFromConfigNilConfigBad(t *core.T) {
+func TestFeature_FeatureFromConfig_NilConfig_Bad(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
 
@@ -69,7 +69,7 @@ func TestFeatureFromConfigNilConfigBad(t *core.T) {
 	core.AssertFalse(t, FeatureFromConfig(nil, "dark-mode"))
 }
 
-func TestFeatureFromConfigEnvOverrideUgly(t *core.T) {
+func TestFeature_FeatureFromConfig_EnvOverride_Ugly(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
 
@@ -78,7 +78,7 @@ func TestFeatureFromConfigEnvOverrideUgly(t *core.T) {
 
 	m := coreio.NewMockMedium()
 	m.Files["/cfg.yaml"] = "features:\n  dark-mode: true\n"
-	cfg, err := New(WithMedium(m), WithPath("/cfg.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/cfg.yaml")))
 	core.AssertNoError(t, err)
 
 	core.AssertFalse(t, FeatureFromConfig(cfg, "dark-mode"))
@@ -90,7 +90,7 @@ func TestFeature_SetFeatureSource_Good(t *core.T) {
 
 	m := coreio.NewMockMedium()
 	m.Files["/cfg.yaml"] = "features:\n  dark-mode: true\n"
-	cfg, err := New(WithMedium(m), WithPath("/cfg.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/cfg.yaml")))
 	core.AssertNoError(t, err)
 
 	// Before registering the source, the flag is false (default registry).
@@ -115,7 +115,7 @@ func TestFeature_FeatureFromConfig_Good(t *core.T) {
 	t.Cleanup(resetFeatureRegistry)
 	m := coreio.NewMockMedium()
 	core.RequireNoError(t, m.Write("/ax7/features.yaml", "features:\n  dark-mode: true\n"))
-	cfg, err := New(WithMedium(m), WithPath("/ax7/features.yaml"))
+	cfg, err := configResult(New(WithMedium(m), WithPath("/ax7/features.yaml")))
 	core.RequireNoError(t, err)
 
 	got := FeatureFromConfig(cfg, "dark-mode")
@@ -140,9 +140,9 @@ func TestFeature_FeatureFromConfig_Ugly(t *core.T) {
 func TestFeature_SetFeatureSource_Ugly(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
-	first, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/first.yaml"), WithDefaults(map[string]any{"features.dark-mode": true}))
+	first, err := configResult(New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/first.yaml"), WithDefaults(map[string]any{"features.dark-mode": true})))
 	core.RequireNoError(t, err)
-	second, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/second.yaml"), WithDefaults(map[string]any{"features.dark-mode": false}))
+	second, err := configResult(New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/second.yaml"), WithDefaults(map[string]any{"features.dark-mode": false})))
 	core.RequireNoError(t, err)
 
 	SetFeatureSource(first)

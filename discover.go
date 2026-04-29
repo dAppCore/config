@@ -15,10 +15,10 @@ const callerDiscoverFrom = "config.DiscoverFrom"
 //
 //	cfg, err := config.Discover()
 //	cfg.Get("build.target", &target)  // merged from all .core/ dirs
-func Discover(opts ...Option) (*Config, error) {
+func Discover(opts ...Option) core.Result {
 	r := core.Getwd()
 	if !r.OK {
-		return nil, coreerr.E("config.Discover", "failed to read working directory", r.Value.(error))
+		return core.Fail(coreerr.E("config.Discover", "failed to read working directory", resultCause(r).(error)))
 	}
 	return DiscoverFrom(r.Value.(string), opts...)
 }
@@ -27,11 +27,12 @@ func Discover(opts ...Option) (*Config, error) {
 // Primarily used by tests; callers usually want Discover().
 //
 //	cfg, _ := config.DiscoverFrom("/srv/app", config.WithMedium(io.Local))
-func DiscoverFrom(start string, opts ...Option) (*Config, error) {
-	base, err := newConfig(false, opts...)
-	if err != nil {
-		return nil, coreerr.E(callerDiscoverFrom, "failed to initialise base config", err)
+func DiscoverFrom(start string, opts ...Option) core.Result {
+	baseResult := newConfig(false, opts...)
+	if !baseResult.OK {
+		return core.Fail(coreerr.E(callerDiscoverFrom, "failed to initialise base config", resultCause(baseResult).(error)))
 	}
+	base := baseResult.Value.(*Config)
 	medium := base.medium
 	if medium == nil {
 		medium = coreio.Local
@@ -46,17 +47,18 @@ func DiscoverFrom(start string, opts ...Option) (*Config, error) {
 		if envPrefix != "" {
 			layerOpts = append(layerOpts, WithEnvPrefix(envPrefix))
 		}
-		layer, err := New(layerOpts...)
-		if err != nil {
-			return nil, coreerr.E(callerDiscoverFrom, "failed to load discovered config: "+p, err)
+		layerResult := New(layerOpts...)
+		if !layerResult.OK {
+			return core.Fail(coreerr.E(callerDiscoverFrom, "failed to load discovered config: "+p, resultCause(layerResult).(error)))
 		}
+		layer := layerResult.Value.(*Config)
 		base.MergeFrom(layer)
 	}
-	if err := base.loadStoreState(); err != nil {
-		return nil, coreerr.E(callerDiscoverFrom, "failed to load config store state", err)
+	if r := base.loadStoreState(); !r.OK {
+		return core.Fail(coreerr.E(callerDiscoverFrom, "failed to load config store state", resultCause(r).(error)))
 	}
 
-	return base, nil
+	return core.Ok(base)
 }
 
 // discoverPaths returns paths to `.core/config.yaml` files from the starting

@@ -10,14 +10,14 @@ type Backend = watchBackend
 
 func ExampleBackend_Add() {
 	backend := newFakeWatchBackend()
-	err := backend.Add("/example/config.yaml")
+	err := resultError(backend.Add("/example/config.yaml"))
 	core.Println(err == nil, backend.addCount())
 	// Output: true 1
 }
 
 func ExampleBackend_Close() {
 	backend := newFakeWatchBackend()
-	err := backend.Close()
+	err := resultError(backend.Close())
 	core.Println(err == nil, backend.closed)
 	// Output: true true
 }
@@ -32,9 +32,9 @@ func ExampleBackend_Events() {
 
 func ExampleBackend_Errors() {
 	backend := newFakeWatchBackend()
-	backend.errors <- core.NewError("watch failed")
-	err := <-backend.Errors()
-	core.Println(err != nil)
+	backend.errors <- core.Fail(core.NewError("watch failed"))
+	result := <-backend.Errors()
+	core.Println(!result.OK)
 	// Output: true
 }
 
@@ -44,15 +44,15 @@ func ExampleConfig_Watch() {
 	_ = m.Write(path, "app:\n  name: before\n")
 	backend := newFakeWatchBackend()
 	previous := newWatchBackend
-	newWatchBackend = func() (watchBackend, error) {
-		return backend, nil
+	newWatchBackend = func() core.Result {
+		return core.Ok(backend)
 	}
 	defer func() {
 		newWatchBackend = previous
 	}()
 
-	cfg, _ := New(WithMedium(m), WithPath(path))
-	err := cfg.Watch()
+	cfg, _ := configResult(New(WithMedium(m), WithPath(path)))
+	err := resultError(cfg.Watch())
 	cfg.StopWatch()
 	core.Println(err == nil, backend.closed)
 	// Output: true true
@@ -64,14 +64,14 @@ func ExampleConfig_StopWatch() {
 	_ = m.Write(path, "app:\n  name: before\n")
 	backend := newFakeWatchBackend()
 	previous := newWatchBackend
-	newWatchBackend = func() (watchBackend, error) {
-		return backend, nil
+	newWatchBackend = func() core.Result {
+		return core.Ok(backend)
 	}
 	defer func() {
 		newWatchBackend = previous
 	}()
 
-	cfg, _ := New(WithMedium(m), WithPath(path))
+	cfg, _ := configResult(New(WithMedium(m), WithPath(path)))
 	_ = cfg.Watch()
 	cfg.StopWatch()
 	core.Println(backend.closed)

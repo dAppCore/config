@@ -59,14 +59,14 @@ func exampleSignedPackageManifest() (PackageManifest, func()) {
 
 func ExampleViewVersion_UnmarshalYAML() {
 	var version ViewVersion
-	err := version.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "2"})
+	err := resultError(version.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "2"}))
 	core.Println(err == nil, version)
 	// Output: true 2
 }
 
 func ExampleBuildTarget_UnmarshalYAML() {
 	var target BuildTarget
-	err := target.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "linux/amd64"})
+	err := resultError(target.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "linux/amd64"}))
 	core.Println(err == nil, target.OS, target.Arch)
 	// Output: true linux amd64
 }
@@ -74,8 +74,16 @@ func ExampleBuildTarget_UnmarshalYAML() {
 func ExampleBuildManifest_UnmarshalYAML() {
 	var build BuildManifest
 	body := "version: 1\nproject:\n  name: app\n  main: ./cmd/app\nbuild:\n  flags: [-trimpath]\ntargets:\n  - linux/amd64\n"
-	err := yaml.Unmarshal([]byte(body), &build)
-	core.Println(err == nil, build.Project.Name, build.Targets[0].Arch)
+	var node yaml.Node
+	err := yaml.Unmarshal([]byte(body), &node)
+	if err == nil {
+		err = resultError(build.UnmarshalYAML(manifestYAMLRoot(&node)))
+	}
+	arch := ""
+	if len(build.Targets) > 0 {
+		arch = build.Targets[0].Arch
+	}
+	core.Println(err == nil, build.Project.Name, arch)
 	// Output: true app amd64
 }
 
@@ -84,28 +92,28 @@ func ExampleLoadManifest() {
 	path := "/example/.core/build.yaml"
 	_ = m.Write(path, "version: 1\nproject:\n  name: app\n")
 	var build BuildManifest
-	err := LoadManifest(m, path, &build)
+	err := resultError(LoadManifest(m, path, &build))
 	core.Println(err == nil, build.Project.Name)
 	// Output: true app
 }
 
 func ExampleCanonicalViewManifestBytes() {
 	view := exampleViewManifest()
-	body, err := CanonicalViewManifestBytes(&view)
+	body, err := bytesResult(CanonicalViewManifestBytes(&view))
 	core.Println(err == nil, core.Contains(string(body), "code: app"))
 	// Output: true true
 }
 
 func ExampleValidateViewManifestSignature() {
 	view, _ := exampleSignedViewManifest()
-	err := ValidateViewManifestSignature(&view)
+	err := resultError(ValidateViewManifestSignature(&view))
 	core.Println(err == nil)
 	// Output: true
 }
 
 func ExampleVerifyViewManifestSignature() {
 	view, pub := exampleSignedViewManifest()
-	err := VerifyViewManifestSignature(&view, pub)
+	err := resultError(VerifyViewManifestSignature(&view, pub))
 	core.Println(err == nil)
 	// Output: true
 }
@@ -113,14 +121,14 @@ func ExampleVerifyViewManifestSignature() {
 func ExampleSignViewManifest() {
 	_, priv, _ := ed25519.GenerateKey(nil)
 	view := exampleViewManifest()
-	err := SignViewManifest(&view, priv)
+	err := resultError(SignViewManifest(&view, priv))
 	core.Println(err == nil, view.Sign != "")
 	// Output: true true
 }
 
 func ExampleCanonicalPackageManifestBytes() {
 	pkg := examplePackageManifest()
-	body, err := CanonicalPackageManifestBytes(&pkg)
+	body, err := bytesResult(CanonicalPackageManifestBytes(&pkg))
 	core.Println(err == nil, core.Contains(string(body), "code: go-config"))
 	// Output: true true
 }
@@ -128,7 +136,7 @@ func ExampleCanonicalPackageManifestBytes() {
 func ExampleSignPackageManifest() {
 	_, priv, _ := ed25519.GenerateKey(nil)
 	pkg := examplePackageManifest()
-	err := SignPackageManifest(&pkg, priv)
+	err := resultError(SignPackageManifest(&pkg, priv))
 	core.Println(err == nil, pkg.Sign != "", pkg.SignKey != "")
 	// Output: true true true
 }
@@ -136,7 +144,7 @@ func ExampleSignPackageManifest() {
 func ExampleVerifyPackageManifest() {
 	pkg, cleanup := exampleSignedPackageManifest()
 	defer cleanup()
-	err := VerifyPackageManifest(&pkg)
+	err := resultError(VerifyPackageManifest(&pkg))
 	core.Println(err == nil)
 	// Output: true
 }
@@ -145,7 +153,7 @@ func ExampleTrustedManifestPublicKeys() {
 	pub, _, _ := ed25519.GenerateKey(nil)
 	cleanup := exampleSetManifestTrustKey(hex.EncodeToString(pub))
 	defer cleanup()
-	keys, err := TrustedManifestPublicKeys()
+	keys, err := trustedKeysResult(TrustedManifestPublicKeys())
 	core.Println(err == nil, len(keys))
 	// Output: true 1
 }

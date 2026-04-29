@@ -120,7 +120,7 @@ func ExampleFindUserWorkspacesDirectory() {
 func ExampleResolveConfigManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	cfg, err := ResolveConfigManifest(m, child)
+	cfg, err := configResult(ResolveConfigManifest(m, child))
 	var name string
 	_ = cfg.Get("app.name", &name)
 	core.Println(err == nil, name)
@@ -144,7 +144,7 @@ func ExampleFindBuildManifest() {
 func ExampleResolveBuildManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	build, err := ResolveBuildManifest(m, child)
+	build, err := buildManifestResult(ResolveBuildManifest(m, child))
 	core.Println(err == nil, build.Project.Name)
 	// Output: true app
 }
@@ -159,7 +159,7 @@ func ExampleFindTestManifest() {
 func ExampleResolveTestManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	test, err := ResolveTestManifest(m, child)
+	test, err := testManifestResult(ResolveTestManifest(m, child))
 	core.Println(err == nil, test.Commands[0].Name)
 	// Output: true unit
 }
@@ -174,7 +174,7 @@ func ExampleFindReleaseManifest() {
 func ExampleResolveReleaseManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	release, err := ResolveReleaseManifest(m, child)
+	release, err := releaseManifestResult(ResolveReleaseManifest(m, child))
 	core.Println(err == nil, release.Archive.Format)
 	// Output: true tar.gz
 }
@@ -189,7 +189,7 @@ func ExampleFindRunManifest() {
 func ExampleResolveRunManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	run, err := ResolveRunManifest(m, child)
+	run, err := runManifestResult(ResolveRunManifest(m, child))
 	core.Println(err == nil, run.Dev.Port)
 	// Output: true 8080
 }
@@ -204,7 +204,7 @@ func ExampleFindViewManifest() {
 func ExampleResolveViewManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	view, err := ResolveViewManifest(m, child)
+	view, err := viewManifestResult(ResolveViewManifest(m, child))
 	core.Println(err == nil, view.Code)
 	// Output: true app
 }
@@ -219,7 +219,7 @@ func ExampleFindPackageManifest() {
 func ExampleResolvePackageManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	pkg, err := ResolvePackageManifest(m, child)
+	pkg, err := packageManifestResult(ResolvePackageManifest(m, child))
 	core.Println(err == nil, pkg.Code)
 	// Output: true go-config
 }
@@ -234,7 +234,7 @@ func ExampleFindAgentManifest() {
 func ExampleResolveAgentManifest() {
 	m, _, cleanup := exampleResolveMedium()
 	defer cleanup()
-	agent, err := ResolveAgentManifest(m)
+	agent, err := agentManifestResult(ResolveAgentManifest(m))
 	core.Println(err == nil, agent.Daemon.Enabled)
 	// Output: true true
 }
@@ -249,7 +249,7 @@ func ExampleFindZoneManifest() {
 func ExampleResolveZoneManifest() {
 	m, _, cleanup := exampleResolveMedium()
 	defer cleanup()
-	zone, err := ResolveZoneManifest(m)
+	zone, err := zoneManifestResult(ResolveZoneManifest(m))
 	core.Println(err == nil, zone.Zone.Name)
 	// Output: true alpha
 }
@@ -264,7 +264,7 @@ func ExampleFindWorkspaceManifest() {
 func ExampleResolveWorkspaceManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	workspace, err := ResolveWorkspaceManifest(m, child)
+	workspace, err := workspaceManifestResult(ResolveWorkspaceManifest(m, child))
 	core.Println(err == nil, workspace.Active)
 	// Output: true core-go
 }
@@ -279,7 +279,7 @@ func ExampleFindIDEManifest() {
 func ExampleResolveIDEManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	ide, err := ResolveIDEManifest(m, child)
+	ide, err := ideManifestResult(ResolveIDEManifest(m, child))
 	core.Println(err == nil, ide.Editor)
 	// Output: true nvim
 }
@@ -301,7 +301,7 @@ func ExampleFindLinuxKitManifest() {
 func ExampleResolveLinuxKitManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	manifest, err := ResolveLinuxKitManifest(m, child)
+	manifest, err := linuxKitManifestResult(ResolveLinuxKitManifest(m, child))
 	core.Println(err == nil, manifest["kernel"].(map[string]any)["image"])
 	// Output: true linuxkit/kernel:6.6.0
 }
@@ -348,7 +348,7 @@ func ExampleFindWorkspaceRegistryManifest() {
 func ExampleResolveReposManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	repos, err := ResolveReposManifest(m, child)
+	repos, err := reposManifestResult(ResolveReposManifest(m, child))
 	core.Println(err == nil, repos.Org)
 	// Output: true core
 }
@@ -356,7 +356,7 @@ func ExampleResolveReposManifest() {
 func ExampleResolveWorkspaceRegistryManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	repos, err := ResolveWorkspaceRegistryManifest(m, child)
+	repos, err := reposManifestResult(ResolveWorkspaceRegistryManifest(m, child))
 	core.Println(err == nil, repos.Org)
 	// Output: true core
 }
@@ -371,7 +371,7 @@ func ExampleFindPHPManifest() {
 func ExampleResolvePHPManifest() {
 	m, child, cleanup := exampleResolveMedium()
 	defer cleanup()
-	php, err := ResolvePHPManifest(m, child)
+	php, err := phpManifestResult(ResolvePHPManifest(m, child))
 	core.Println(err == nil, php.Server.Type)
 	// Output: true php-fpm
 }

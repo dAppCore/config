@@ -50,14 +50,14 @@ func ExampleService_OnShutdown() {
 func ExampleService_Get() {
 	svc, _ := exampleService()
 	var name string
-	err := svc.Get("app.name", &name)
+	err := resultError(svc.Get("app.name", &name))
 	core.Println(err == nil, name)
 	// Output: true service
 }
 
 func ExampleService_Set() {
 	svc, _ := exampleService()
-	err := svc.Set("dev.editor", "vim")
+	err := resultError(svc.Set("dev.editor", "vim"))
 	var editor string
 	_ = svc.Get("dev.editor", &editor)
 	core.Println(err == nil, editor)
@@ -67,7 +67,7 @@ func ExampleService_Set() {
 func ExampleService_Commit() {
 	svc, m := exampleService()
 	_ = svc.Set("dev.editor", "vim")
-	err := svc.Commit()
+	err := resultError(svc.Commit())
 	core.Println(err == nil && m.Exists("/example/.core/config.yaml"))
 	// Output: true
 }
@@ -75,7 +75,7 @@ func ExampleService_Commit() {
 func ExampleService_LoadFile() {
 	svc, m := exampleService()
 	_ = m.Write("/example/.core/extra.yaml", "dev:\n  shell: zsh\n")
-	err := svc.LoadFile(m, ".core/extra.yaml")
+	err := resultError(svc.LoadFile(m, ".core/extra.yaml"))
 	var shell string
 	_ = svc.Get("dev.shell", &shell)
 	core.Println(err == nil, shell)

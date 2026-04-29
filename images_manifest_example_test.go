@@ -20,7 +20,7 @@ func exampleImagesManifest() *ImagesManifest {
 
 func ExampleResolveImagesManifest() {
 	m := coreio.NewMockMedium()
-	manifest, err := ResolveImagesManifest(m)
+	manifest, err := imagesManifestResult(ResolveImagesManifest(m))
 	core.Println(err == nil, len(manifest.Images))
 	// Output: true 0
 }
@@ -29,7 +29,7 @@ func ExampleLoadImagesManifest() {
 	m := coreio.NewMockMedium()
 	path := core.PathJoin("/", "home", ".core", DirectoryImages, FileImagesManifest)
 	_ = SaveImagesManifest(m, path, exampleImagesManifest())
-	manifest, err := LoadImagesManifest(m, path)
+	manifest, err := imagesManifestResult(LoadImagesManifest(m, path))
 	core.Println(err == nil, manifest.Images["core-dev"].Version)
 	// Output: true 1.0.0
 }
@@ -37,7 +37,7 @@ func ExampleLoadImagesManifest() {
 func ExampleSaveImagesManifest() {
 	m := coreio.NewMockMedium()
 	path := core.PathJoin("/", "home", ".core", DirectoryImages, FileImagesManifest)
-	err := SaveImagesManifest(m, path, exampleImagesManifest())
+	err := resultError(SaveImagesManifest(m, path, exampleImagesManifest()))
 	core.Println(err == nil && m.Exists(path))
 	// Output: true
 }

@@ -38,7 +38,7 @@ func TestXdg_XDGWithPrefix_Good(t *core.T) {
 	core.AssertContains(t, paths.Config(), "testing")
 }
 
-func TestXdgDefaultHomesUgly(t *core.T) {
+func TestXdg_defaultConfigHome_DefaultHomes_Ugly(t *core.T) {
 	configHome := defaultConfigHome()
 	dataHome := defaultDataHome()
 	core.AssertNotEmpty(t, configHome)

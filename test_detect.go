@@ -8,13 +8,21 @@ import (
 
 const callerResolveTestManifest = "config.ResolveTestManifest"
 
-func detectTestCommand(medium coreio.Medium, start string) (string, bool, error) {
+type detectedTestCommand struct {
+	Command string
+	Found   bool
+}
+
+func detectTestCommand(medium coreio.Medium, start string) core.Result {
 	start = normalizeUpwardStart(medium, start)
 	for dir := start; ; dir = core.PathDir(dir) {
-		if command, ok, err := detectTestCommandAtDir(medium, dir); err != nil {
-			return "", false, err
-		} else if ok {
-			return command, true, nil
+		detectedResult := detectTestCommandAtDir(medium, dir)
+		if !detectedResult.OK {
+			return detectedResult
+		}
+		detected := detectedResult.Value.(detectedTestCommand)
+		if detected.Found {
+			return detectedResult
 		}
 
 		if medium.Exists(core.Path(dir, ".git")) {
@@ -26,52 +34,52 @@ func detectTestCommand(medium coreio.Medium, start string) (string, bool, error)
 		}
 	}
 
-	return "", false, nil
+	return core.Ok(detectedTestCommand{})
 }
 
-func detectTestCommandAtDir(medium coreio.Medium, dir string) (string, bool, error) {
+func detectTestCommandAtDir(medium coreio.Medium, dir string) core.Result {
 	switch {
 	case medium.Exists(core.Path(dir, "composer.json")):
 		return detectJSONTestCommand(medium, core.Path(dir, "composer.json"), "composer", "composer test")
 	case medium.Exists(core.Path(dir, "package.json")):
 		return detectJSONTestCommand(medium, core.Path(dir, "package.json"), "npm", "npm test")
 	case medium.Exists(core.Path(dir, "go.mod")):
-		return "core go qa", true, nil
+		return core.Ok(detectedTestCommand{Command: "core go qa", Found: true})
 	case medium.Exists(core.Path(dir, "pytest.ini")):
-		return "pytest", true, nil
+		return core.Ok(detectedTestCommand{Command: "pytest", Found: true})
 	case medium.Exists(core.Path(dir, "pyproject.toml")):
-		return "pytest", true, nil
+		return core.Ok(detectedTestCommand{Command: "pytest", Found: true})
 	case medium.Exists(core.Path(dir, "Taskfile.yaml")) || medium.Exists(core.Path(dir, "Taskfile.yml")):
-		return "task test", true, nil
+		return core.Ok(detectedTestCommand{Command: "task test", Found: true})
 	default:
-		return "", false, nil
+		return core.Ok(detectedTestCommand{})
 	}
 }
 
-func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) (string, bool, error) {
+func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) core.Result {
 	content, err := medium.Read(path)
 	if err != nil {
-		return "", false, coreerr.E(callerResolveTestManifest, "failed to read "+label+" manifest: "+path, err)
+		return core.Fail(coreerr.E(callerResolveTestManifest, "failed to read "+label+" manifest: "+path, err))
 	}
 
 	var data struct {
 		Scripts map[string]any `json:"scripts"`
 	}
 	if r := core.JSONUnmarshalString(content, &data); !r.OK {
-		return "", false, coreerr.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, r.Value.(error))
+		return core.Fail(coreerr.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, resultCause(r).(error)))
 	}
 
 	raw, ok := data.Scripts["test"]
 	if !ok {
-		return fallback, true, nil
+		return core.Ok(detectedTestCommand{Command: fallback, Found: true})
 	}
 
 	script, ok := raw.(string)
 	if !ok {
-		return "", false, coreerr.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, nil)
+		return core.Fail(coreerr.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, nil))
 	}
 	if script == "" {
-		return fallback, true, nil
+		return core.Ok(detectedTestCommand{Command: fallback, Found: true})
 	}
-	return script, true, nil
+	return core.Ok(detectedTestCommand{Command: script, Found: true})
 }

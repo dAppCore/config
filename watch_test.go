@@ -12,7 +12,7 @@ import (
 type fakeWatchBackend struct {
 	mu     sync.Mutex
 	events chan fsnotify.Event
-	errors chan error
+	errors chan core.Result
 	addErr error
 	adds   []string
 	closed bool
@@ -21,29 +21,29 @@ type fakeWatchBackend struct {
 func newFakeWatchBackend() *fakeWatchBackend {
 	return &fakeWatchBackend{
 		events: make(chan fsnotify.Event, 8),
-		errors: make(chan error, 1),
+		errors: make(chan core.Result, 1),
 	}
 }
 
-func (w *fakeWatchBackend) Add(path string) error {
+func (w *fakeWatchBackend) Add(path string) core.Result {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.adds = append(w.adds, path)
-	return w.addErr
+	return core.ResultOf(nil, w.addErr)
 }
 
-func (w *fakeWatchBackend) Close() error {
+func (w *fakeWatchBackend) Close() core.Result {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.closed = true
-	return nil
+	return core.Ok(nil)
 }
 
 func (w *fakeWatchBackend) Events() <-chan fsnotify.Event {
 	return w.events
 }
 
-func (w *fakeWatchBackend) Errors() <-chan error {
+func (w *fakeWatchBackend) Errors() <-chan core.Result {
 	return w.errors
 }
 
@@ -60,8 +60,8 @@ func (w *fakeWatchBackend) addCount() int {
 func useFakeWatchBackend(t *core.T, backend *fakeWatchBackend) {
 	t.Helper()
 	previous := newWatchBackend
-	newWatchBackend = func() (watchBackend, error) {
-		return backend, nil
+	newWatchBackend = func() core.Result {
+		return core.Ok(backend)
 	}
 	t.Cleanup(func() {
 		newWatchBackend = previous
@@ -75,7 +75,7 @@ func TestWatch_Watch_Good(t *core.T) {
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
 
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.AssertNoError(t, err)
 
 	var mu sync.Mutex
@@ -86,7 +86,7 @@ func TestWatch_Watch_Good(t *core.T) {
 		mu.Unlock()
 	})
 
-	core.AssertNoError(t, cfg.Watch())
+	core.AssertNoError(t, resultError(cfg.Watch()))
 	t.Cleanup(cfg.StopWatch)
 
 	core.AssertNoError(t, m.Write(path, "key: two\n"))
@@ -105,10 +105,10 @@ func TestWatch_Watch_Bad(t *core.T) {
 	backend.addErr = core.NewError("missing")
 	useFakeWatchBackend(t, backend)
 
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.AssertNoError(t, err)
 	// Watching a non-existent path should return an error rather than crashing.
-	err = cfg.Watch()
+	err = resultError(cfg.Watch())
 	core.AssertError(t, err)
 }
 
@@ -119,17 +119,17 @@ func TestWatch_Watch_Ugly(t *core.T) {
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
 
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.AssertNoError(t, err)
 
 	// Double Watch is idempotent — no duplicate watchers, no panic.
-	core.AssertNoError(t, cfg.Watch())
-	core.AssertNoError(t, cfg.Watch())
+	core.AssertNoError(t, resultError(cfg.Watch()))
+	core.AssertNoError(t, resultError(cfg.Watch()))
 	cfg.StopWatch()
 	cfg.StopWatch()
 }
 
-func TestWatchReloadKeysGood(t *core.T) {
+func TestWatch_Config_Watch_ReloadKeys_Good(t *core.T) {
 	// When a file is reloaded via the watcher, OnChange must fire once per
 	// changed key with the new value — not a single empty-key signal.
 	m := coreio.NewMockMedium()
@@ -138,7 +138,7 @@ func TestWatchReloadKeysGood(t *core.T) {
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
 
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.AssertNoError(t, err)
 
 	var mu sync.Mutex
@@ -149,7 +149,7 @@ func TestWatchReloadKeysGood(t *core.T) {
 		seen[key] = value
 	})
 
-	core.AssertNoError(t, cfg.Watch())
+	core.AssertNoError(t, resultError(cfg.Watch()))
 	t.Cleanup(cfg.StopWatch)
 
 	// Change editor and name, plus add a new key.
@@ -164,7 +164,7 @@ func TestWatchReloadKeysGood(t *core.T) {
 	core.AssertEqual(t, "1", seen["app.version"])
 }
 
-func TestWatchAtomicSaveGood(t *core.T) {
+func TestWatch_Config_Watch_AtomicSave_Good(t *core.T) {
 	// Atomic-save editors (vim, VSCode, most IDE auto-formatters) replace a
 	// file via rename: write new inode, rename over the old path, unlink the
 	// original. fsnotify tracks the original inode and silently stops firing
@@ -175,7 +175,7 @@ func TestWatchAtomicSaveGood(t *core.T) {
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
 
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.AssertNoError(t, err)
 
 	var mu sync.Mutex
@@ -186,7 +186,7 @@ func TestWatchAtomicSaveGood(t *core.T) {
 		mu.Unlock()
 	})
 
-	core.AssertNoError(t, cfg.Watch())
+	core.AssertNoError(t, resultError(cfg.Watch()))
 	t.Cleanup(cfg.StopWatch)
 
 	// Simulate an atomic save: write to sidecar, rename over target.
@@ -269,54 +269,54 @@ func TestWatch_diffSnapshots_Ugly(t *core.T) {
 }
 
 func TestWatch_Backend_Add_Good(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	defer backend.Close()
 	got := backend.Add(t.TempDir())
-	core.AssertNoError(t, got)
+	core.AssertNoError(t, resultError(got))
 }
 
 func TestWatch_Backend_Add_Bad(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, backend.Close())
+	core.RequireNoError(t, resultError(backend.Close()))
 	got := backend.Add(t.TempDir())
-	core.AssertError(t, got)
+	core.AssertError(t, resultError(got))
 }
 
 func TestWatch_Backend_Add_Ugly(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	defer backend.Close()
 	got := backend.Add("missing/watch/path")
-	core.AssertError(t, got)
+	core.AssertError(t, resultError(got))
 }
 
 func TestWatch_Backend_Close_Good(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	got := backend.Close()
-	core.AssertNoError(t, got)
+	core.AssertNoError(t, resultError(got))
 }
 
 func TestWatch_Backend_Close_Bad(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, backend.Close())
+	core.RequireNoError(t, resultError(backend.Close()))
 	got := backend.Close()
-	core.AssertNoError(t, got)
+	core.AssertNoError(t, resultError(got))
 }
 
 func TestWatch_Backend_Close_Ugly(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	events := backend.Events()
 	core.AssertNotNil(t, events)
-	core.AssertNoError(t, backend.Close())
+	core.AssertNoError(t, resultError(backend.Close()))
 }
 
 func TestWatch_Backend_Events_Good(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	defer backend.Close()
 	got := backend.Events()
@@ -324,15 +324,15 @@ func TestWatch_Backend_Events_Good(t *core.T) {
 }
 
 func TestWatch_Backend_Events_Bad(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, backend.Close())
+	core.RequireNoError(t, resultError(backend.Close()))
 	got := backend.Events()
 	core.AssertNotNil(t, got)
 }
 
 func TestWatch_Backend_Events_Ugly(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	defer backend.Close()
 	got := cap(backend.Events())
@@ -340,7 +340,7 @@ func TestWatch_Backend_Events_Ugly(t *core.T) {
 }
 
 func TestWatch_Backend_Errors_Good(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	defer backend.Close()
 	got := backend.Errors()
@@ -348,15 +348,15 @@ func TestWatch_Backend_Errors_Good(t *core.T) {
 }
 
 func TestWatch_Backend_Errors_Bad(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, backend.Close())
+	core.RequireNoError(t, resultError(backend.Close()))
 	got := backend.Errors()
 	core.AssertNotNil(t, got)
 }
 
 func TestWatch_Backend_Errors_Ugly(t *core.T) {
-	backend, err := newWatchBackend()
+	backend, err := watchBackendResult(newWatchBackend())
 	core.RequireNoError(t, err)
 	defer backend.Close()
 	got := cap(backend.Errors())
@@ -369,10 +369,10 @@ func TestWatch_Config_Watch_Good(t *core.T) {
 	core.RequireNoError(t, m.Write(path, "name: one\n"))
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.RequireNoError(t, err)
 
-	err = cfg.Watch()
+	err = resultError(cfg.Watch())
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, 1, backend.addCount())
 }
@@ -384,10 +384,10 @@ func TestWatch_Config_Watch_Bad(t *core.T) {
 	backend := newFakeWatchBackend()
 	backend.addErr = core.NewError("add failed")
 	useFakeWatchBackend(t, backend)
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.RequireNoError(t, err)
 
-	err = cfg.Watch()
+	err = resultError(cfg.Watch())
 	core.AssertError(t, err)
 	core.AssertTrue(t, backend.closed)
 }
@@ -398,11 +398,11 @@ func TestWatch_Config_Watch_Ugly(t *core.T) {
 	core.RequireNoError(t, m.Write(path, "name: one\n"))
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.RequireNoError(t, err)
 
-	core.AssertNoError(t, cfg.Watch())
-	core.AssertNoError(t, cfg.Watch())
+	core.AssertNoError(t, resultError(cfg.Watch()))
+	core.AssertNoError(t, resultError(cfg.Watch()))
 	core.AssertEqual(t, 1, backend.addCount())
 }
 
@@ -412,9 +412,9 @@ func TestWatch_Config_StopWatch_Good(t *core.T) {
 	core.RequireNoError(t, m.Write(path, "name: one\n"))
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, cfg.Watch())
+	core.RequireNoError(t, resultError(cfg.Watch()))
 
 	cfg.StopWatch()
 	core.AssertNil(t, cfg.watcher)
@@ -422,7 +422,7 @@ func TestWatch_Config_StopWatch_Good(t *core.T) {
 }
 
 func TestWatch_Config_StopWatch_Bad(t *core.T) {
-	cfg, err := New(WithMedium(coreio.NewMockMedium()), WithPath("ax7/watch.yaml"))
+	cfg, err := configResult(New(WithMedium(coreio.NewMockMedium()), WithPath("ax7/watch.yaml")))
 	core.RequireNoError(t, err)
 	cfg.StopWatch()
 	core.AssertNil(t, cfg.watcher)
@@ -434,9 +434,9 @@ func TestWatch_Config_StopWatch_Ugly(t *core.T) {
 	core.RequireNoError(t, m.Write(path, "name: one\n"))
 	backend := newFakeWatchBackend()
 	useFakeWatchBackend(t, backend)
-	cfg, err := New(WithMedium(m), WithPath(path))
+	cfg, err := configResult(New(WithMedium(m), WithPath(path)))
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, cfg.Watch())
+	core.RequireNoError(t, resultError(cfg.Watch()))
 
 	cfg.StopWatch()
 	cfg.StopWatch()
