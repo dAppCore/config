@@ -11,12 +11,8 @@
 package config
 
 import (
-	"fmt"
 	"iter"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 
 	core "dappco.re/go"
@@ -35,11 +31,13 @@ type Medium interface {
 // Config implements the core.Config interface with layered resolution.
 // It uses viper as the underlying configuration engine.
 type Config struct {
-	mu     sync.RWMutex
-	full   *viper.Viper // Full configuration (file + env + defaults)
-	file   *viper.Viper // File-backed configuration only (for persistence)
-	medium Medium
-	path   string
+	mu        sync.RWMutex
+	full      *viper.Viper // Full configuration (file + env + defaults)
+	file      *viper.Viper // File-backed configuration only (for persistence)
+	medium    Medium
+	path      string
+	envPrefix string
+	overrides map[string]any
 }
 
 // Option is a functional option for configuring a Config instance.
@@ -62,22 +60,20 @@ func WithPath(path string) Option {
 // WithEnvPrefix sets the prefix for environment variables.
 func WithEnvPrefix(prefix string) Option {
 	return func(c *Config) {
-		c.full.SetEnvPrefix(strings.TrimSuffix(prefix, "_"))
+		c.envPrefix = core.TrimSuffix(prefix, "_")
 	}
 }
 
 // New creates a new Config instance with the given options.
 // If no medium is provided, it defaults to io.Local.
 // If no path is provided, it defaults to ~/.core/config.yaml.
-func New(opts ...Option) (*Config, error) {
+func New(opts ...Option) core.Result {
 	c := &Config{
-		full: viper.New(),
-		file: viper.New(),
+		full:      viper.New(),
+		file:      viper.New(),
+		envPrefix: "CORE_CONFIG",
+		overrides: make(map[string]any),
 	}
-
-	// Configure viper defaults
-	c.full.SetEnvPrefix("CORE_CONFIG")
-	c.full.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	for _, opt := range opts {
 		opt(c)
@@ -88,153 +84,183 @@ func New(opts ...Option) (*Config, error) {
 	}
 
 	if c.path == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, core.E("config.New", "failed to determine home directory", err)
+		home := core.UserHomeDir()
+		if !home.OK {
+			return core.Fail(core.E("config.New", "failed to determine home directory", core.NewError(home.Error())))
 		}
-		c.path = filepath.Join(home, ".core", "config.yaml")
+		c.path = core.Path(home.Value.(string), ".core", "config.yaml")
 	}
-
-	c.full.AutomaticEnv()
 
 	// Load existing config file if it exists
 	if c.medium.Exists(c.path) {
-		if err := c.LoadFile(c.medium, c.path); err != nil {
-			return nil, core.E("config.New", "failed to load config file", err)
+		if r := c.LoadFile(c.medium, c.path); !r.OK {
+			return core.Fail(core.E("config.New", "failed to load config file", core.NewError(r.Error())))
 		}
+	} else if r := c.refreshFull(); !r.OK {
+		return r
 	}
 
-	return c, nil
+	return core.Ok(c)
 }
 
-func configTypeForPath(path string) (string, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == "" && filepath.Base(path) == ".env" {
-		return "env", nil
+func configTypeForPath(path string) core.Result {
+	ext := core.Lower(core.PathExt(path))
+	if ext == "" && core.PathBase(path) == ".env" {
+		return core.Ok("env")
 	}
 	if ext == "" {
-		return "yaml", nil
+		return core.Ok("yaml")
 	}
 
 	switch ext {
 	case ".yaml", ".yml":
-		return "yaml", nil
+		return core.Ok("yaml")
 	case ".json":
-		return "json", nil
+		return core.Ok("json")
 	case ".toml":
-		return "toml", nil
+		return core.Ok("toml")
 	case ".env":
-		return "env", nil
+		return core.Ok("env")
 	default:
-		return "", core.E("config.configTypeForPath", "unsupported config file type: "+path, nil)
+		return core.Fail(core.E("config.configTypeForPath", "unsupported config file type: "+path, nil))
 	}
 }
 
-func resultError(r core.Result) error {
-	if err, ok := r.Value.(error); ok {
-		return err
+func (c *Config) refreshFull() core.Result {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.refreshFullLocked()
+}
+
+func (c *Config) refreshFullLocked() core.Result {
+	next := viper.New()
+	if r := core.ResultOf(nil, next.MergeConfigMap(c.file.AllSettings())); !r.OK {
+		return core.Fail(core.E("config.refreshFull", "failed to merge file settings", core.NewError(r.Error())))
 	}
-	return core.NewError(r.Error())
+	for key, value := range Env(c.envPrefix) {
+		next.Set(key, value)
+	}
+	for key, value := range c.overrides {
+		next.Set(key, value)
+	}
+	c.full = next
+	return core.Ok(nil)
 }
 
 // LoadFile reads a configuration file from the given medium and path and merges it into the current config.
 // It supports YAML, JSON, TOML, and dotenv files (.env).
-func (c *Config) LoadFile(m Medium, path string) error {
+func (c *Config) LoadFile(m Medium, path string) core.Result {
+	if c == nil {
+		return core.Fail(core.E("config.LoadFile", "config is nil", nil))
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if m == nil {
-		return core.E("config.LoadFile", "storage medium is nil", nil)
+		return core.Fail(core.E("config.LoadFile", "storage medium is nil", nil))
 	}
 
-	configType, err := configTypeForPath(path)
-	if err != nil {
-		return core.E("config.LoadFile", "failed to determine config file type: "+path, err)
+	configType := configTypeForPath(path)
+	if !configType.OK {
+		return core.Fail(core.E("config.LoadFile", "failed to determine config file type: "+path, core.NewError(configType.Error())))
 	}
 
 	read := m.Read(path)
 	if !read.OK {
-		return core.E("config.LoadFile", fmt.Sprintf("failed to read config file: %s", path), resultError(read))
+		return core.Fail(core.E("config.LoadFile", core.Sprintf("failed to read config file: %s", path), core.NewError(read.Error())))
 	}
 
 	content, ok := read.Value.(string)
 	if !ok {
-		return core.E("config.LoadFile", fmt.Sprintf("config file was not text: %s", path), nil)
+		return core.Fail(core.E("config.LoadFile", core.Sprintf("config file was not text: %s", path), nil))
 	}
 
 	parsed := viper.New()
-	parsed.SetConfigType(configType)
-	if err := parsed.MergeConfig(strings.NewReader(content)); err != nil {
-		return core.E("config.LoadFile", fmt.Sprintf("failed to parse config file: %s", path), err)
+	parsed.SetConfigType(configType.Value.(string))
+	if r := core.ResultOf(nil, parsed.MergeConfig(core.NewReader(content))); !r.OK {
+		return core.Fail(core.E("config.LoadFile", core.Sprintf("failed to parse config file: %s", path), core.NewError(r.Error())))
 	}
 
 	settings := parsed.AllSettings()
 
 	// Keep the persisted and runtime views aligned with the same parsed data.
-	if err := c.file.MergeConfigMap(settings); err != nil {
-		return core.E("config.LoadFile", "failed to merge config into file settings", err)
+	if r := core.ResultOf(nil, c.file.MergeConfigMap(settings)); !r.OK {
+		return core.Fail(core.E("config.LoadFile", "failed to merge config into file settings", core.NewError(r.Error())))
 	}
 
-	if err := c.full.MergeConfigMap(settings); err != nil {
-		return core.E("config.LoadFile", "failed to merge config into full settings", err)
-	}
-
-	return nil
+	return c.refreshFullLocked()
 }
 
 // Get retrieves a configuration value by dot-notation key and stores it in out.
 // If key is empty, it unmarshals the entire configuration into out.
 // The out parameter must be a pointer to the target type.
-func (c *Config) Get(key string, out any) error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+func (c *Config) Get(key string, out any) core.Result {
+	if c == nil {
+		return core.Fail(core.E("config.Get", "config is nil", nil))
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if r := c.refreshFullLocked(); !r.OK {
+		return r
+	}
 
 	if key == "" {
-		if err := c.full.Unmarshal(out); err != nil {
-			return core.E("config.Get", "failed to unmarshal full config", err)
+		if r := core.ResultOf(nil, c.full.Unmarshal(out)); !r.OK {
+			return core.Fail(core.E("config.Get", "failed to unmarshal full config", core.NewError(r.Error())))
 		}
-		return nil
+		return core.Ok(out)
 	}
 
 	if !c.full.IsSet(key) {
-		return core.E("config.Get", fmt.Sprintf("key not found: %s", key), nil)
+		return core.Fail(core.E("config.Get", core.Sprintf("key not found: %s", key), nil))
 	}
 
-	if err := c.full.UnmarshalKey(key, out); err != nil {
-		return core.E("config.Get", fmt.Sprintf("failed to unmarshal key: %s", key), err)
+	if r := core.ResultOf(nil, c.full.UnmarshalKey(key, out)); !r.OK {
+		return core.Fail(core.E("config.Get", core.Sprintf("failed to unmarshal key: %s", key), core.NewError(r.Error())))
 	}
-	return nil
+	return core.Ok(out)
 }
 
 // Set stores a configuration value in memory.
 // Call Commit() to persist changes to disk.
-func (c *Config) Set(key string, v any) error {
+func (c *Config) Set(key string, v any) core.Result {
+	if c == nil {
+		return core.Fail(core.E("config.Set", "config is nil", nil))
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.file.Set(key, v)
-	c.full.Set(key, v)
-	return nil
+	c.overrides[key] = v
+	return c.refreshFullLocked()
 }
 
 // Commit persists any changes made via Set() to the configuration file on disk.
 // This will only save the configuration that was loaded from the file or explicitly Set(),
 // preventing environment variable leakage.
-func (c *Config) Commit() error {
+func (c *Config) Commit() core.Result {
+	if c == nil {
+		return core.Fail(core.E("config.Commit", "config is nil", nil))
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if err := Save(c.medium, c.path, c.file.AllSettings()); err != nil {
-		return core.E("config.Commit", "failed to save config", err)
+	if r := Save(c.medium, c.path, c.file.AllSettings()); !r.OK {
+		return core.Fail(core.E("config.Commit", "failed to save config", core.NewError(r.Error())))
 	}
-	return nil
+	return core.Ok(nil)
 }
 
 // All returns an iterator over all configuration values in lexical key order
 // (including environment variables).
 func (c *Config) All() iter.Seq2[string, any] {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if r := c.refreshFullLocked(); !r.OK {
+		return func(func(string, any) bool) {}
+	}
 
 	settings := c.full.AllSettings()
 	keys := make([]string, 0, len(settings))
@@ -260,64 +286,64 @@ func (c *Config) Path() string {
 // Load reads a YAML configuration file from the given medium and path.
 // Returns the parsed data as a map, or an error if the file cannot be read or parsed.
 // Deprecated: Use Config.LoadFile instead.
-func Load(m Medium, path string) (map[string]any, error) {
-	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+func Load(m Medium, path string) core.Result {
+	switch ext := core.Lower(core.PathExt(path)); ext {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML sources.
 	default:
-		return nil, core.E("config.Load", "unsupported config file type: "+path, nil)
+		return core.Fail(core.E("config.Load", "unsupported config file type: "+path, nil))
 	}
 
 	if m == nil {
-		return nil, core.E("config.Load", "storage medium is nil", nil)
+		return core.Fail(core.E("config.Load", "storage medium is nil", nil))
 	}
 
 	read := m.Read(path)
 	if !read.OK {
-		return nil, core.E("config.Load", "failed to read config file: "+path, resultError(read))
+		return core.Fail(core.E("config.Load", "failed to read config file: "+path, core.NewError(read.Error())))
 	}
 
 	content, ok := read.Value.(string)
 	if !ok {
-		return nil, core.E("config.Load", "config file was not text: "+path, nil)
+		return core.Fail(core.E("config.Load", "config file was not text: "+path, nil))
 	}
 
 	v := viper.New()
 	v.SetConfigType("yaml")
-	if err := v.ReadConfig(strings.NewReader(content)); err != nil {
-		return nil, core.E("config.Load", "failed to parse config file: "+path, err)
+	if r := core.ResultOf(nil, v.ReadConfig(core.NewReader(content))); !r.OK {
+		return core.Fail(core.E("config.Load", "failed to parse config file: "+path, core.NewError(r.Error())))
 	}
 
-	return v.AllSettings(), nil
+	return core.Ok(v.AllSettings())
 }
 
 // Save writes configuration data to a YAML file at the given path.
 // It ensures the parent directory exists before writing.
-func Save(m Medium, path string, data map[string]any) error {
-	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+func Save(m Medium, path string, data map[string]any) core.Result {
+	switch ext := core.Lower(core.PathExt(path)); ext {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML destinations.
 	default:
-		return core.E("config.Save", "unsupported config file type: "+path, nil)
+		return core.Fail(core.E("config.Save", "unsupported config file type: "+path, nil))
 	}
 
 	if m == nil {
-		return core.E("config.Save", "storage medium is nil", nil)
+		return core.Fail(core.E("config.Save", "storage medium is nil", nil))
 	}
 
-	out, err := yaml.Marshal(data)
-	if err != nil {
-		return core.E("config.Save", "failed to marshal config", err)
+	out := core.ResultOf(yaml.Marshal(data))
+	if !out.OK {
+		return core.Fail(core.E("config.Save", "failed to marshal config", core.NewError(out.Error())))
 	}
 
-	dir := filepath.Dir(path)
+	dir := core.PathDir(path)
 	if r := m.EnsureDir(dir); !r.OK {
-		return core.E("config.Save", "failed to create config directory: "+dir, resultError(r))
+		return core.Fail(core.E("config.Save", "failed to create config directory: "+dir, core.NewError(r.Error())))
 	}
 
-	if r := m.Write(path, string(out)); !r.OK {
-		return core.E("config.Save", "failed to write config file: "+path, resultError(r))
+	if r := m.Write(path, string(out.Value.([]byte))); !r.OK {
+		return core.Fail(core.E("config.Save", "failed to write config file: "+path, core.NewError(r.Error())))
 	}
 
-	return nil
+	return core.Ok(nil)
 }

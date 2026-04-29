@@ -1,54 +1,59 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file gives Claude Code agents repository-specific context for
+`dappco.re/go/config`.
 
-## Build & Test Commands
+## Commands
 
-This project uses the Core CLI (`core` binary), not `go` directly.
+Use the explicit verification commands from the compliance brief:
 
 ```bash
-core go test                          # run all tests
-core go test --run TestConfig_Get_Good  # run a single test
-core go cov                           # test with coverage
-core go cov --open                    # coverage + open HTML report
-
-core go qa                            # format, vet, lint, test
-core go qa full                       # adds race detector, vuln scan, security audit
-
-core go fmt                           # format
-core go vet                           # vet
-core go lint                          # lint
+GOWORK=off go mod tidy
+GOWORK=off go vet ./...
+GOWORK=off go test -count=1 ./...
+gofmt -l .
+bash /Users/snider/Code/core/go/tests/cli/v090-upgrade/audit.sh .
 ```
 
-This is a library package — there is no binary to build or run.
+The audit script is the completion contract. The repository is not complete
+until every audit counter is `0` and the verdict is `COMPLIANT`.
 
 ## Architecture
 
-**Dual-Viper pattern**: `Config` holds two `*viper.Viper` instances:
-- `v` (full) — file + env + defaults; used for all reads (`Get`, `All`)
-- `f` (file-only) — file + explicit `Set()` calls; used for persistence (`Commit`)
+`Config` uses two Viper instances:
 
-This prevents environment variables from leaking into saved config files. When implementing new features, maintain this invariant: writes go to both `v` and `f`; reads come from `v`; persistence comes from `f`.
+- `file` stores values loaded from config files and values explicitly set at
+  runtime. This is the only source written by `Commit`.
+- `full` is the read view. It is rebuilt from file settings, environment
+  variables, and explicit overrides.
 
-**Resolution priority** (ascending): defaults → file → env vars (`CORE_CONFIG_*`) → `Set()`
+This shape keeps environment-derived secrets out of persisted YAML while still
+letting `Get` and `All` see the effective runtime configuration.
 
-**Service wrapper**: `Service` in `service.go` wraps `Config` with framework lifecycle (`core.Startable`). Both `Config` and `Service` satisfy `core.Config`, enforced by compile-time assertions.
+## API Conventions
 
-**Storage abstraction**: All file I/O goes through `coreio.Medium` (from `go-io`). Tests use `coreio.NewMockMedium()` with an in-memory `Files` map — never touch the real filesystem.
+This consumer repo follows `dappco.re/go` v0.9.0 conventions:
 
-## Conventions
+- Public operations return `core.Result`.
+- Callers branch on `r.OK` and read `r.Value` or `r.Error()`.
+- Use `core.Ok`, `core.Fail`, and `core.ResultOf` rather than struct literals.
+- Do not import banned stdlib packages directly. Reach through Core wrappers
+  such as `core.PathExt`, `core.PathDir`, `core.Environ`, `core.SplitN`,
+  `core.Replace`, `core.NewReader`, and `core.Sprintf`.
 
-- **UK English** in comments and documentation (colour, organisation, centre)
-- **Error wrapping**: `coreerr.E(caller, message, underlying)` from `go-log`
-- **Test naming**: `_Good` (happy path), `_Bad` (expected errors), `_Ugly` (panics/edge cases)
-- **Functional options**: `New()` takes `...Option` (e.g. `WithMedium`, `WithPath`, `WithEnvPrefix`)
-- **Conventional commits**: `type(scope): description`
-- **Go workspace**: module is part of `~/Code/go.work`
+## Tests And Examples
 
-## Dependencies
+Each production file with public symbols has a sibling test file and a sibling
+example file. Keep coverage file-aware:
 
-- `forge.lthn.ai/core/go-io` — `Medium` interface for storage
-- `forge.lthn.ai/core/go-log` — `coreerr.E()` error helper
-- `forge.lthn.ai/core/go/pkg/core` — `core.Config`, `core.Startable`, `core.ServiceRuntime` interfaces
-- `github.com/spf13/viper` — configuration engine
-- `github.com/stretchr/testify` — test assertions
+- `config.go` -> `config_test.go` and `config_example_test.go`
+- `env.go` -> `env_test.go` and `env_example_test.go`
+- `service.go` -> `service_test.go` and `service_example_test.go`
+
+Tests use `*core.T`, dot-import `dappco.re/go`, and the Core assertion helpers.
+Triplets are named `Test<File>_<Symbol>_{Good,Bad,Ugly}`. Examples use
+`core.Println`, not `fmt.Println`.
+
+## Do Not Touch
+
+Do not edit `BRIEF.md`, `.git`, `.codex`, or any `third_party` directory.

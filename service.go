@@ -42,43 +42,43 @@ func (s *Service) OnStartup(_ core.Context) core.Result {
 		configOpts = append(configOpts, WithMedium(opts.Medium))
 	}
 
-	cfg, err := New(configOpts...)
-	if err != nil {
-		return core.Fail(core.E("config.Service.OnStartup", "failed to create config", err))
+	r := New(configOpts...)
+	if !r.OK {
+		return core.Fail(core.E("config.Service.OnStartup", "failed to create config", core.NewError(r.Error())))
 	}
 
-	s.config = cfg
+	s.config = r.Value.(*Config)
 	return core.Ok(nil)
 }
 
 // Get retrieves a configuration value by key.
-func (s *Service) Get(key string, out any) error {
-	if s.config == nil {
-		return core.E("config.Service.Get", "config not loaded", nil)
+func (s *Service) Get(key string, out any) core.Result {
+	if s == nil || s.config == nil {
+		return core.Fail(core.E("config.Service.Get", "config not loaded", nil))
 	}
 	return s.config.Get(key, out)
 }
 
 // Set stores a configuration value by key.
-func (s *Service) Set(key string, v any) error {
-	if s.config == nil {
-		return core.E("config.Service.Set", "config not loaded", nil)
+func (s *Service) Set(key string, v any) core.Result {
+	if s == nil || s.config == nil {
+		return core.Fail(core.E("config.Service.Set", "config not loaded", nil))
 	}
 	return s.config.Set(key, v)
 }
 
 // Commit persists any configuration changes to disk.
-func (s *Service) Commit() error {
-	if s.config == nil {
-		return core.E("config.Service.Commit", "config not loaded", nil)
+func (s *Service) Commit() core.Result {
+	if s == nil || s.config == nil {
+		return core.Fail(core.E("config.Service.Commit", "config not loaded", nil))
 	}
 	return s.config.Commit()
 }
 
 // LoadFile merges a configuration file into the central configuration.
-func (s *Service) LoadFile(m Medium, path string) error {
-	if s.config == nil {
-		return core.E("config.Service.LoadFile", "config not loaded", nil)
+func (s *Service) LoadFile(m Medium, path string) core.Result {
+	if s == nil || s.config == nil {
+		return core.Fail(core.E("config.Service.LoadFile", "config not loaded", nil))
 	}
 	return s.config.LoadFile(m, path)
 }

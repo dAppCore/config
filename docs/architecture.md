@@ -1,188 +1,87 @@
 ---
 title: Architecture
-description: Internal design of config -- dual-viper layering, the Medium abstraction, and the framework service wrapper.
+description: Internal design of dappco.re/go/config.
 ---
 
 # Architecture
 
-## Design Goals
+The package is built around one invariant: the configuration a service reads is
+not the same thing as the configuration that should be persisted. Runtime
+environment values may override file values, but they must never be written back
+to disk by `Commit`.
 
-1. **Layered resolution** -- a single `Get()` call checks environment, file, and defaults without the caller needing to know which source won.
-2. **Safe persistence** -- environment variables must never bleed into the saved config file.
-3. **Pluggable storage** -- the file system is abstracted behind `io.Medium`, making tests deterministic and enabling future remote backends.
-4. **Framework integration** -- the package satisfies the `core.Config` interface, so any Core service can consume configuration without importing this package directly.
+## Config
 
-## Key Types
-
-### Config
+`Config` owns two Viper instances and a small amount of Core-specific state:
 
 ```go
 type Config struct {
-    mu     sync.RWMutex
-    full   *viper.Viper   // full configuration (file + env + defaults)
-    file   *viper.Viper   // file-backed configuration only (for persistence)
-    medium coreio.Medium
-    path   string
+    mu        sync.RWMutex
+    full      *viper.Viper
+    file      *viper.Viper
+    medium    Medium
+    path      string
+    envPrefix string
+    overrides map[string]any
 }
 ```
 
-`Config` is the central type. It holds **two** Viper instances:
+`file` stores configuration loaded from files plus explicit `Set` calls.
+`full` is rebuilt from `file`, the current environment, and explicit overrides.
+Reads use `full`; persistence uses `file`.
 
-- **`full`** -- contains everything: file values, environment bindings, and explicit `Set()` calls. All reads go through `full`.
-- **`file`** -- contains only values that originated from the config file or were explicitly set via `Set()`. All writes (`Commit()`) go through `file`.
+## Source Priority
 
-This dual-instance design is the key architectural decision. It solves the environment leakage problem: Viper merges environment variables into its settings map, which means a naive `SaveConfig()` would serialise env vars into the YAML file. By maintaining `file` as a clean copy, `Commit()` only persists what should be persisted.
+The effective read view is assembled in this order:
 
-### Option
+1. File-backed settings.
+2. Environment variables for the configured prefix.
+3. Explicit runtime overrides from `Set`.
 
-```go
-type Option func(*Config)
-```
+The override map exists because explicit `Set` values are persisted in `file`
+but must still outrank environment variables in the read view.
 
-Functional options configure the `Config` at creation time:
+## Storage
 
-| Option            | Effect                                             |
-|-------------------|----------------------------------------------------|
-| `WithMedium(m)`   | Sets the storage backend (defaults to `io.Local`)  |
-| `WithPath(path)`  | Sets the config file path (defaults to `~/.core/config.yaml`) |
-| `WithEnvPrefix(p)`| Changes the environment variable prefix (defaults to `CORE_CONFIG`) |
-
-### Service
+All file I/O goes through the local `Medium` interface:
 
 ```go
-type Service struct {
-    *core.ServiceRuntime[ServiceOptions]
-    config *Config
+type Medium interface {
+    Exists(path string) bool
+    Read(path string) core.Result
+    Write(path, content string) core.Result
+    EnsureDir(path string) core.Result
 }
 ```
 
-`Service` wraps `Config` as a framework-managed service. It embeds `ServiceRuntime` for typed options and implements two interfaces:
+The default implementation is `(&core.Fs{}).New("/")`. Tests pass a rooted
+`core.Fs` created inside `t.TempDir`, which keeps filesystem state deterministic.
 
-- **`core.Config`** -- `Get(key, out)` and `Set(key, v)`
-- **`core.Startable`** -- `OnStartup(ctx)` triggers config file loading during the application lifecycle
+## File Loading
 
-The service is registered as a factory function:
+`LoadFile` detects the format from the path:
 
-```go
-core.New(core.WithService(config.NewConfigService))
-```
+- `.yaml`, `.yml`, and extensionless files load as YAML.
+- `.json` loads as JSON.
+- `.toml` loads as TOML.
+- `.env` loads as dotenv.
 
-The factory receives the `*core.Core` instance, constructs the service, and returns it. The framework calls `OnStartup` at the appropriate lifecycle phase, at which point the config file is loaded.
+Parsed settings merge into `file`, then `full` is rebuilt. A later `Commit`
+therefore persists loaded file data and explicit runtime writes, not environment
+snapshots.
 
-### Env / LoadEnv
+## Service Wrapper
 
-```go
-func Env(prefix string) iter.Seq2[string, any]
-func LoadEnv(prefix string) map[string]any  // deprecated
-```
+`Service` embeds `core.ServiceRuntime[ServiceOptions]` and initialises `Config`
+during `OnStartup`. Its `Get`, `Set`, `Commit`, and `LoadFile` methods return
+`core.Result` and delegate to the loaded `Config`.
 
-`Env` returns a Go 1.23+ iterator over environment variables matching a given prefix, yielding `(dotKey, value)` pairs. The conversion logic:
-
-1. Filter `os.Environ()` for entries starting with `prefix`
-2. Strip the prefix
-3. Lowercase and replace `_` with `.`
-
-`LoadEnv` is the older materialising variant and is deprecated in favour of the iterator.
-
-## Data Flow
-
-### Initialisation (`New`)
-
-```
-New(opts...)
-  |
-  +-- create two viper instances (full, file)
-  +-- set env prefix on full ("CORE_CONFIG_" default)
-  +-- set env key replacer ("." <-> "_")
-  +-- apply functional options
-  +-- default medium to io.Local if nil
-  +-- default path to ~/.core/config.yaml if empty
-  +-- enable full.AutomaticEnv()
-  +-- if config file exists:
-        LoadFile(medium, path)
-          +-- medium.Read(path)
-          +-- detect config type from extension
-          +-- file.MergeConfig(content)
-          +-- full.MergeConfig(content)
-```
-
-### Read (`Get`)
-
-```
-Get(key, &out)
-  |
-  +-- RLock
-  +-- if key == "":
-  |     full.Unmarshal(out)  // full config into a struct
-  +-- else:
-  |     full.IsSet(key)?
-  |       yes -> full.UnmarshalKey(key, out)
-  |       no  -> error "key not found"
-  +-- RUnlock
-```
-
-Because `full` has `AutomaticEnv()` enabled, `full.IsSet(key)` returns true if the key exists in the file **or** as a `CORE_CONFIG_*` environment variable.
-
-### Write (`Set` + `Commit`)
-
-```
-Set(key, value)
-  |
-  +-- Lock
-  +-- file.Set(key, value)  // track for persistence
-  +-- full.Set(key, value)   // make visible to Get()
-  +-- Unlock
-
-Commit()
-  |
-  +-- Lock
-  +-- Save(medium, path, file.AllSettings())
-  |     +-- yaml.Marshal(data)
-  |     +-- medium.EnsureDir(dir)
-  |     +-- medium.Write(path, content)
-  +-- Unlock
-```
-
-Note that `Commit()` serialises `file.AllSettings()`, not `full.AllSettings()`. This is intentional -- it prevents environment variable values from being written to the config file.
-
-### File Loading (`LoadFile`)
-
-`LoadFile` supports YAML, JSON, TOML, and `.env` files. The config type is inferred from the file extension:
-
-- `.yaml`, `.yml` -- YAML
-- `.json` -- JSON
-- `.toml` -- TOML
-- `.env` (no extension, basename `.env`) -- dotenv format
-
-Content is merged (not replaced) into both `full` and `file` via `MergeConfig`, so multiple files can be layered.
+`NewConfigService` is the Core service factory. It returns a `core.Result`
+containing `*Service`, so it can be passed to `core.WithService`.
 
 ## Concurrency
 
-All public methods on `Config` and `Service` are safe for concurrent use. A `sync.RWMutex` protects the internal state:
-
-- `Get`, `All` take a read lock
-- `Set`, `Commit`, `LoadFile` take a write lock
-
-## The Medium Abstraction
-
-File operations go through `io.Medium` (from `forge.lthn.ai/core/go-io`), not `os` directly. This means:
-
-- **Tests** use `io.NewMockMedium()` -- an in-memory filesystem with a `Files` map
-- **Production** uses `io.Local` -- the real local filesystem
-- **Future** backends (S3, embedded assets) can implement `Medium` without changing config code
-
-## Compile-Time Interface Checks
-
-The package includes two compile-time assertions at the bottom of the respective files:
-
-```go
-var _ core.Config = (*Config)(nil)   // config.go
-var _ core.Config    = (*Service)(nil)  // service.go
-var _ core.Startable = (*Service)(nil)  // service.go
-```
-
-These ensure that if the `core.Config` or `core.Startable` interfaces ever change, this package will fail to compile rather than fail at runtime.
-
-## Licence
-
-EUPL-1.2
+Public `Config` methods lock around Viper access. `Get` and `All` refresh the
+read view so environment changes made before the call are visible. `All` returns
+a snapshot iterator; later `Set` calls do not mutate an iterator already
+returned to the caller.

@@ -1,121 +1,67 @@
 ---
 title: Development
-description: How to build, test, and contribute to config.
+description: Build, test, and compliance workflow for dappco.re/go/config.
 ---
 
 # Development
 
-## Prerequisites
+This module is a consumer of `dappco.re/go`. Its local style is defined by the
+v0.9.0 compliance audit in the Core repository.
 
-- **Go 1.26+**
-- **Core CLI** (`core` binary) for running tests and quality checks
-- The Go workspace at `~/Code/go.work` should include this module
+## Required Checks
 
-## Running Tests
-
-```bash
-cd /path/to/config
-
-# All tests
-core go test
-
-# Single test
-core go test --run TestConfig_Get_Good
-
-# With coverage
-core go cov
-core go cov --open   # opens HTML report in browser
-```
-
-### Test Naming Convention
-
-Tests follow the `_Good` / `_Bad` / `_Ugly` suffix pattern:
-
-| Suffix  | Meaning                         |
-|---------|---------------------------------|
-| `_Good` | Happy path -- expected success  |
-| `_Bad`  | Expected error conditions       |
-| `_Ugly` | Panics, edge cases, corruption  |
-
-### Mock Medium
-
-Tests use `io.NewMockMedium()` to avoid touching the real filesystem. Pre-populate it by writing directly to the `Files` map:
-
-```go
-m := io.NewMockMedium()
-m.Files["/tmp/test/config.yaml"] = "app:\n  name: existing\n"
-
-cfg, err := config.New(config.WithMedium(m), config.WithPath("/tmp/test/config.yaml"))
-```
-
-This pattern keeps tests fast, deterministic, and parallelisable.
-
-## Quality Checks
+Run these from the repository root:
 
 ```bash
-# Format, vet, lint, test in one pass
-core go qa
-
-# Full suite (adds race detector, vulnerability scan, security audit)
-core go qa full
-
-# Individual commands
-core go fmt
-core go vet
-core go lint
+GOWORK=off go mod tidy
+GOWORK=off go vet ./...
+GOWORK=off go test -count=1 ./...
+gofmt -l .
+bash /Users/snider/Code/core/go/tests/cli/v090-upgrade/audit.sh .
 ```
 
-## Code Style
+The audit script is authoritative. A change is incomplete until the audit
+prints `verdict: COMPLIANT` and every counter is `0`.
 
-- **UK English** in comments and documentation (colour, organisation, centre)
-- **`declare(strict_types=1)`** equivalent: all functions have explicit parameter and return types
-- **Error wrapping**: use `coreerr.E(caller, message, underlying)` from `go-log`
-- **Formatting**: standard `gofmt` / `goimports`
+## Test Layout
 
-## Project Structure
+Tests are file-aware. A public symbol in `config.go` belongs in
+`config_test.go`, a public symbol in `env.go` belongs in `env_test.go`, and a
+public symbol in `service.go` belongs in `service_test.go`.
 
-```
-config/
-    .core/
-        build.yaml       # Build configuration (targets, flags)
-        release.yaml     # Release configuration (changelog rules)
-    config.go            # Config struct, New(), Get/Set/Commit, Load/Save
-    config_test.go       # Tests
-    env.go               # Env() iterator, LoadEnv() (deprecated)
-    service.go           # Framework service wrapper (Startable)
-    go.mod
-    go.sum
-    docs/
-        index.md         # This documentation
-        architecture.md  # Internal design
-        development.md   # Build and contribution guide
-```
+Each public function or method has three variants:
 
-## Adding a New Feature
+- `Good` for the normal success path.
+- `Bad` for expected failure.
+- `Ugly` for edge cases such as nil receivers, empty inputs, or boundary
+  behaviour.
 
-1. **Write the test first** -- add a `TestFeatureName_Good` (and `_Bad` if error paths exist) to `config_test.go`.
-2. **Implement** -- keep the dual-viper invariant: writes go to both `v` and `f`; reads come from `v`; persistence comes from `f`.
-3. **Run QA** -- `core go qa` must pass before committing.
-4. **Update docs** -- if the change affects public API, update `docs/index.md` and `docs/architecture.md`.
+The canonical name is `Test<File>_<Symbol>_<Variant>`. Do not add aggregate
+test files, versioned test files, or AX-7 dump files.
 
-## Interface Compliance
+## Examples
 
-`Config` and `Service` both satisfy `core.Config`. `Service` additionally satisfies `core.Startable`. These are enforced at compile time:
+Each source file has a matching `_example_test.go` file. Examples must execute
+the symbol they document and print stable output through `core.Println`.
+Examples should avoid dynamic paths or map iteration unless the output is
+normalised first.
 
-```go
-var _ core.Config    = (*Config)(nil)
-var _ core.Config    = (*Service)(nil)
-var _ core.Startable = (*Service)(nil)
-```
+## Core Wrapper Policy
 
-If you add a new interface method upstream in `core/go`, the compiler will tell you what to implement here.
+Consumer code and tests should not import banned stdlib packages directly.
+Common replacements are:
 
-## Commit Guidelines
+- `core.Sprintf`, `core.Println`, and `core.Print` for formatting.
+- `core.PathExt`, `core.PathBase`, `core.PathDir`, and `core.Path` for paths.
+- `core.Environ`, `core.Setenv`, and `core.Unsetenv` for environment access.
+- `core.NewReader`, `core.SplitN`, `core.Replace`, `core.Lower`, and
+  `core.TrimPrefix` for text helpers.
 
-- Use conventional commits: `type(scope): description`
-- Include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` when pair-programming with Claude
-- Push via SSH: `ssh://git@forge.lthn.ai:2223/core/config.git`
+## Adding Behaviour
 
-## Licence
+When adding a public symbol:
 
-EUPL-1.2
+1. Add its Good, Bad, and Ugly tests to the matching source test file.
+2. Add its runnable example to the matching source example file.
+3. Keep production return values in `core.Result` shape.
+4. Run the required checks before handing the branch back.

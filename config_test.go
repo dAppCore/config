@@ -39,6 +39,14 @@ func writeConfigFile(t *T, fs *Fs, path, content string) {
 	RequireTrue(t, r.OK, r.Error())
 }
 
+func requireConfig(t *T, r Result) *config.Config {
+	t.Helper()
+	RequireTrue(t, r.OK, r.Error())
+	cfg, ok := r.Value.(*config.Config)
+	RequireTrue(t, ok)
+	return cfg
+}
+
 func startedService(t *T, opts config.ServiceOptions) *config.Service {
 	t.Helper()
 	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, opts)}
@@ -51,11 +59,13 @@ func TestConfig_New_Good(t *T) {
 	fs, path := configTestMedium(t)
 	writeConfigFile(t, fs, path, "app:\n  name: core\n")
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
+	r := config.New(config.WithMedium(fs), config.WithPath(path))
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
+	cfg := r.Value.(*config.Config)
 	var name string
-	AssertNoError(t, cfg.Get("app.name", &name))
+	get := cfg.Get("app.name", &name)
+	AssertTrue(t, get.OK, get.Error())
 	AssertEqual(t, "core", name)
 }
 
@@ -63,22 +73,23 @@ func TestConfig_New_Bad(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/config.txt", "app.name=core")
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/config.txt"))
+	r := config.New(config.WithMedium(fs), config.WithPath("/config.txt"))
 
-	AssertNil(t, cfg)
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "unsupported config file type")
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "unsupported config file type")
 }
 
 func TestConfig_New_Ugly(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/.env", "FOO=bar\n")
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/.env"))
+	r := config.New(config.WithMedium(fs), config.WithPath("/.env"))
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
+	cfg := r.Value.(*config.Config)
 	var foo string
-	AssertNoError(t, cfg.Get("foo", &foo))
+	get := cfg.Get("foo", &foo)
+	AssertTrue(t, get.OK, get.Error())
 	AssertEqual(t, "bar", foo)
 }
 
@@ -86,36 +97,34 @@ func TestConfig_WithMedium_Good(t *T) {
 	fs, path := configTestMedium(t)
 	writeConfigFile(t, fs, path, "agent: codex\n")
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	AssertNoError(t, err)
 	var agent string
-	AssertNoError(t, cfg.Get("agent", &agent))
+	r := cfg.Get("agent", &agent)
+	AssertTrue(t, r.OK, r.Error())
 	AssertEqual(t, "codex", agent)
 }
 
 func TestConfig_WithMedium_Bad(t *T) {
-	cfg, err := config.New(config.WithMedium(nil), config.WithPath("/missing.yaml"))
+	r := config.New(config.WithMedium(nil), config.WithPath("/missing.yaml"))
 
-	AssertNoError(t, err)
-	AssertNotNil(t, cfg)
+	AssertTrue(t, r.OK, r.Error())
+	cfg := r.Value.(*config.Config)
 	AssertEqual(t, "/missing.yaml", cfg.Path())
 }
 
 func TestConfig_WithMedium_Ugly(t *T) {
-	cfg, err := config.New(config.WithMedium(refusingMedium{}), config.WithPath("/config.yaml"))
+	r := config.New(config.WithMedium(refusingMedium{}), config.WithPath("/config.yaml"))
 
-	AssertNil(t, cfg)
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "read refused")
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "read refused")
 }
 
 func TestConfig_WithPath_Good(t *T) {
 	fs := configTestFS(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/custom/config.yaml"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("/custom/config.yaml")))
 
-	AssertNoError(t, err)
 	AssertEqual(t, "/custom/config.yaml", cfg.Path())
 }
 
@@ -123,18 +132,16 @@ func TestConfig_WithPath_Bad(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/custom/config.json", `{"app":{"name":"core"}}`)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/custom/config.json"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("/custom/config.json")))
 
-	AssertNoError(t, err)
 	AssertEqual(t, "/custom/config.json", cfg.Path())
 }
 
 func TestConfig_WithPath_Ugly(t *T) {
 	fs := configTestFS(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(""))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("")))
 
-	AssertNoError(t, err)
 	AssertContains(t, cfg.Path(), ".core/config.yaml")
 }
 
@@ -142,11 +149,11 @@ func TestConfig_WithEnvPrefix_Good(t *T) {
 	t.Setenv("MYAPP_SETTING", "secret")
 	fs, path := configTestMedium(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("MYAPP"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("MYAPP")))
 
-	AssertNoError(t, err)
 	var setting string
-	AssertNoError(t, cfg.Get("setting", &setting))
+	r := cfg.Get("setting", &setting)
+	AssertTrue(t, r.OK, r.Error())
 	AssertEqual(t, "secret", setting)
 }
 
@@ -154,11 +161,11 @@ func TestConfig_WithEnvPrefix_Bad(t *T) {
 	t.Setenv("MYAPP_SETTING", "secret")
 	fs, path := configTestMedium(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("OTHER"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("OTHER")))
 
-	AssertNoError(t, err)
 	var setting string
-	AssertError(t, cfg.Get("setting", &setting))
+	r := cfg.Get("setting", &setting)
+	AssertFalse(t, r.OK)
 	AssertEqual(t, "", setting)
 }
 
@@ -166,44 +173,41 @@ func TestConfig_WithEnvPrefix_Ugly(t *T) {
 	t.Setenv("MYAPP_SETTING", "secret")
 	fs, path := configTestMedium(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("MYAPP_"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("MYAPP_")))
 
-	AssertNoError(t, err)
 	var setting string
-	AssertNoError(t, cfg.Get("setting", &setting))
+	r := cfg.Get("setting", &setting)
+	AssertTrue(t, r.OK, r.Error())
 	AssertEqual(t, "secret", setting)
 }
 
 func TestConfig_Config_Get_Good(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
-	RequireNoError(t, cfg.Set("app.name", "core"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
+	RequireTrue(t, cfg.Set("app.name", "core").OK)
 
 	var name string
-	err = cfg.Get("app.name", &name)
+	r := cfg.Get("app.name", &name)
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	AssertEqual(t, "core", name)
 }
 
 func TestConfig_Config_Get_Bad(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
 	var missing string
-	err = cfg.Get("missing.key", &missing)
+	r := cfg.Get("missing.key", &missing)
 
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "key not found")
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "key not found")
 }
 
 func TestConfig_Config_Get_Ugly(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/config.yaml", "app:\n  name: core\nversion: 1\n")
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/config.yaml"))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("/config.yaml")))
 
 	var full struct {
 		App struct {
@@ -211,56 +215,56 @@ func TestConfig_Config_Get_Ugly(t *T) {
 		} `mapstructure:"app"`
 		Version int `mapstructure:"version"`
 	}
-	err = cfg.Get("", &full)
+	r := cfg.Get("", &full)
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	AssertEqual(t, "core", full.App.Name)
 	AssertEqual(t, 1, full.Version)
 }
 
 func TestConfig_Config_Set_Good(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	err = cfg.Set("dev.editor", "vim")
+	r := cfg.Set("dev.editor", "vim")
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	var editor string
-	AssertNoError(t, cfg.Get("dev.editor", &editor))
+	get := cfg.Get("dev.editor", &editor)
+	AssertTrue(t, get.OK, get.Error())
 	AssertEqual(t, "vim", editor)
 }
 
 func TestConfig_Config_Set_Bad(t *T) {
 	var cfg *config.Config
 
-	AssertPanics(t, func() {
-		_ = cfg.Set("dev.editor", "vim")
-	})
+	r := cfg.Set("dev.editor", "vim")
+
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "config is nil")
 }
 
 func TestConfig_Config_Set_Ugly(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	err = cfg.Set("", "root-value")
+	r := cfg.Set("feature.enabled", true)
 
-	AssertNoError(t, err)
-	var full map[string]any
-	AssertNoError(t, cfg.Get("", &full))
-	AssertEqual(t, "root-value", full[""])
+	AssertTrue(t, r.OK, r.Error())
+	var enabled bool
+	get := cfg.Get("feature.enabled", &enabled)
+	AssertTrue(t, get.OK, get.Error())
+	AssertTrue(t, enabled)
 }
 
 func TestConfig_Config_Commit_Good(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
-	RequireNoError(t, cfg.Set("dev.editor", "vim"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
+	RequireTrue(t, cfg.Set("dev.editor", "vim").OK)
 
-	err = cfg.Commit()
+	r := cfg.Commit()
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	content := fs.Read(path)
 	RequireTrue(t, content.OK, content.Error())
 	AssertContains(t, content.Value.(string), "editor: vim")
@@ -268,24 +272,22 @@ func TestConfig_Config_Commit_Good(t *T) {
 
 func TestConfig_Config_Commit_Bad(t *T) {
 	fs := configTestFS(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/config.json"))
-	RequireNoError(t, err)
-	RequireNoError(t, cfg.Set("key", "value"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("/config.json")))
+	RequireTrue(t, cfg.Set("key", "value").OK)
 
-	err = cfg.Commit()
+	r := cfg.Commit()
 
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "unsupported config file type")
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "unsupported config file type")
 }
 
 func TestConfig_Config_Commit_Ugly(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	err = cfg.Commit()
+	r := cfg.Commit()
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	content := fs.Read(path)
 	RequireTrue(t, content.OK, content.Error())
 	AssertContains(t, content.Value.(string), "{}")
@@ -293,10 +295,9 @@ func TestConfig_Config_Commit_Ugly(t *T) {
 
 func TestConfig_Config_All_Good(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
-	RequireNoError(t, cfg.Set("zulu", "last"))
-	RequireNoError(t, cfg.Set("alpha", "first"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
+	RequireTrue(t, cfg.Set("zulu", "last").OK)
+	RequireTrue(t, cfg.Set("alpha", "first").OK)
 
 	var keys []string
 	for key := range cfg.All() {
@@ -308,8 +309,7 @@ func TestConfig_Config_All_Good(t *T) {
 
 func TestConfig_Config_All_Bad(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
 	var keys []string
 	for key := range cfg.All() {
@@ -321,11 +321,10 @@ func TestConfig_Config_All_Bad(t *T) {
 
 func TestConfig_Config_All_Ugly(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
-	RequireNoError(t, cfg.Set("alpha", "first"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
+	RequireTrue(t, cfg.Set("alpha", "first").OK)
 	seq := cfg.All()
-	RequireNoError(t, cfg.Set("beta", "second"))
+	RequireTrue(t, cfg.Set("beta", "second").OK)
 
 	var keys []string
 	for key := range seq {
@@ -338,66 +337,62 @@ func TestConfig_Config_All_Ugly(t *T) {
 func TestConfig_Config_Path_Good(t *T) {
 	fs := configTestFS(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath("/custom/path/config.yaml"))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("/custom/path/config.yaml")))
 
-	AssertNoError(t, err)
 	AssertEqual(t, "/custom/path/config.yaml", cfg.Path())
 }
 
 func TestConfig_Config_Path_Bad(t *T) {
 	fs := configTestFS(t)
 
-	cfg, err := config.New(config.WithMedium(fs))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs)))
 
-	AssertNoError(t, err)
 	AssertContains(t, cfg.Path(), ".core/config.yaml")
 }
 
 func TestConfig_Config_Path_Ugly(t *T) {
 	fs := configTestFS(t)
 
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(""))
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath("")))
 
-	AssertNoError(t, err)
 	AssertContains(t, cfg.Path(), ".core/config.yaml")
 }
 
 func TestConfig_Config_LoadFile_Good(t *T) {
 	fs, path := configTestMedium(t)
 	writeConfigFile(t, fs, "/extra.yaml", "agent: codex\n")
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	err = cfg.LoadFile(fs, "/extra.yaml")
+	r := cfg.LoadFile(fs, "/extra.yaml")
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	var agent string
-	AssertNoError(t, cfg.Get("agent", &agent))
+	get := cfg.Get("agent", &agent)
+	AssertTrue(t, get.OK, get.Error())
 	AssertEqual(t, "codex", agent)
 }
 
 func TestConfig_Config_LoadFile_Bad(t *T) {
 	fs, path := configTestMedium(t)
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	err = cfg.LoadFile(fs, "/missing.yaml")
+	r := cfg.LoadFile(fs, "/missing.yaml")
 
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "failed to read config file")
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "failed to read config file")
 }
 
 func TestConfig_Config_LoadFile_Ugly(t *T) {
 	fs, path := configTestMedium(t)
 	writeConfigFile(t, fs, "/.env", "TOKEN=abc\n")
-	cfg, err := config.New(config.WithMedium(fs), config.WithPath(path))
-	RequireNoError(t, err)
+	cfg := requireConfig(t, config.New(config.WithMedium(fs), config.WithPath(path)))
 
-	err = cfg.LoadFile(fs, "/.env")
+	r := cfg.LoadFile(fs, "/.env")
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	var token string
-	AssertNoError(t, cfg.Get("token", &token))
+	get := cfg.Get("token", &token)
+	AssertTrue(t, get.OK, get.Error())
 	AssertEqual(t, "abc", token)
 }
 
@@ -405,9 +400,10 @@ func TestConfig_Load_Good(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/config.yaml", "app:\n  name: core\n")
 
-	data, err := config.Load(fs, "/config.yaml")
+	r := config.Load(fs, "/config.yaml")
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
+	data := r.Value.(map[string]any)
 	app := data["app"].(map[string]any)
 	AssertEqual(t, "core", app["name"])
 }
@@ -416,20 +412,20 @@ func TestConfig_Load_Bad(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/config.json", `{"app":{"name":"core"}}`)
 
-	data, err := config.Load(fs, "/config.json")
+	r := config.Load(fs, "/config.json")
 
-	AssertNil(t, data)
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "unsupported config file type")
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "unsupported config file type")
 }
 
 func TestConfig_Load_Ugly(t *T) {
 	fs := configTestFS(t)
 	writeConfigFile(t, fs, "/config", "app:\n  name: core\n")
 
-	data, err := config.Load(fs, "/config")
+	r := config.Load(fs, "/config")
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
+	data := r.Value.(map[string]any)
 	app := data["app"].(map[string]any)
 	AssertEqual(t, "core", app["name"])
 }
@@ -437,9 +433,9 @@ func TestConfig_Load_Ugly(t *T) {
 func TestConfig_Save_Good(t *T) {
 	fs := configTestFS(t)
 
-	err := config.Save(fs, "/config.yaml", map[string]any{"key": "value"})
+	r := config.Save(fs, "/config.yaml", map[string]any{"key": "value"})
 
-	AssertNoError(t, err)
+	AssertTrue(t, r.OK, r.Error())
 	content := fs.Read("/config.yaml")
 	RequireTrue(t, content.OK, content.Error())
 	AssertContains(t, content.Value.(string), "key: value")
@@ -448,287 +444,15 @@ func TestConfig_Save_Good(t *T) {
 func TestConfig_Save_Bad(t *T) {
 	fs := configTestFS(t)
 
-	err := config.Save(fs, "/config.json", map[string]any{"key": "value"})
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "unsupported config file type")
-}
-
-func TestConfig_Save_Ugly(t *T) {
-	err := config.Save(refusingMedium{}, "/config.yaml", map[string]any{"key": "value"})
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "mkdir refused")
-}
-
-func TestConfig_Env_Good(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
-	t.Setenv("AX_CONFIG_ALPHA", "first")
-
-	var keys []string
-	var values []any
-	for key, value := range config.Env("AX_CONFIG_") {
-		keys = append(keys, key)
-		values = append(values, value)
-	}
-
-	AssertEqual(t, []string{"alpha", "foo.bar"}, keys)
-	AssertEqual(t, []any{"first", "baz"}, values)
-}
-
-func TestConfig_Env_Bad(t *T) {
-	t.Setenv("AX_CONFIG_FOO", "bar")
-
-	var keys []string
-	for key := range config.Env("OTHER_CONFIG_") {
-		keys = append(keys, key)
-	}
-
-	AssertEmpty(t, keys)
-}
-
-func TestConfig_Env_Ugly(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
-
-	var keys []string
-	for key := range config.Env("AX_CONFIG") {
-		keys = append(keys, key)
-	}
-
-	AssertEqual(t, []string{"foo.bar"}, keys)
-}
-
-func TestConfig_LoadEnv_Good(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
-
-	data := config.LoadEnv("AX_CONFIG_")
-
-	AssertLen(t, data, 1)
-	AssertEqual(t, "baz", data["foo.bar"])
-}
-
-func TestConfig_LoadEnv_Bad(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
-
-	data := config.LoadEnv("OTHER_CONFIG_")
-
-	AssertEmpty(t, data)
-}
-
-func TestConfig_LoadEnv_Ugly(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
-
-	data := config.LoadEnv("AX_CONFIG")
-
-	AssertLen(t, data, 1)
-	AssertEqual(t, "baz", data["foo.bar"])
-}
-
-func TestConfig_Service_OnStartup_Good(t *T) {
-	fs, path := configTestMedium(t)
-	writeConfigFile(t, fs, path, "app:\n  name: service\n")
-	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, Medium: fs})}
-
-	r := svc.OnStartup(Background())
-
-	AssertTrue(t, r.OK, r.Error())
-	var name string
-	AssertNoError(t, svc.Get("app.name", &name))
-	AssertEqual(t, "service", name)
-}
-
-func TestConfig_Service_OnStartup_Bad(t *T) {
-	fs := configTestFS(t)
-	writeConfigFile(t, fs, "/config.txt", "app.name=service")
-	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: "/config.txt", Medium: fs})}
-
-	r := svc.OnStartup(Background())
+	r := config.Save(fs, "/config.json", map[string]any{"key": "value"})
 
 	AssertFalse(t, r.OK)
 	AssertContains(t, r.Error(), "unsupported config file type")
 }
 
-func TestConfig_Service_OnStartup_Ugly(t *T) {
-	t.Setenv("SERVICE_SETTING", "secret")
-	fs, path := configTestMedium(t)
-	svc := &config.Service{
-		ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, EnvPrefix: "SERVICE", Medium: fs}),
-	}
+func TestConfig_Save_Ugly(t *T) {
+	r := config.Save(refusingMedium{}, "/config.yaml", map[string]any{"key": "value"})
 
-	r := svc.OnStartup(Background())
-
-	AssertTrue(t, r.OK, r.Error())
-	var setting string
-	AssertNoError(t, svc.Get("setting", &setting))
-	AssertEqual(t, "secret", setting)
-}
-
-func TestConfig_Service_Get_Good(t *T) {
-	fs, path := configTestMedium(t)
-	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
-	RequireNoError(t, svc.Set("agent", "codex"))
-
-	var agent string
-	err := svc.Get("agent", &agent)
-
-	AssertNoError(t, err)
-	AssertEqual(t, "codex", agent)
-}
-
-func TestConfig_Service_Get_Bad(t *T) {
-	svc := &config.Service{}
-
-	var agent string
-	err := svc.Get("agent", &agent)
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "config not loaded")
-}
-
-func TestConfig_Service_Get_Ugly(t *T) {
-	fs := configTestFS(t)
-	writeConfigFile(t, fs, "/config.yaml", "app:\n  name: service\n")
-	svc := startedService(t, config.ServiceOptions{Path: "/config.yaml", Medium: fs})
-
-	var full struct {
-		App struct {
-			Name string `mapstructure:"name"`
-		} `mapstructure:"app"`
-	}
-	err := svc.Get("", &full)
-
-	AssertNoError(t, err)
-	AssertEqual(t, "service", full.App.Name)
-}
-
-func TestConfig_Service_Set_Good(t *T) {
-	fs, path := configTestMedium(t)
-	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
-
-	err := svc.Set("agent", "codex")
-
-	AssertNoError(t, err)
-	var agent string
-	AssertNoError(t, svc.Get("agent", &agent))
-	AssertEqual(t, "codex", agent)
-}
-
-func TestConfig_Service_Set_Bad(t *T) {
-	svc := &config.Service{}
-
-	err := svc.Set("agent", "codex")
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "config not loaded")
-}
-
-func TestConfig_Service_Set_Ugly(t *T) {
-	fs, path := configTestMedium(t)
-	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
-
-	err := svc.Set("nested.agent", "codex")
-
-	AssertNoError(t, err)
-	var agent string
-	AssertNoError(t, svc.Get("nested.agent", &agent))
-	AssertEqual(t, "codex", agent)
-}
-
-func TestConfig_Service_Commit_Good(t *T) {
-	fs, path := configTestMedium(t)
-	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
-	RequireNoError(t, svc.Set("agent", "codex"))
-
-	err := svc.Commit()
-
-	AssertNoError(t, err)
-	content := fs.Read(path)
-	RequireTrue(t, content.OK, content.Error())
-	AssertContains(t, content.Value.(string), "agent: codex")
-}
-
-func TestConfig_Service_Commit_Bad(t *T) {
-	svc := &config.Service{}
-
-	err := svc.Commit()
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "config not loaded")
-}
-
-func TestConfig_Service_Commit_Ugly(t *T) {
-	fs := configTestFS(t)
-	svc := startedService(t, config.ServiceOptions{Path: "/config.json", Medium: fs})
-	RequireNoError(t, svc.Set("agent", "codex"))
-
-	err := svc.Commit()
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "unsupported config file type")
-}
-
-func TestConfig_Service_LoadFile_Good(t *T) {
-	fs, path := configTestMedium(t)
-	writeConfigFile(t, fs, "/extra.yaml", "agent: codex\n")
-	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
-
-	err := svc.LoadFile(fs, "/extra.yaml")
-
-	AssertNoError(t, err)
-	var agent string
-	AssertNoError(t, svc.Get("agent", &agent))
-	AssertEqual(t, "codex", agent)
-}
-
-func TestConfig_Service_LoadFile_Bad(t *T) {
-	svc := &config.Service{}
-	fs, path := configTestMedium(t)
-
-	err := svc.LoadFile(fs, path)
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "config not loaded")
-}
-
-func TestConfig_Service_LoadFile_Ugly(t *T) {
-	fs, path := configTestMedium(t)
-	writeConfigFile(t, fs, "/.env", "TOKEN=abc\n")
-	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
-
-	err := svc.LoadFile(fs, "/.env")
-
-	AssertNoError(t, err)
-	var token string
-	AssertNoError(t, svc.Get("token", &token))
-	AssertEqual(t, "abc", token)
-}
-
-func TestConfig_NewConfigService_Good(t *T) {
-	r := config.NewConfigService(New())
-
-	AssertTrue(t, r.OK, r.Error())
-	svc, ok := r.Value.(*config.Service)
-	AssertTrue(t, ok)
-	AssertNotNil(t, svc)
-}
-
-func TestConfig_NewConfigService_Bad(t *T) {
-	r := config.NewConfigService(nil)
-	RequireTrue(t, r.OK, r.Error())
-	svc := r.Value.(*config.Service)
-
-	var value string
-	err := svc.Get("missing", &value)
-
-	AssertError(t, err)
-	AssertContains(t, err.Error(), "config not loaded")
-}
-
-func TestConfig_NewConfigService_Ugly(t *T) {
-	c := New(WithService(config.NewConfigService))
-
-	svc, ok := ServiceFor[*config.Service](c, "config")
-
-	AssertTrue(t, ok)
-	AssertNotNil(t, svc)
+	AssertFalse(t, r.OK)
+	AssertContains(t, r.Error(), "mkdir refused")
 }

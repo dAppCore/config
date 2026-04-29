@@ -2,13 +2,13 @@ package config
 
 import (
 	"iter"
-	"os"
 	"sort"
-	"strings"
+
+	core "dappco.re/go"
 )
 
 func normaliseEnvPrefix(prefix string) string {
-	if prefix == "" || strings.HasSuffix(prefix, "_") {
+	if prefix == "" || core.HasSuffix(prefix, "_") {
 		return prefix
 	}
 	return prefix + "_"
@@ -33,12 +33,12 @@ func Env(prefix string) iter.Seq2[string, any] {
 
 		var entries []entry
 
-		for _, env := range os.Environ() {
-			if !strings.HasPrefix(env, prefix) {
+		for _, env := range core.Environ() {
+			if !core.HasPrefix(env, prefix) {
 				continue
 			}
 
-			parts := strings.SplitN(env, "=", 2)
+			parts := core.SplitN(env, "=", 2)
 			if len(parts) != 2 {
 				continue
 			}
@@ -46,9 +46,9 @@ func Env(prefix string) iter.Seq2[string, any] {
 			name := parts[0]
 			value := parts[1]
 
-			key := strings.TrimPrefix(name, prefix)
-			key = strings.ToLower(key)
-			key = strings.ReplaceAll(key, "_", ".")
+			key := core.TrimPrefix(name, prefix)
+			key = core.Lower(key)
+			key = core.Replace(key, "_", ".")
 
 			entries = append(entries, entry{key: key, value: value})
 		}
