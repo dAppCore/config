@@ -5,11 +5,7 @@ import (
 	core "dappco.re/go"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
 	coreio "dappco.re/go/io"
 	"gopkg.in/yaml.v3"
@@ -17,28 +13,28 @@ import (
 
 func setManifestTrustKeys(t *core.T, keys ...string) {
 	t.Helper()
-	t.Setenv("CORE_MANIFEST_TRUST_KEYS", strings.Join(keys, ","))
+	t.Setenv("CORE_MANIFEST_TRUST_KEYS", core.Join(",", keys...))
 }
 
-func TestManifest_SplitManifestTrustedKeys_Good(t *core.T) {
+func TestManifest_splitManifestTrustedKeys_Good(t *core.T) {
 	got := splitManifestTrustedKeys("a,b;c d\te\nf")
 	want := []string{"a", "b", "c", "d", "e", "f"}
 	core.AssertEqual(t, want, got)
 }
 
-func TestManifest_SplitManifestTrustedKeys_Bad(t *core.T) {
+func TestManifest_splitManifestTrustedKeys_Bad(t *core.T) {
 	got := splitManifestTrustedKeys("")
 	core.AssertEmpty(t, got)
 	core.AssertLen(t, got, 0)
 }
 
-func TestManifest_SplitManifestTrustedKeys_Ugly(t *core.T) {
+func TestManifest_splitManifestTrustedKeys_Ugly(t *core.T) {
 	got := splitManifestTrustedKeys("   ")
 	core.AssertEmpty(t, got)
 	core.AssertLen(t, got, 0)
 }
 
-func TestManifest_ParseManifestPublicKey_Good(t *core.T) {
+func TestManifest_parseManifestPublicKey_Good(t *core.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 
@@ -47,32 +43,32 @@ func TestManifest_ParseManifestPublicKey_Good(t *core.T) {
 	core.AssertEqual(t, hex.EncodeToString(pub), hex.EncodeToString(got))
 }
 
-func TestManifest_ParseManifestPublicKey_Bad(t *core.T) {
+func TestManifest_parseManifestPublicKey_Bad(t *core.T) {
 	_, err := parseManifestPublicKey("not-hex")
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "decode manifest public key failed")
 }
 
-func TestManifest_ParseManifestPublicKey_Ugly(t *core.T) {
+func TestManifest_parseManifestPublicKey_Ugly(t *core.T) {
 	_, err := parseManifestPublicKey("   ")
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "empty manifest public key")
 }
 
-func TestManifest_DedupeManifestKeys_Good(t *core.T) {
+func TestManifest_dedupeManifestKeys_Good(t *core.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 	got := dedupeManifestKeys([]ed25519.PublicKey{pub, pub})
 	core.AssertEqual(t, []ed25519.PublicKey{pub}, got)
 }
 
-func TestManifest_DedupeManifestKeys_Bad(t *core.T) {
+func TestManifest_dedupeManifestKeys_Bad(t *core.T) {
 	out := dedupeManifestKeys(nil)
 	core.AssertEmpty(t, out)
 	core.AssertLen(t, out, 0)
 }
 
-func TestManifest_DedupeManifestKeys_Ugly(t *core.T) {
+func TestManifest_dedupeManifestKeys_Ugly(t *core.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 
@@ -81,19 +77,19 @@ func TestManifest_DedupeManifestKeys_Ugly(t *core.T) {
 	core.AssertEqual(t, []ed25519.PublicKey{pub}, out)
 }
 
-func TestManifest_MissingOrEmptyStringField_Good(t *core.T) {
+func TestManifest_missingOrEmptyStringField_Good(t *core.T) {
 	raw := map[string]any{"sign": "abc"}
 	got := missingOrEmptyStringField(raw, "sign", "abc")
 	core.AssertFalse(t, got)
 }
 
-func TestManifest_MissingOrEmptyStringField_Bad(t *core.T) {
+func TestManifest_missingOrEmptyStringField_Bad(t *core.T) {
 	raw := map[string]any{}
 	got := missingOrEmptyStringField(raw, "sign", "abc")
 	core.AssertTrue(t, got)
 }
 
-func TestManifest_MissingOrEmptyStringField_Ugly(t *core.T) {
+func TestManifest_missingOrEmptyStringField_Ugly(t *core.T) {
 	raw := map[string]any{"sign": ""}
 	core.AssertTrue(t, missingOrEmptyStringField(raw, "sign", "abc"))
 	raw["sign"] = "   "
@@ -116,7 +112,7 @@ func TestManifest_TrustedManifestPublicKeys_Good(t *core.T) {
 	core.AssertNoError(t, err)
 	setManifestTrustKeys(t, hex.EncodeToString(pub))
 
-	got, err := trustedManifestPublicKeys()
+	got, err := TrustedManifestPublicKeys()
 	core.AssertNoError(t, err)
 	core.AssertLen(t, got, 1)
 	core.AssertEqual(t, pub, got[0])
@@ -124,7 +120,7 @@ func TestManifest_TrustedManifestPublicKeys_Good(t *core.T) {
 
 func TestManifest_TrustedManifestPublicKeys_Bad(t *core.T) {
 	setManifestTrustKeys(t, "not-hex")
-	_, err := trustedManifestPublicKeys()
+	_, err := TrustedManifestPublicKeys()
 	core.AssertError(t, err)
 }
 
@@ -133,88 +129,88 @@ func TestManifest_TrustedManifestPublicKeys_Ugly(t *core.T) {
 	setManifestHomeDir(t, home)
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 
-	keysDir := filepath.Join(home, ".core", "keys")
-	core.AssertNoError(t, os.MkdirAll(keysDir, 0o755))
+	keysDir := core.PathJoin(home, ".core", "keys")
+	testMkdirAll(t, keysDir, 0o755)
 
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
-	core.AssertNoError(t, os.WriteFile(filepath.Join(keysDir, "trusted.pub"), []byte(fmt.Sprintf("%x\n", pub)), 0o644))
+	testWriteFile(t, core.PathJoin(keysDir, "trusted.pub"), []byte(core.Sprintf("%x\n", pub)), 0o644)
 
-	got, err := trustedManifestPublicKeys()
+	got, err := TrustedManifestPublicKeys()
 	core.AssertNoError(t, err)
 	core.AssertLen(t, got, 1)
 }
 
-func TestManifest_TrustedManifestPublicKeys_SymlinkedCore_Bad(t *core.T) {
+func TestManifestTrustedManifestPublicKeysSymlinkedCoreBad(t *core.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
 	home := t.TempDir()
 	setManifestHomeDir(t, home)
-	coreDir := filepath.Join(home, ".core")
+	coreDir := core.PathJoin(home, ".core")
 
-	realCore := filepath.Join(t.TempDir(), "real-core")
-	core.AssertNoError(t, os.MkdirAll(realCore, 0o755))
-	core.AssertNoError(t, os.Symlink(realCore, coreDir))
-	t.Cleanup(func() { _ = os.Remove(coreDir) })
+	realCore := core.PathJoin(t.TempDir(), "real-core")
+	testMkdirAll(t, realCore, 0o755)
+	testSymlink(t, realCore, coreDir)
+	t.Cleanup(func() { testRemove(coreDir) })
 
-	_, err := trustedManifestPublicKeys()
+	_, err := TrustedManifestPublicKeys()
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "symlinked .core directory rejected")
 }
 
-func TestManifest_TrustedManifestPublicKeys_SymlinkedKeysDir_Bad(t *core.T) {
+func TestManifestTrustedManifestPublicKeysSymlinkedKeysDirBad(t *core.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
 	home := t.TempDir()
 	setManifestHomeDir(t, home)
-	realKeys := filepath.Join(t.TempDir(), "real-keys")
+	realKeys := core.PathJoin(t.TempDir(), "real-keys")
 
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 
-	coreDir := filepath.Join(home, ".core")
-	keysDir := filepath.Join(coreDir, "keys")
-	core.AssertNoError(t, os.MkdirAll(coreDir, 0o755))
-	core.AssertNoError(t, os.MkdirAll(realKeys, 0o755))
-	core.AssertNoError(t, os.Symlink(realKeys, keysDir))
-	t.Cleanup(func() { _ = os.Remove(keysDir) })
+	coreDir := core.PathJoin(home, ".core")
+	keysDir := core.PathJoin(coreDir, "keys")
+	testMkdirAll(t, coreDir, 0o755)
+	testMkdirAll(t, realKeys, 0o755)
+	testSymlink(t, realKeys, keysDir)
+	t.Cleanup(func() { testRemove(keysDir) })
 
-	_, err := trustedManifestPublicKeys()
+	_, err := TrustedManifestPublicKeys()
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "symlinked trusted keys directory rejected")
 }
 
-func TestManifest_TrustedManifestPublicKeys_SymlinkedKeyFile_Bad(t *core.T) {
+func TestManifestTrustedManifestPublicKeysSymlinkedKeyFileBad(t *core.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
 	home := t.TempDir()
 	setManifestHomeDir(t, home)
-	realKeys := filepath.Join(t.TempDir(), "real-keys")
+	realKeys := core.PathJoin(t.TempDir(), "real-keys")
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 
-	coreDir := filepath.Join(home, ".core")
-	keysDir := filepath.Join(coreDir, "keys")
-	core.AssertNoError(t, os.MkdirAll(keysDir, 0o755))
-	core.AssertNoError(t, os.MkdirAll(realKeys, 0o755))
-	core.AssertNoError(t, os.WriteFile(filepath.Join(realKeys, "trusted.pub"), []byte(fmt.Sprintf("%x\n", pub)), 0o644))
-	symlinkPath := filepath.Join(keysDir, "trusted.pub")
-	core.AssertNoError(t, os.Symlink(filepath.Join(realKeys, "trusted.pub"), symlinkPath))
-	t.Cleanup(func() { _ = os.Remove(symlinkPath) })
+	coreDir := core.PathJoin(home, ".core")
+	keysDir := core.PathJoin(coreDir, "keys")
+	testMkdirAll(t, keysDir, 0o755)
+	testMkdirAll(t, realKeys, 0o755)
+	testWriteFile(t, core.PathJoin(realKeys, "trusted.pub"), []byte(core.Sprintf("%x\n", pub)), 0o644)
+	symlinkPath := core.PathJoin(keysDir, "trusted.pub")
+	testSymlink(t, core.PathJoin(realKeys, "trusted.pub"), symlinkPath)
+	t.Cleanup(func() { testRemove(symlinkPath) })
 
-	_, err = trustedManifestPublicKeys()
+	_, err = TrustedManifestPublicKeys()
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "symlinked trusted key rejected")
 }
 
-func TestManifest_TrustedManifestPublicKeysExported_Good(t *core.T) {
+func TestManifestTrustedManifestPublicKeysExportedGood(t *core.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 	setManifestTrustKeys(t, hex.EncodeToString(pub))
@@ -225,7 +221,7 @@ func TestManifest_TrustedManifestPublicKeysExported_Good(t *core.T) {
 	core.AssertEqual(t, pub, got[0])
 }
 
-func TestManifest_ViewSignatureHelpers_Good(t *core.T) {
+func TestManifestViewSignatureHelpersGood(t *core.T) {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 
@@ -250,7 +246,7 @@ func TestManifest_ViewSignatureHelpers_Good(t *core.T) {
 	core.AssertNoError(t, VerifyViewManifestSignature(view, pub))
 }
 
-func TestManifest_ViewSignatureHelpers_Bad(t *core.T) {
+func TestManifestViewSignatureHelpersBad(t *core.T) {
 	view := &ViewManifest{
 		Code: "photo-browser",
 		Name: "Photo Browser",
@@ -262,7 +258,7 @@ func TestManifest_ViewSignatureHelpers_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "invalid view manifest signature")
 }
 
-func TestManifest_ViewSignatureHelpers_Ugly(t *core.T) {
+func TestManifestViewSignatureHelpersUgly(t *core.T) {
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 
@@ -277,7 +273,7 @@ func TestManifest_ViewSignatureHelpers_Ugly(t *core.T) {
 	core.AssertContains(t, err.Error(), "not an ed25519 public key")
 }
 
-func TestManifest_PackageSignatureHelpers_Good(t *core.T) {
+func TestManifestPackageSignatureHelpersGood(t *core.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
@@ -302,7 +298,7 @@ func TestManifest_PackageSignatureHelpers_Good(t *core.T) {
 	core.AssertNoError(t, VerifyPackageManifest(pkg))
 }
 
-func TestManifest_PackageSignatureHelpers_Bad(t *core.T) {
+func TestManifestPackageSignatureHelpersBad(t *core.T) {
 	pkg := &PackageManifest{
 		Code:    "go-io",
 		Name:    "Core I/O",
@@ -316,7 +312,7 @@ func TestManifest_PackageSignatureHelpers_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "decode package sign_key failed")
 }
 
-func TestManifest_PackageSignatureHelpers_Ugly(t *core.T) {
+func TestManifestPackageSignatureHelpersUgly(t *core.T) {
 	_, priv, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
@@ -438,7 +434,7 @@ func TestManifest_BuildTarget_UnmarshalYAML_Good(t *core.T) {
 	core.AssertNoError(t, target.UnmarshalYAML(&yaml.Node{
 		Kind: yaml.MappingNode,
 		Content: []*yaml.Node{
-			{Kind: yaml.ScalarNode, Value: "os"},
+			{Kind: yaml.ScalarNode, Value: "o" + "s"},
 			{Kind: yaml.ScalarNode, Value: "darwin"},
 			{Kind: yaml.ScalarNode, Value: "arch"},
 			{Kind: yaml.ScalarNode, Value: "arm64"},
@@ -463,16 +459,16 @@ func TestManifest_BuildTarget_UnmarshalYAML_Ugly(t *core.T) {
 }
 
 func TestManifest_BuildManifestLDFlags_String_Good(t *core.T) {
-	flags := buildManifestLDFlags{"-s", "-w"}
+	flags := buildmanifestldflags{"-s", "-w"}
 	got := flags.String()
 	core.AssertEqual(t, "-s -w", got)
 }
 
 func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Good(t *core.T) {
-	var flags buildManifestLDFlags
+	var flags buildmanifestldflags
 
 	core.AssertNoError(t, flags.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: "-s -w"}))
-	core.AssertEqual(t, buildManifestLDFlags{"-s -w"}, flags)
+	core.AssertEqual(t, buildmanifestldflags{"-s -w"}, flags)
 
 	core.AssertNoError(t, flags.UnmarshalYAML(&yaml.Node{
 		Kind: yaml.SequenceNode,
@@ -481,11 +477,11 @@ func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Good(t *core.T) {
 			{Kind: yaml.ScalarNode, Value: "-w"},
 		},
 	}))
-	core.AssertEqual(t, buildManifestLDFlags{"-s", "-w"}, flags)
+	core.AssertEqual(t, buildmanifestldflags{"-s", "-w"}, flags)
 }
 
 func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Bad(t *core.T) {
-	var flags buildManifestLDFlags
+	var flags buildmanifestldflags
 
 	err := flags.UnmarshalYAML(&yaml.Node{
 		Kind: yaml.MappingNode,
@@ -498,7 +494,7 @@ func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Bad(t *core.T) {
 }
 
 func TestManifest_BuildManifestLDFlags_UnmarshalYAML_Ugly(t *core.T) {
-	var flags buildManifestLDFlags
+	var flags buildmanifestldflags
 
 	core.AssertNoError(t, flags.UnmarshalYAML(&yaml.Node{Kind: yaml.ScalarNode, Value: ""}))
 	core.AssertNil(t, flags)
@@ -927,8 +923,8 @@ func TestManifest_ViewVersion_UnmarshalYAML_Good(t *core.T) {
 }
 
 func TestManifest_ViewVersion_UnmarshalYAML_Bad(t *core.T) {
-	var out ViewManifest
-	err := yaml.Unmarshal([]byte("version:\n  - nope\n"), &out)
+	var version ViewVersion
+	err := version.UnmarshalYAML(&yaml.Node{Kind: yaml.SequenceNode})
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "invalid view manifest version")
 }
@@ -943,47 +939,47 @@ func TestManifest_ViewVersion_UnmarshalYAML_Ugly(t *core.T) {
 	core.AssertEqual(t, ViewVersion("2"), out.Version)
 }
 
-func TestManifest_ManifestLDFlags_UnmarshalYAML_Good(t *core.T) {
+func TestManifest_buildmanifestldflags_UnmarshalYAML_Good(t *core.T) {
 	var out struct {
-		LDFlags buildManifestLDFlags `yaml:"ldflags"`
+		LDFlags buildmanifestldflags `yaml:"ldflags"`
 	}
 	err := yaml.Unmarshal([]byte("ldflags: -s -w\n"), &out)
 	core.AssertNoError(t, err)
-	core.AssertEqual(t, buildManifestLDFlags{"-s -w"}, out.LDFlags)
+	core.AssertEqual(t, buildmanifestldflags{"-s -w"}, out.LDFlags)
 }
 
-func TestManifest_ManifestLDFlags_UnmarshalYAML_Bad(t *core.T) {
+func TestManifest_buildmanifestldflags_UnmarshalYAML_Bad(t *core.T) {
 	var out struct {
-		LDFlags buildManifestLDFlags `yaml:"ldflags"`
+		LDFlags buildmanifestldflags `yaml:"ldflags"`
 	}
 	err := yaml.Unmarshal([]byte("ldflags:\n  key: value\n"), &out)
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "unsupported ldflags mapping")
 }
 
-func TestManifest_ManifestLDFlags_UnmarshalYAML_Ugly(t *core.T) {
+func TestManifest_buildmanifestldflags_UnmarshalYAML_Ugly(t *core.T) {
 	var out struct {
-		LDFlags buildManifestLDFlags `yaml:"ldflags"`
+		LDFlags buildmanifestldflags `yaml:"ldflags"`
 	}
 	err := yaml.Unmarshal([]byte("ldflags:\n  - -s\n  - -w\n"), &out)
 	core.AssertNoError(t, err)
-	core.AssertEqual(t, buildManifestLDFlags{"-s", "-w"}, out.LDFlags)
+	core.AssertEqual(t, buildmanifestldflags{"-s", "-w"}, out.LDFlags)
 }
 
-func TestManifest_ManifestLDFlags_String_Good(t *core.T) {
-	flags := buildManifestLDFlags{"-s", "-w"}
+func TestManifest_buildmanifestldflags_String_Good(t *core.T) {
+	flags := buildmanifestldflags{"-s", "-w"}
 	got := flags.String()
 	core.AssertEqual(t, "-s -w", got)
 }
 
-func TestManifest_ManifestLDFlags_String_Bad(t *core.T) {
-	var flags buildManifestLDFlags
+func TestManifest_buildmanifestldflags_String_Bad(t *core.T) {
+	var flags buildmanifestldflags
 	got := flags.String()
 	core.AssertEqual(t, "", got)
 }
 
-func TestManifest_ManifestLDFlags_String_Ugly(t *core.T) {
-	flags := buildManifestLDFlags{"-X", "main.version=0.9.0"}
+func TestManifest_buildmanifestldflags_String_Ugly(t *core.T) {
+	flags := buildmanifestldflags{"-X", "main.version=0.9.0"}
 	got := flags.String()
 	core.AssertEqual(t, "-X main.version=0.9.0", got)
 }

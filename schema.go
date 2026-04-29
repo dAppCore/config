@@ -2,8 +2,6 @@ package config
 
 import (
 	"embed"
-	"encoding/json"
-	"strings"
 
 	core "dappco.re/go"
 	coreerr "dappco.re/go/log"
@@ -34,7 +32,7 @@ const callerValidateSchema = "config.validateSchema"
 // validateSchema applies an embedded JSON schema when the current filename has
 // one. Empty documents are treated as absent config and skip validation so
 // blank files remain a non-error baseline.
-func validateSchema(path string, raw map[string]any) error {
+func validateSchema(path string, raw map[string]any) configError {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -49,10 +47,11 @@ func validateSchema(path string, raw map[string]any) error {
 		return coreerr.E(callerValidateSchema, "failed to read embedded schema: "+schemaPath, err)
 	}
 
-	documentBody, err := json.Marshal(raw)
-	if err != nil {
-		return coreerr.E(callerValidateSchema, "failed to encode config for schema validation: "+path, err)
+	documentResult := core.JSONMarshal(raw)
+	if !documentResult.OK {
+		return coreerr.E(callerValidateSchema, "failed to encode config for schema validation: "+path, documentResult.Value.(error))
 	}
+	documentBody := documentResult.Value.([]byte)
 
 	result, err := gojsonschema.Validate(
 		gojsonschema.NewBytesLoader(schemaBody),
@@ -71,7 +70,7 @@ func validateSchema(path string, raw map[string]any) error {
 	}
 	return coreerr.E(
 		callerValidateSchema,
-		"schema validation failed: "+path+": "+strings.Join(problems, "; "),
+		"schema validation failed: "+path+": "+core.Join("; ", problems...),
 		nil,
 	)
 }

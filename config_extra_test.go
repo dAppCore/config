@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"sync"
 
 	core "dappco.re/go"
@@ -121,44 +120,6 @@ func TestConfig_Medium_Good(t *core.T) {
 	core.AssertSame(t, m, cfg.Medium())
 }
 
-func TestConfig_WithDefaults_Good(t *core.T) {
-	// WithDefaults seeds the lowest-precedence layer: unset keys resolve to
-	// the default; keys supplied by file/env/Set still win.
-	m := coreio.NewMockMedium()
-	cfg, err := New(
-		WithMedium(m),
-		WithPath("/defaults.yaml"),
-		WithDefaults(map[string]any{
-			"dev.editor":  "vim",
-			"app.version": "0.1.0",
-		}),
-	)
-	core.AssertNoError(t, err)
-
-	var editor, version string
-	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
-	core.AssertEqual(t, "vim", editor)
-	core.AssertNoError(t, cfg.Get("app.version", &version))
-	core.AssertEqual(t, "0.1.0", version)
-}
-
-func TestConfig_WithDefaults_Bad(t *core.T) {
-	// An explicit Set() shadows the default — defaults are the floor, not a
-	// ceiling.
-	m := coreio.NewMockMedium()
-	cfg, err := New(
-		WithMedium(m),
-		WithPath("/defaults.yaml"),
-		WithDefaults(map[string]any{"dev.editor": "vim"}),
-	)
-	core.AssertNoError(t, err)
-	core.AssertNoError(t, cfg.Set("dev.editor", "nano"))
-
-	var editor string
-	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
-	core.AssertEqual(t, "nano", editor)
-}
-
 func TestConfig_SetDefault_Good(t *core.T) {
 	// SetDefault installs a runtime default — visible only while no other
 	// source has set the key.
@@ -264,7 +225,7 @@ func TestConfig_AttachCore_Ugly(t *core.T) {
 	core.AssertNoError(t, cfg.Set("quiet", "ok"))
 }
 
-func TestConfig_PersistToStore_Good(t *core.T) {
+func TestConfigPersistToStoreGood(t *core.T) {
 	store := &mockConfigStore{}
 	m := coreio.NewMockMedium()
 	cfg, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
@@ -278,8 +239,8 @@ func TestConfig_PersistToStore_Good(t *core.T) {
 	core.AssertEqual(t, "\"core\"", store.value)
 }
 
-func TestConfig_PersistToStore_Bad(t *core.T) {
-	store := &mockConfigStore{failWith: errors.New("store write failed")}
+func TestConfigPersistToStoreBad(t *core.T) {
+	store := &mockConfigStore{failWith: core.NewError("store write failed")}
 	m := coreio.NewMockMedium()
 	cfg, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))
 	core.AssertNoError(t, err)
@@ -288,7 +249,7 @@ func TestConfig_PersistToStore_Bad(t *core.T) {
 	core.AssertEqual(t, 1, store.calls)
 }
 
-func TestConfig_PersistToStore_Ugly(t *core.T) {
+func TestConfigPersistToStoreUgly(t *core.T) {
 	store := &mockConfigStore{}
 	m := coreio.NewMockMedium()
 	_, err := New(WithStore(store), WithMedium(m), WithPath("/store.yaml"))

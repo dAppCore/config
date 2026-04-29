@@ -1,11 +1,7 @@
 package config
 
 import (
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
-
+	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 )
 
@@ -13,7 +9,16 @@ type symlinkReporter interface {
 	IsSymlink(string) bool
 }
 
-var localLstat = os.Lstat
+var localLstat = func(path string) (core.FsFileInfo, error) {
+	r := core.Lstat(path)
+	if !r.OK {
+		if err, ok := r.Value.(error); ok {
+			return nil, err
+		}
+		return nil, core.NewError("lstat failed")
+	}
+	return r.Value.(core.FsFileInfo), nil
+}
 
 // isSafePathElement reports whether part is a single relative path element.
 // It rejects absolute paths, traversal segments, and separators so public
@@ -22,13 +27,13 @@ func isSafePathElement(part string) bool {
 	if part == "" {
 		return false
 	}
-	if filepath.IsAbs(part) {
+	if core.PathIsAbs(part) {
 		return false
 	}
-	if strings.ContainsAny(part, `/\`) {
+	if core.Contains(part, "/") || core.Contains(part, `\`) {
 		return false
 	}
-	clean := filepath.Clean(part)
+	clean := core.CleanPath(part, string(core.PathSeparator))
 	if clean != part {
 		return false
 	}
@@ -60,10 +65,10 @@ func isSymlinkedLocalPath(path string) bool {
 	return isSymlinkedByLstat(localLstat, path)
 }
 
-func isSymlinkedByLstat(lstat func(string) (fs.FileInfo, error), path string) bool {
+func isSymlinkedByLstat(lstat func(string) (core.FsFileInfo, error), path string) bool {
 	info, err := lstat(path)
 	if err != nil {
 		return false
 	}
-	return info.Mode()&os.ModeSymlink != 0
+	return info.Mode()&core.ModeSymlink != 0
 }

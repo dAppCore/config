@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"strconv"
 	"sync"
 
@@ -128,12 +127,9 @@ func Features() []string {
 	return out
 }
 
-// featureEnv maps dark-mode → CORE_FEATURE_DARK_MODE.
-// os.LookupEnv is deliberate: feature flags need a present/absent distinction
-// that core.Env() (which returns "" for both unset and empty) cannot provide.
 func featureEnv(name string) (bool, bool) {
 	envName := featurePrefix + core.Upper(core.Replace(name, "-", "_"))
-	raw, ok := os.LookupEnv(envName)
+	raw, ok := core.LookupEnv(envName)
 	if !ok {
 		return false, false
 	}

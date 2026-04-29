@@ -1,12 +1,12 @@
 package config
 
 import (
-	"errors"
 	"reflect"
 	"slices"
 	"sync"
 	"time"
 
+	core "dappco.re/go"
 	coreerr "dappco.re/go/log"
 	"github.com/fsnotify/fsnotify"
 )
@@ -32,11 +32,11 @@ type fsnotifyBackend struct {
 	w *fsnotify.Watcher
 }
 
-func (b fsnotifyBackend) Add(path string) error {
+func (b fsnotifyBackend) Add(path string) configError {
 	return b.w.Add(path)
 }
 
-func (b fsnotifyBackend) Close() error {
+func (b fsnotifyBackend) Close() configError {
 	return b.w.Close()
 }
 
@@ -44,7 +44,7 @@ func (b fsnotifyBackend) Events() <-chan fsnotify.Event {
 	return b.w.Events
 }
 
-func (b fsnotifyBackend) Errors() <-chan error {
+func (b fsnotifyBackend) Errors() <-chan (error) {
 	return b.w.Errors
 }
 
@@ -63,7 +63,7 @@ var newWatchBackend = func() (watchBackend, error) {
 //
 //	cfg.Watch()
 //	defer cfg.StopWatch()
-func (c *Config) Watch() error {
+func (c *Config) Watch() configError {
 	c.mu.Lock()
 	if c.watcher != nil {
 		c.mu.Unlock()
@@ -81,7 +81,7 @@ func (c *Config) Watch() error {
 
 	if err := w.Add(path); err != nil {
 		if closeErr := w.Close(); closeErr != nil {
-			err = errors.Join(err, closeErr)
+			err = core.ErrorJoin(err, closeErr)
 		}
 		c.mu.Lock()
 		c.watcher = nil

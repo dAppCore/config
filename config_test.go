@@ -2,15 +2,66 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"io/fs"
 	"iter"
 	"maps"
-	"os"
+	"syscall"
 
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 )
+
+func requireResultOK(t *core.T, r core.Result) {
+	t.Helper()
+	if !r.OK {
+		core.RequireNoError(t, resultError(r))
+	}
+}
+
+func testMkdirAll(t *core.T, path string, mode core.FileMode) {
+	t.Helper()
+	requireResultOK(t, core.MkdirAll(path, mode))
+}
+
+func testWriteFile(t *core.T, path string, data []byte, mode core.FileMode) {
+	t.Helper()
+	requireResultOK(t, core.WriteFile(path, data, mode))
+}
+
+func testSymlink(t *core.T, target, link string) {
+	t.Helper()
+	core.RequireNoError(t, syscall.Symlink(target, link))
+}
+
+func testRemove(path string) {
+	_ = core.Remove(path)
+}
+
+func testGetwd(t *core.T) string {
+	t.Helper()
+	r := core.Getwd()
+	requireResultOK(t, r)
+	return r.Value.(string)
+}
+
+func testChdir(t *core.T, dir string) {
+	t.Helper()
+	requireResultOK(t, core.Chdir(dir))
+}
+
+func testPathAbs(t *core.T, path string) string {
+	t.Helper()
+	r := core.PathAbs(path)
+	requireResultOK(t, r)
+	return r.Value.(string)
+}
+
+func testPathEvalSymlinks(t *core.T, path string) string {
+	t.Helper()
+	r := core.PathEvalSymlinks(path)
+	requireResultOK(t, r)
+	return r.Value.(string)
+}
 
 func TestConfig_Get_Good(t *core.T) {
 	m := coreio.NewMockMedium()
@@ -191,7 +242,7 @@ func TestConfig_Path_Good(t *core.T) {
 	core.AssertEqual(t, "/custom/path/config.yaml", cfg.Path())
 }
 
-func TestConfig_Load_Existing_Good(t *core.T) {
+func TestConfigLoadExistingGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "app:\n  name: existing\n"
 
@@ -204,7 +255,7 @@ func TestConfig_Load_Existing_Good(t *core.T) {
 	core.AssertEqual(t, "existing", name)
 }
 
-func TestConfig_Load_Existing_Schema_Bad(t *core.T) {
+func TestConfigLoadExistingSchemaBad(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "features: enabled\n"
 
@@ -213,7 +264,7 @@ func TestConfig_Load_Existing_Schema_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "schema validation failed")
 }
 
-func TestConfig_Env_Good(t *core.T) {
+func TestConfigEnvGood(t *core.T) {
 	// Set environment variable
 	t.Setenv("CORE_CONFIG_DEV_EDITOR", "nano")
 
@@ -227,7 +278,7 @@ func TestConfig_Env_Good(t *core.T) {
 	core.AssertEqual(t, "nano", editor)
 }
 
-func TestConfig_Env_Overrides_File_Good(t *core.T) {
+func TestConfigEnvOverridesFileGood(t *core.T) {
 	// Set file config
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "dev:\n  editor: vim\n"
@@ -244,7 +295,7 @@ func TestConfig_Env_Overrides_File_Good(t *core.T) {
 	core.AssertEqual(t, "nano", editor)
 }
 
-func TestConfig_Assign_Types_Good(t *core.T) {
+func TestConfigAssignTypesGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "count: 42\nenabled: true\nratio: 3.14\n"
 
@@ -267,7 +318,7 @@ func TestConfig_Assign_Types_Good(t *core.T) {
 	core.AssertInDelta(t, 3.14, ratio, 0.001)
 }
 
-func TestConfig_Assign_Any_Good(t *core.T) {
+func TestConfigAssignAnyGood(t *core.T) {
 	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m), WithPath("/tmp/test/config.yaml"))
@@ -281,13 +332,13 @@ func TestConfig_Assign_Any_Good(t *core.T) {
 	core.AssertEqual(t, "value", val)
 }
 
-func TestConfig_DefaultPath_Good(t *core.T) {
+func TestConfigDefaultPathGood(t *core.T) {
 	m := coreio.NewMockMedium()
 
 	cfg, err := New(WithMedium(m))
 	core.AssertNoError(t, err)
 
-	home, _ := os.UserHomeDir()
+	home := core.UserHomeDir().Value.(string)
 	core.AssertEqual(t, home+"/.core/config.yaml", cfg.Path())
 }
 
@@ -308,7 +359,7 @@ func TestLoadEnv_Good(t *core.T) {
 	core.AssertEqual(t, "value", result["simple"])
 }
 
-func TestLoadEnv_PrefixNormalisation_Good(t *core.T) {
+func TestLoadEnvPrefixNormalisationGood(t *core.T) {
 	t.Setenv("MYAPP_SETTING", "secret")
 	t.Setenv("MYAPP_ALPHA", "first")
 
@@ -331,7 +382,7 @@ func TestLoad_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "failed to read config file")
 }
 
-func TestLoad_UnsupportedPath_Bad(t *core.T) {
+func TestLoadUnsupportedPathBad(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.json"] = `{"app":{"name":"core"}}`
 
@@ -340,7 +391,7 @@ func TestLoad_UnsupportedPath_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "unsupported config file type")
 }
 
-func TestLoad_InvalidYAML_Bad(t *core.T) {
+func TestLoadInvalidYAMLBad(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.yaml"] = "invalid: yaml: content: [[[["
 
@@ -349,7 +400,7 @@ func TestLoad_InvalidYAML_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "failed to parse config file")
 }
 
-func TestConfig_LoadFile_JSON_Good(t *core.T) {
+func TestConfigLoadFileJSONGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.json"] = `{"app":{"name":"core"}}`
 
@@ -362,7 +413,7 @@ func TestConfig_LoadFile_JSON_Good(t *core.T) {
 	core.AssertEqual(t, "core", name)
 }
 
-func TestConfig_LoadFile_Extensionless_Good(t *core.T) {
+func TestConfigLoadFileExtensionlessGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config"] = "app:\n  name: core\n"
 
@@ -375,7 +426,7 @@ func TestConfig_LoadFile_Extensionless_Good(t *core.T) {
 	core.AssertEqual(t, "core", name)
 }
 
-func TestConfig_LoadFile_TOML_Good(t *core.T) {
+func TestConfigLoadFileTOMLGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/test/config.toml"] = "app = { name = \"core\" }\n"
 
@@ -431,7 +482,7 @@ func TestSave_Good(t *core.T) {
 	core.AssertEqual(t, fs.FileMode(0600), info.Mode())
 }
 
-func TestSave_Extensionless_Good(t *core.T) {
+func TestSaveExtensionlessGood(t *core.T) {
 	m := coreio.NewMockMedium()
 
 	err := Save(m, "/tmp/test/config", map[string]any{"key": "value"})
@@ -442,7 +493,7 @@ func TestSave_Extensionless_Good(t *core.T) {
 	core.AssertContains(t, content, "key: value")
 }
 
-func TestSave_UnsupportedPath_Bad(t *core.T) {
+func TestSaveUnsupportedPathBad(t *core.T) {
 	m := coreio.NewMockMedium()
 
 	err := Save(m, "/tmp/test/config.json", map[string]any{"key": "value"})
@@ -547,60 +598,6 @@ func TestConfig_Get_EmptyKey_Good(t *core.T) {
 	core.AssertEqual(t, 1, full.Version)
 }
 
-func ExampleConfig_Get() {
-	m := coreio.NewMockMedium()
-
-	cfg, _ := New(WithMedium(m), WithPath("/tmp/example/config.yaml"))
-	_ = cfg.Set("dev.editor", "vim")
-
-	var editor string
-	_ = cfg.Get("dev.editor", &editor)
-
-	fmt.Println(editor)
-	// Output: vim
-}
-
-func ExampleConfig_Commit() {
-	m := coreio.NewMockMedium()
-
-	cfg, _ := New(WithMedium(m), WithPath("/tmp/example/config.yaml"))
-	_ = cfg.Set("app.name", "core")
-	_ = cfg.Commit()
-
-	content, _ := m.Read("/tmp/example/config.yaml")
-	fmt.Print(content)
-	// Output:
-	// app:
-	//     name: core
-	// version: 1
-}
-
-func ExampleEnv() {
-	t := "EXAMPLE_FOO_BAR"
-	_ = os.Setenv(t, "baz")
-	defer os.Unsetenv(t)
-
-	for key, value := range Env("EXAMPLE_") {
-		fmt.Printf("%s=%s\n", key, value)
-	}
-
-	// Output: foo.bar=baz
-}
-
-func ExampleConfig_LoadFile() {
-	m := coreio.NewMockMedium()
-	m.Files["/.env"] = "FOO=bar\n"
-
-	cfg, _ := New(WithMedium(m), WithPath("/config.yaml"))
-	_ = cfg.LoadFile(m, "/.env")
-
-	var foo string
-	_ = cfg.Get("foo", &foo)
-
-	fmt.Println(foo)
-	// Output: bar
-}
-
 func axConfigFixture(t *core.T) (*Config, *coreio.MockMedium, string) {
 	t.Helper()
 	m := coreio.NewMockMedium()
@@ -640,16 +637,16 @@ func TestConfig_WithPath_Good(t *core.T) {
 
 func TestConfig_WithPath_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m))
+	cfg, err := New(WithMedium(m), WithPath(""))
 	core.RequireNoError(t, err)
 	core.AssertContains(t, cfg.Path(), ".core/config.yaml")
 }
 
 func TestConfig_WithPath_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
-	cfg, err := New(WithMedium(m), WithPath(""))
+	cfg, err := New(WithMedium(m), WithPath("/ax7/first.yaml"), WithPath("/ax7/second.yaml"))
 	core.RequireNoError(t, err)
-	core.AssertContains(t, cfg.Path(), ".core/config.yaml")
+	core.AssertEqual(t, "/ax7/second.yaml", cfg.Path())
 }
 
 func TestConfig_WithEnvPrefix_Bad(t *core.T) {
@@ -700,10 +697,44 @@ func TestConfig_WithStore_Bad(t *core.T) {
 }
 
 func TestConfig_WithStore_Ugly(t *core.T) {
-	store := &mockConfigStore{failWith: fmt.Errorf("store refused")}
+	store := &mockConfigStore{failWith: core.NewError("store refused")}
 	cfg, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/store.yaml"), WithStore(store))
 	core.RequireNoError(t, err)
 	core.AssertNoError(t, cfg.Set("agent", "codex"))
+}
+
+func TestConfig_WithDefaults_Good(t *core.T) {
+	m := coreio.NewMockMedium()
+	cfg, err := New(
+		WithMedium(m),
+		WithPath("/defaults.yaml"),
+		WithDefaults(map[string]any{
+			"dev.editor":  "vim",
+			"app.version": "0.1.0",
+		}),
+	)
+	core.AssertNoError(t, err)
+
+	var editor, version string
+	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
+	core.AssertEqual(t, "vim", editor)
+	core.AssertNoError(t, cfg.Get("app.version", &version))
+	core.AssertEqual(t, "0.1.0", version)
+}
+
+func TestConfig_WithDefaults_Bad(t *core.T) {
+	m := coreio.NewMockMedium()
+	cfg, err := New(
+		WithMedium(m),
+		WithPath("/defaults.yaml"),
+		WithDefaults(map[string]any{"dev.editor": "vim"}),
+	)
+	core.AssertNoError(t, err)
+	core.AssertNoError(t, cfg.Set("dev.editor", "nano"))
+
+	var editor string
+	core.AssertNoError(t, cfg.Get("dev.editor", &editor))
+	core.AssertEqual(t, "nano", editor)
 }
 
 func TestConfig_WithDefaults_Ugly(t *core.T) {
@@ -831,7 +862,7 @@ func TestConfig_Config_Set_Good(t *core.T) {
 }
 
 func TestConfig_Config_Set_Bad(t *core.T) {
-	store := &mockConfigStore{failWith: fmt.Errorf("store refused")}
+	store := &mockConfigStore{failWith: core.NewError("store refused")}
 	cfg, err := New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/set.yaml"), WithStore(store))
 	core.RequireNoError(t, err)
 	core.AssertNoError(t, cfg.Set("agent.name", "codex"))

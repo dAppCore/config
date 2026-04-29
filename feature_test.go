@@ -44,7 +44,7 @@ func TestFeature_SetFeature_Good(t *core.T) {
 	core.AssertNotContains(t, flags, "verbose-logging")
 }
 
-func TestFeature_FromConfig_Good(t *core.T) {
+func TestFeatureFromConfigLoadsConfigGood(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
 
@@ -61,7 +61,7 @@ func TestFeature_FromConfig_Good(t *core.T) {
 	core.AssertFalse(t, FeatureFromConfig(cfg, "never-declared"))
 }
 
-func TestFeature_FromConfig_Bad(t *core.T) {
+func TestFeatureFromConfigNilConfigBad(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
 
@@ -69,7 +69,7 @@ func TestFeature_FromConfig_Bad(t *core.T) {
 	core.AssertFalse(t, FeatureFromConfig(nil, "dark-mode"))
 }
 
-func TestFeature_FromConfig_Ugly(t *core.T) {
+func TestFeatureFromConfigEnvOverrideUgly(t *core.T) {
 	resetFeatureRegistry()
 	t.Cleanup(resetFeatureRegistry)
 

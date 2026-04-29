@@ -1,8 +1,6 @@
 package config
 
 import (
-	"encoding/json"
-
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 	coreerr "dappco.re/go/log"
@@ -57,10 +55,10 @@ func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) (
 	}
 
 	var data struct {
-		Scripts map[string]json.RawMessage `json:"scripts"`
+		Scripts map[string]any `json:"scripts"`
 	}
-	if err := json.Unmarshal([]byte(content), &data); err != nil {
-		return "", false, coreerr.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, err)
+	if r := core.JSONUnmarshalString(content, &data); !r.OK {
+		return "", false, coreerr.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, r.Value.(error))
 	}
 
 	raw, ok := data.Scripts["test"]
@@ -68,9 +66,9 @@ func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) (
 		return fallback, true, nil
 	}
 
-	var script string
-	if err := json.Unmarshal(raw, &script); err != nil {
-		return "", false, coreerr.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, err)
+	script, ok := raw.(string)
+	if !ok {
+		return "", false, coreerr.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, nil)
 	}
 	if script == "" {
 		return fallback, true, nil

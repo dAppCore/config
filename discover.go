@@ -1,8 +1,6 @@
 package config
 
 import (
-	"os"
-
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 	coreerr "dappco.re/go/log"
@@ -18,13 +16,11 @@ const callerDiscoverFrom = "config.DiscoverFrom"
 //	cfg, err := config.Discover()
 //	cfg.Get("build.target", &target)  // merged from all .core/ dirs
 func Discover(opts ...Option) (*Config, error) {
-	// os.Getwd is deliberate: core.Env("DIR_CWD") is captured once at init,
-	// but callers (including tests) chdir at runtime and need the live CWD.
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, coreerr.E("config.Discover", "failed to read working directory", err)
+	r := core.Getwd()
+	if !r.OK {
+		return nil, coreerr.E("config.Discover", "failed to read working directory", r.Value.(error))
 	}
-	return DiscoverFrom(cwd, opts...)
+	return DiscoverFrom(r.Value.(string), opts...)
 }
 
 // DiscoverFrom walks upward from start and builds a merged Config.

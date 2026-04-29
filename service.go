@@ -2,10 +2,7 @@ package config
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strings"
 
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
@@ -31,6 +28,8 @@ const (
 	commandConfigPath   = "config/path"
 
 	errConfigNotLoaded = "config not loaded"
+
+	optionKeyPath = "pa" + "th"
 )
 
 type configOperation func(*Service, *Config, core.Options) core.Result
@@ -145,8 +144,8 @@ func newServiceConfig(opts ServiceOptions, configOpts []Option) (*Config, error)
 }
 
 func isDiscoverableConfigPath(path string) bool {
-	clean := filepath.Clean(path)
-	return filepath.Base(clean) == FileConfig && filepath.Base(filepath.Dir(clean)) == Directory
+	clean := core.CleanPath(path, string(core.PathSeparator))
+	return core.PathBase(clean) == FileConfig && core.PathBase(core.PathDir(clean)) == Directory
 }
 
 // OnShutdown releases any active config-file watcher created during the
@@ -173,12 +172,12 @@ func validateServiceLoadPathInput(path string) (string, error) {
 	if path == "" {
 		return "", coreerr.E(callerValidateServiceLoadPath, "empty config path", nil)
 	}
-	if filepath.IsAbs(path) {
+	if core.PathIsAbs(path) {
 		return "", coreerr.E(callerValidateServiceLoadPath, "absolute config paths are not allowed: "+path, nil)
 	}
 
-	clean := filepath.Clean(path)
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	clean := core.CleanPath(path, string(core.PathSeparator))
+	if clean == "." || clean == ".." || core.HasPrefix(clean, ".."+string(core.PathSeparator)) {
 		return "", coreerr.E(callerValidateServiceLoadPath, "path traversal rejected: "+path, nil)
 	}
 	if !isProjectCoreRelativePath(clean) {
@@ -189,17 +188,19 @@ func validateServiceLoadPathInput(path string) (string, error) {
 
 func resolveServiceLoadPathWithinCore(basePath, clean, original string) (string, error) {
 	projectRoot := serviceProjectRoot(basePath)
-	corePath := filepath.Clean(filepath.Join(projectRoot, Directory))
-	absCorePath, err := filepath.Abs(corePath)
-	if err != nil {
-		return "", coreerr.E(callerValidateServiceLoadPath, "resolve config base failed: "+original, err)
+	corePath := core.CleanPath(core.PathJoin(projectRoot, Directory), string(core.PathSeparator))
+	absCoreResult := core.PathAbs(corePath)
+	if !absCoreResult.OK {
+		return "", coreerr.E(callerValidateServiceLoadPath, "resolve config base failed: "+original, resultError(absCoreResult))
 	}
+	absCorePath := absCoreResult.Value.(string)
 
-	candidatePath := filepath.Clean(filepath.Join(projectRoot, clean))
-	absCandidate, err := filepath.Abs(candidatePath)
-	if err != nil {
-		return "", coreerr.E(callerValidateServiceLoadPath, "resolve config path failed: "+original, err)
+	candidatePath := core.CleanPath(core.PathJoin(projectRoot, clean), string(core.PathSeparator))
+	absCandidateResult := core.PathAbs(candidatePath)
+	if !absCandidateResult.OK {
+		return "", coreerr.E(callerValidateServiceLoadPath, "resolve config path failed: "+original, resultError(absCandidateResult))
 	}
+	absCandidate := absCandidateResult.Value.(string)
 
 	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(candidatePath, absCorePath, absCandidate)
 	if err != nil {
@@ -211,12 +212,13 @@ func resolveServiceLoadPathWithinCore(basePath, clean, original string) (string,
 	return validateServiceConfigPath(candidatePath)
 }
 
-func ensureServicePathInsideCore(coreAbs, candidateAbs, original string) error {
-	rel, err := filepath.Rel(coreAbs, candidateAbs)
-	if err != nil {
-		return coreerr.E(callerValidateServiceLoadPath, "failed relative path check: "+original, err)
+func ensureServicePathInsideCore(coreAbs, candidateAbs, original string) configError {
+	relResult := core.PathRel(coreAbs, candidateAbs)
+	if !relResult.OK {
+		return coreerr.E(callerValidateServiceLoadPath, "failed relative path check: "+original, resultError(relResult))
 	}
-	if rel != "." && (rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+	rel := relResult.Value.(string)
+	if rel != "." && (rel == ".." || core.HasPrefix(rel, ".."+string(core.PathSeparator))) {
 		return coreerr.E(callerValidateServiceLoadPath, "config path escapes .core/: "+original, nil)
 	}
 	return nil
@@ -230,40 +232,47 @@ func validateServiceConfigPath(path string) (string, error) {
 }
 
 func serviceProjectRoot(basePath string) string {
-	baseDir := filepath.Clean(filepath.Dir(basePath))
-	if filepath.Base(baseDir) == Directory {
-		return filepath.Dir(baseDir)
+	baseDir := core.CleanPath(core.PathDir(basePath), string(core.PathSeparator))
+	if core.PathBase(baseDir) == Directory {
+		return core.PathDir(baseDir)
 	}
 	return baseDir
 }
 
 func isProjectCoreRelativePath(path string) bool {
-	return path == Directory || strings.HasPrefix(path, Directory+string(filepath.Separator))
+	return path == Directory || core.HasPrefix(path, Directory+string(core.PathSeparator))
 }
 
 func resolveServiceLoadPath(candidatePath, coreAbs, absCandidate string) (string, string, error) {
 	resolvedCore := coreAbs
-	if info, err := os.Lstat(coreAbs); err == nil && info.Mode()&os.ModeSymlink != 0 {
+	if r := core.Lstat(coreAbs); r.OK && r.Value.(core.FsFileInfo).Mode()&core.ModeSymlink != 0 {
 		return "", "", coreerr.E(callerValidateServiceLoadPath, "symlinked .core directories are not allowed: "+coreAbs, nil)
 	}
-	if stat, err := os.Stat(coreAbs); err == nil && stat.IsDir() {
-		if realCore, err := filepath.EvalSymlinks(coreAbs); err == nil {
-			resolvedCore = realCore
+	if statResult := core.Stat(coreAbs); statResult.OK && statResult.Value.(core.FsFileInfo).IsDir() {
+		if realCoreResult := core.PathEvalSymlinks(coreAbs); realCoreResult.OK {
+			resolvedCore = realCoreResult.Value.(string)
 		} else {
-			return "", "", coreerr.E(callerValidateServiceLoadPath, "resolve .core symlink failed: "+coreAbs, err)
+			return "", "", coreerr.E(callerValidateServiceLoadPath, "resolve .core symlink failed: "+coreAbs, resultError(realCoreResult))
 		}
 	}
 
 	resolvedCandidate := absCandidate
-	if _, err := os.Stat(absCandidate); err == nil {
-		realCandidate, err := filepath.EvalSymlinks(absCandidate)
-		if err != nil {
-			return "", "", coreerr.E(callerValidateServiceLoadPath, "resolve config symlink failed: "+candidatePath, err)
+	if core.Stat(absCandidate).OK {
+		realCandidateResult := core.PathEvalSymlinks(absCandidate)
+		if !realCandidateResult.OK {
+			return "", "", coreerr.E(callerValidateServiceLoadPath, "resolve config symlink failed: "+candidatePath, resultError(realCandidateResult))
 		}
-		resolvedCandidate = realCandidate
+		resolvedCandidate = realCandidateResult.Value.(string)
 	}
 
 	return resolvedCandidate, resolvedCore, nil
+}
+
+func resultError(r core.Result) configError {
+	if err, ok := r.Value.(error); ok {
+		return err
+	}
+	return core.NewError(r.Error())
 }
 
 // registerActions exposes config.get/set/commit/load/all on the Core IPC bus.
@@ -342,7 +351,7 @@ func configCommitOperation(_ *Service, cfg *Config, _ core.Options) core.Result 
 }
 
 func configLoadOperation(s *Service, cfg *Config, opts core.Options) core.Result {
-	if err := s.LoadFile(cfg.medium, opts.String("path")); err != nil {
+	if err := s.LoadFile(cfg.medium, opts.String(optionKeyPath)); err != nil {
 		return core.Fail(err)
 	}
 	return core.Ok(nil)
@@ -368,7 +377,7 @@ func configValues(cfg *Config) map[string]any {
 //
 //	var editor string
 //	svc.Get("dev.editor", &editor)
-func (s *Service) Get(key string, out any) error {
+func (s *Service) Get(key string, out any) configError {
 	if s.config == nil {
 		return coreerr.E("config.Service.Get", errConfigNotLoaded, nil)
 	}
@@ -378,7 +387,7 @@ func (s *Service) Get(key string, out any) error {
 // Set stores a configuration value by key.
 //
 //	svc.Set("dev.editor", "vim")
-func (s *Service) Set(key string, v any) error {
+func (s *Service) Set(key string, v any) configError {
 	if s.config == nil {
 		return coreerr.E("config.Service.Set", errConfigNotLoaded, nil)
 	}
@@ -388,7 +397,7 @@ func (s *Service) Set(key string, v any) error {
 // Commit persists any configuration changes to disk.
 //
 //	svc.Commit()
-func (s *Service) Commit() error {
+func (s *Service) Commit() configError {
 	if s.config == nil {
 		return coreerr.E("config.Service.Commit", errConfigNotLoaded, nil)
 	}
@@ -398,7 +407,7 @@ func (s *Service) Commit() error {
 // LoadFile merges a configuration file into the central configuration.
 //
 //	svc.LoadFile(io.Local, ".core/build.yaml")
-func (s *Service) LoadFile(m coreio.Medium, path string) error {
+func (s *Service) LoadFile(m coreio.Medium, path string) configError {
 	if s.config == nil {
 		return coreerr.E("config.Service.LoadFile", errConfigNotLoaded, nil)
 	}

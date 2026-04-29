@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/hex"
-	"path/filepath"
 
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
@@ -22,22 +21,22 @@ func (m falseExistsMedium) Exists(string) bool {
 func TestResolve_FindConfigManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	base := filepath.Join(tmp, "workspace")
-	repo := filepath.Join(base, "repo")
-	child := filepath.Join(repo, "service")
+	base := core.PathJoin(tmp, "workspace")
+	repo := core.PathJoin(base, "repo")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(base, ".core"),
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(base, ".core"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".git"),
 		child,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
-	globalConfig := filepath.Join(core.Env("DIR_HOME"), ".core", FileConfig)
-	projectConfig := filepath.Join(repo, ".core", FileConfig)
-	workspaceRepos := filepath.Join(base, ".core", FileRepos)
+	globalConfig := core.PathJoin(core.Env("DIR_HOME"), ".core", FileConfig)
+	projectConfig := core.PathJoin(repo, ".core", FileConfig)
+	workspaceRepos := core.PathJoin(base, ".core", FileRepos)
 	core.AssertNoError(t, m.Write(globalConfig, "app:\n  name: global\n"))
 	core.AssertNoError(t, m.Write(projectConfig, "app:\n  name: project\n"))
 	core.AssertNoError(t, m.Write(workspaceRepos, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
@@ -54,7 +53,7 @@ func TestResolve_FindConfigManifest_Bad(t *core.T) {
 
 func TestResolve_FindConfigManifest_Ugly(t *core.T) {
 	m := falseExistsMedium{coreio.NewMockMedium()}
-	start := filepath.Join(t.TempDir(), "missing", "service")
+	start := core.PathJoin(t.TempDir(), "missing", "service")
 
 	core.AssertEmpty(t, FindConfigManifest(m, start))
 }
@@ -62,19 +61,19 @@ func TestResolve_FindConfigManifest_Ugly(t *core.T) {
 func TestResolve_FindProjectManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	base := filepath.Join(tmp, "workspace")
-	repo := filepath.Join(base, "repo")
-	child := filepath.Join(repo, "service")
+	base := core.PathJoin(tmp, "workspace")
+	repo := core.PathJoin(base, "repo")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(base, ".core"),
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(base, ".core"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".git"),
 		child,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
-	core.AssertNoError(t, m.EnsureDir(filepath.Join(base, ".core")))
+	core.AssertNoError(t, m.EnsureDir(core.PathJoin(base, ".core")))
 
 	files := map[string]string{
 		FileBuild:     "name: core\noutput: dist\ntargets:\n  - linux/amd64\n",
@@ -87,24 +86,25 @@ func TestResolve_FindProjectManifest_Good(t *core.T) {
 	}
 
 	for name, content := range files {
-		core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", name), content))
+		core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", name), content))
 	}
-	core.AssertNoError(t, m.Write(filepath.Join(base, ".core", FileBuild), "name: external\noutput: ext\n"))
-	core.AssertNoError(t, m.Write(filepath.Join(base, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(base, ".core", FileBuild), "name: external\noutput: ext\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(base, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertEqual(t, core.PathJoin(repo, ".core", FileBuild), FindProjectManifest(m, child, FileBuild))
 
 	cases := []struct {
 		name string
 		path string
 		got  string
 	}{
-		{name: "build", path: filepath.Join(repo, ".core", FileBuild), got: FindBuildManifest(m, child)},
-		{name: "release", path: filepath.Join(repo, ".core", FileRelease), got: FindReleaseManifest(m, child)},
-		{name: "run", path: filepath.Join(repo, ".core", FileRun), got: FindRunManifest(m, child)},
-		{name: "view", path: filepath.Join(repo, ".core", FileView), got: FindViewManifest(m, child)},
-		{name: "manifest", path: filepath.Join(repo, ".core", FileManifest), got: FindPackageManifest(m, child)},
-		{name: "workspace", path: filepath.Join(repo, ".core", FileWorkspace), got: FindWorkspaceManifest(m, child)},
-		{name: "ide", path: filepath.Join(repo, ".core", FileIDE), got: FindIDEManifest(m, child)},
-		{name: "repos", path: filepath.Join(base, ".core", FileRepos), got: FindReposManifest(m, child)},
+		{name: "build", path: core.PathJoin(repo, ".core", FileBuild), got: FindBuildManifest(m, child)},
+		{name: "release", path: core.PathJoin(repo, ".core", FileRelease), got: FindReleaseManifest(m, child)},
+		{name: "run", path: core.PathJoin(repo, ".core", FileRun), got: FindRunManifest(m, child)},
+		{name: "view", path: core.PathJoin(repo, ".core", FileView), got: FindViewManifest(m, child)},
+		{name: "manifest", path: core.PathJoin(repo, ".core", FileManifest), got: FindPackageManifest(m, child)},
+		{name: "workspace", path: core.PathJoin(repo, ".core", FileWorkspace), got: FindWorkspaceManifest(m, child)},
+		{name: "ide", path: core.PathJoin(repo, ".core", FileIDE), got: FindIDEManifest(m, child)},
+		{name: "repos", path: core.PathJoin(base, ".core", FileRepos), got: FindReposManifest(m, child)},
 	}
 
 	for _, tc := range cases {
@@ -117,18 +117,18 @@ func TestResolve_FindProjectManifest_Good(t *core.T) {
 func TestResolve_FindLinuxKitManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "repo")
-	child := filepath.Join(repo, "service")
+	repo := core.PathJoin(tmp, "repo")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".core", LinuxKitDirectory),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".core", LinuxKitDirectory),
+		core.PathJoin(repo, ".git"),
 		child,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
-	lkPath := filepath.Join(repo, ".core", LinuxKitDirectory, FileLinuxKit)
+	lkPath := core.PathJoin(repo, ".core", LinuxKitDirectory, FileLinuxKit)
 	core.AssertNoError(t, m.Write(lkPath, "version: 1\n"))
 
 	core.AssertEqual(t, lkPath, FindLinuxKitManifest(m, child))
@@ -137,18 +137,18 @@ func TestResolve_FindLinuxKitManifest_Good(t *core.T) {
 func TestResolve_ResolveLinuxKitManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "repo")
-	child := filepath.Join(repo, "service")
+	repo := core.PathJoin(tmp, "repo")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".core", LinuxKitDirectory),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".core", LinuxKitDirectory),
+		core.PathJoin(repo, ".git"),
 		child,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
-	core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", LinuxKitDirectory, FileLinuxKit), "kernel:\n  image: linuxkit/kernel:6.6.0\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", LinuxKitDirectory, FileLinuxKit), "kernel:\n  image: linuxkit/kernel:6.6.0\n"))
 
 	manifest, err := ResolveLinuxKitManifest(m, child)
 	core.RequireNoError(t, err)
@@ -164,22 +164,132 @@ func TestResolve_ResolveLinuxKitManifest_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "no linuxkit manifest could be detected")
 }
 
+func TestResolve_ResolveTestManifest_Good(t *core.T) {
+	tests := []struct {
+		name     string
+		filename string
+		content  string
+		expected string
+	}{
+		{
+			name:     "core manifest",
+			filename: FileTest,
+			content:  "version: 1\ncommands:\n  - name: unit\n    run: vendor/bin/pest --parallel\n",
+			expected: "vendor/bin/pest --parallel",
+		},
+		{
+			name:     "composer fallback",
+			filename: "composer.json",
+			content:  `{"scripts":{}}`,
+			expected: "composer test",
+		},
+		{
+			name:     "package script",
+			filename: "package.json",
+			content:  `{"scripts":{"test":"npm run test:unit"}}`,
+			expected: "npm run test:unit",
+		},
+		{
+			name:     "go module",
+			filename: "go.mod",
+			content:  "module example.com/repo\n",
+			expected: "core go qa",
+		},
+		{
+			name:     "pytest ini",
+			filename: "pytest.ini",
+			content:  "[pytest]\n",
+			expected: "pytest",
+		},
+		{
+			name:     "pyproject",
+			filename: "pyproject.toml",
+			content:  "[tool.pytest.ini_options]\n",
+			expected: "pytest",
+		},
+		{
+			name:     "taskfile",
+			filename: "Taskfile.yaml",
+			content:  "version: '3'\n",
+			expected: "task test",
+		},
+		{
+			name:     "taskfile-yml",
+			filename: "Taskfile.yml",
+			content:  "version: '3'\n",
+			expected: "task test",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *core.T) {
+			m := coreio.NewMockMedium()
+			root := core.PathJoin("/", "repo", tc.name)
+			child := core.PathJoin(root, "service")
+
+			core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".core")))
+			core.AssertNoError(t, m.EnsureDir(child))
+			core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".git")))
+
+			path := core.PathJoin(root, tc.filename)
+			if tc.filename == FileTest {
+				path = core.PathJoin(root, ".core", FileTest)
+			}
+			core.AssertNoError(t, m.Write(path, tc.content))
+
+			manifest, err := ResolveTestManifest(m, child)
+			core.AssertNoError(t, err)
+			core.AssertNotNil(t, manifest)
+			core.AssertNotEmpty(t, manifest.Commands)
+			core.AssertEqual(t, tc.expected, manifest.Commands[0].Run)
+		})
+	}
+}
+
+func TestResolve_ResolveTestManifest_Bad(t *core.T) {
+	m := coreio.NewMockMedium()
+	root := core.PathJoin("/", "repo", "bad")
+	child := core.PathJoin(root, "service")
+
+	core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".git")))
+	core.AssertNoError(t, m.EnsureDir(child))
+	core.AssertNoError(t, m.Write(core.PathJoin(root, "package.json"), `{"scripts":{"test":123}}`))
+
+	manifest, err := ResolveTestManifest(m, child)
+	core.AssertNil(t, manifest)
+	core.AssertError(t, err)
+	core.AssertContains(t, err.Error(), "invalid npm test script")
+}
+
+func TestResolve_ResolveTestManifest_Ugly(t *core.T) {
+	m := coreio.NewMockMedium()
+	root := core.PathJoin("/", "repo", "ugly")
+
+	core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".git")))
+
+	manifest, err := ResolveTestManifest(m, root)
+	core.AssertNil(t, manifest)
+	core.AssertError(t, err)
+	core.AssertContains(t, err.Error(), "no test command could be detected")
+}
+
 func TestResolve_FindProjectManifest_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	base := filepath.Join(tmp, "workspace")
-	repo := filepath.Join(base, "repo")
-	child := filepath.Join(repo, "service")
+	base := core.PathJoin(tmp, "workspace")
+	repo := core.PathJoin(base, "repo")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(base, ".core"),
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(base, ".core"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".git"),
 		child,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
+	core.AssertEmpty(t, FindProjectManifest(m, child, FileBuild))
 	core.AssertEmpty(t, FindBuildManifest(m, child))
 	core.AssertEmpty(t, FindReleaseManifest(m, child))
 	core.AssertEmpty(t, FindRunManifest(m, child))
@@ -195,7 +305,8 @@ func TestResolve_FindProjectManifest_Ugly(t *core.T) {
 	// project-local wrappers should still return an empty path instead of panicking.
 	// Repos are resolved from the shared workspace root and may legitimately
 	// exist on the host machine, so this test does not assert on repos.yaml.
-	start := filepath.Join(t.TempDir(), "missing", "service")
+	start := core.PathJoin(t.TempDir(), "missing", "service")
+	core.AssertEmpty(t, FindProjectManifest(nil, start, FileBuild))
 	core.AssertEmpty(t, FindBuildManifest(nil, start))
 	core.AssertEmpty(t, FindReleaseManifest(nil, start))
 	core.AssertEmpty(t, FindRunManifest(nil, start))
@@ -209,30 +320,30 @@ func TestResolve_FindUserPath_Good(t *core.T) {
 	home := core.Env("DIR_HOME")
 
 	for _, dir := range []string{
-		filepath.Join(home, ".core"),
-		filepath.Join(home, ".core", DirectoryImages),
-		filepath.Join(home, ".core", DirectorySecrets),
-		filepath.Join(home, ".core", DirectoryDaemons),
-		filepath.Join(home, ".core", DirectoryWorkspaces),
+		core.PathJoin(home, ".core"),
+		core.PathJoin(home, ".core", DirectoryImages),
+		core.PathJoin(home, ".core", DirectorySecrets),
+		core.PathJoin(home, ".core", DirectoryDaemons),
+		core.PathJoin(home, ".core", DirectoryWorkspaces),
 	} {
 		core.RequireNoError(t, m.EnsureDir(dir))
 	}
 
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: true\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), "{\"images\":{}}"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", FileAgent), "daemon:\n  enabled: true\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", DirectoryImages, FileImagesManifest), "{\"images\":{}}"))
 
-	core.AssertEqual(t, filepath.Join(home, ".core", FileAgent), FindUserManifest(m, FileAgent))
-	core.AssertEqual(t, filepath.Join(home, ".core", FileAgent), FindAgentManifest(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", FileAgent), FindUserPath(m, "", FileAgent))
-	core.AssertEqual(t, filepath.Join(home, ".core", FileZone), FindZoneManifest(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectoryImages), FindUserImagesDirectory(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), FindUserImagesManifest(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), FindUserPath(m, DirectoryImages, "", FileImagesManifest))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectorySecrets), FindUserSecretsDirectory(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectoryDaemons), FindUserDaemonsDirectory(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectoryWorkspaces), FindUserWorkspacesDirectory(m))
-	core.AssertEqual(t, filepath.Join(home, ".core", DirectoryImages), FindUserDirectory(m, DirectoryImages))
+	core.AssertEqual(t, core.PathJoin(home, ".core", FileAgent), FindUserManifest(m, FileAgent))
+	core.AssertEqual(t, core.PathJoin(home, ".core", FileAgent), FindAgentManifest(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", FileAgent), FindUserPath(m, "", FileAgent))
+	core.AssertEqual(t, core.PathJoin(home, ".core", FileZone), FindZoneManifest(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectoryImages), FindUserImagesDirectory(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectoryImages, FileImagesManifest), FindUserImagesManifest(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectoryImages, FileImagesManifest), FindUserPath(m, DirectoryImages, "", FileImagesManifest))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectorySecrets), FindUserSecretsDirectory(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectoryDaemons), FindUserDaemonsDirectory(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectoryWorkspaces), FindUserWorkspacesDirectory(m))
+	core.AssertEqual(t, core.PathJoin(home, ".core", DirectoryImages), FindUserDirectory(m, DirectoryImages))
 }
 
 func TestResolve_FindUserPath_Bad(t *core.T) {
@@ -252,25 +363,25 @@ func TestResolve_FindUserPath_Bad(t *core.T) {
 
 func TestResolve_FindUserPath_Ugly(t *core.T) {
 	home := core.Env("DIR_HOME")
-	coreDir := filepath.Join(home, ".core")
+	coreDir := core.PathJoin(home, ".core")
 	m := symlinkMockMedium{
 		MockMedium: coreio.NewMockMedium(),
 		symlinks:   map[string]bool{coreDir: true},
 	}
 	core.RequireNoError(t, m.EnsureDir(coreDir))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileAgent), "daemon:\n  enabled: true\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileAgent), "daemon:\n  enabled: true\n"))
 
 	core.AssertEmpty(t, FindUserPath(m, FileAgent))
 	core.AssertEmpty(t, FindUserManifest(m, FileAgent))
 }
 
-func TestResolve_ResolveUserManifests_Good(t *core.T) {
+func TestResolveResolveUserManifestsGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(home, ".core")))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: true\nagents:\n  worker:\n    total: 2\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n  services:\n    vpn:\n      enabled: true\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, ".core")))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", FileAgent), "daemon:\n  enabled: true\nagents:\n  worker:\n    total: 2\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n  services:\n    vpn:\n      enabled: true\n"))
 
 	agent, err := ResolveAgentManifest(m)
 	core.RequireNoError(t, err)
@@ -285,7 +396,7 @@ func TestResolve_ResolveUserManifests_Good(t *core.T) {
 	core.AssertTrue(t, zone.Zone.Services.VPN.Enabled)
 }
 
-func TestResolve_ResolveUserManifests_Bad(t *core.T) {
+func TestResolveResolveUserManifestsBad(t *core.T) {
 	m := coreio.NewMockMedium()
 
 	agent, err := ResolveAgentManifest(m)
@@ -299,13 +410,13 @@ func TestResolve_ResolveUserManifests_Bad(t *core.T) {
 	core.AssertContains(t, err.Error(), "no zone manifest could be detected")
 }
 
-func TestResolve_ResolveUserManifests_Ugly(t *core.T) {
+func TestResolveResolveUserManifestsUgly(t *core.T) {
 	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(home, ".core")))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", FileAgent), "daemon:\n  enabled: [broken"))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", FileZone), "zone:\n  name: [broken"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, ".core")))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", FileAgent), "daemon:\n  enabled: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", FileZone), "zone:\n  name: [broken"))
 
 	agent, err := ResolveAgentManifest(m)
 	core.AssertNil(t, agent)
@@ -321,17 +432,17 @@ func TestResolve_ResolveUserManifests_Ugly(t *core.T) {
 func TestResolve_FindPHPManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "repo")
-	child := filepath.Join(repo, "service")
+	repo := core.PathJoin(tmp, "repo")
+	child := core.PathJoin(repo, "service")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(repo, ".core")))
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(repo, ".git")))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(repo, ".core")))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(repo, ".git")))
 	core.RequireNoError(t, m.EnsureDir(child))
-	core.RequireNoError(t, m.Write(filepath.Join(repo, ".core", FilePHP), "version: 1\n"))
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(repo, ".core", LinuxKitDirectory)))
+	core.RequireNoError(t, m.Write(core.PathJoin(repo, ".core", FilePHP), "version: 1\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(repo, ".core", LinuxKitDirectory)))
 
-	core.AssertEqual(t, filepath.Join(repo, ".core", FilePHP), FindPHPManifest(m, child))
-	core.AssertEqual(t, filepath.Join(repo, ".core", LinuxKitDirectory), FindLinuxKitDirectory(m, child))
+	core.AssertEqual(t, core.PathJoin(repo, ".core", FilePHP), FindPHPManifest(m, child))
+	core.AssertEqual(t, core.PathJoin(repo, ".core", LinuxKitDirectory), FindLinuxKitDirectory(m, child))
 }
 
 func TestResolve_ResolvePHPManifest_Bad(t *core.T) {
@@ -346,10 +457,10 @@ func TestResolve_ResolvePHPManifest_Bad(t *core.T) {
 func TestResolve_ResolvePHPManifest_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "repo")
+	repo := core.PathJoin(tmp, "repo")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(repo, ".core")))
-	core.RequireNoError(t, m.Write(filepath.Join(repo, ".core", FilePHP), "version: [broken"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(repo, ".core")))
+	core.RequireNoError(t, m.Write(core.PathJoin(repo, ".core", FilePHP), "version: [broken"))
 
 	php, err := ResolvePHPManifest(m, repo)
 	core.AssertNil(t, php)
@@ -360,10 +471,10 @@ func TestResolve_ResolvePHPManifest_Ugly(t *core.T) {
 func TestResolve_ResolvePHPManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "repo")
+	repo := core.PathJoin(tmp, "repo")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(repo, ".core")))
-	core.RequireNoError(t, m.Write(filepath.Join(repo, ".core", FilePHP), "version: 1\nserver:\n  type: php-fpm\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(repo, ".core")))
+	core.RequireNoError(t, m.Write(core.PathJoin(repo, ".core", FilePHP), "version: 1\nserver:\n  type: php-fpm\n"))
 
 	php, err := ResolvePHPManifest(m, repo)
 	core.RequireNoError(t, err)
@@ -375,24 +486,24 @@ func TestResolve_ResolvePHPManifest_Good(t *core.T) {
 func TestResolve_FindReposManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	start := filepath.Join(tmp, "workspace", "repo", "service")
+	start := core.PathJoin(tmp, "workspace", "repo", "service")
 	home := core.Env("DIR_HOME")
 
 	core.RequireNoError(t, m.EnsureDir(start))
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(home, "Code", Directory)))
-	core.RequireNoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, "Code", Directory)))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
 
-	core.AssertEqual(t, filepath.Join(home, "Code", Directory, FileRepos), FindReposManifest(m, start))
+	core.AssertEqual(t, core.PathJoin(home, "Code", Directory, FileRepos), FindReposManifest(m, start))
 }
 
 func TestResolve_FindWorkspaceRegistryManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	start := filepath.Join(tmp, "workspace", "repo", "service")
+	start := core.PathJoin(tmp, "workspace", "repo", "service")
 	home := core.Env("DIR_HOME")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Dir(filepath.Join(home, "Code", Directory, FileRepos))))
-	core.RequireNoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathDir(core.PathJoin(home, "Code", Directory, FileRepos))))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
 
 	core.AssertEqual(t, FindReposManifest(m, start), FindWorkspaceRegistryManifest(m, start))
 }
@@ -406,14 +517,14 @@ func TestResolve_FindWorkspaceRegistryManifest_Bad(t *core.T) {
 
 func TestResolve_FindWorkspaceRegistryManifest_Ugly(t *core.T) {
 	home := core.Env("DIR_HOME")
-	coreDir := filepath.Join(home, "Code", Directory)
-	start := filepath.Join("workspace", "repo", "service")
+	coreDir := core.PathJoin(home, "Code", Directory)
+	start := core.PathJoin("workspace", "repo", "service")
 	m := symlinkMockMedium{
 		MockMedium: coreio.NewMockMedium(),
 		symlinks:   map[string]bool{coreDir: true},
 	}
 	core.RequireNoError(t, m.EnsureDir(coreDir))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
 
 	core.AssertEmpty(t, FindWorkspaceRegistryManifest(m, start))
 }
@@ -421,11 +532,11 @@ func TestResolve_FindWorkspaceRegistryManifest_Ugly(t *core.T) {
 func TestResolve_ResolveWorkspaceRegistryManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	start := filepath.Join(tmp, "workspace", "repo", "service")
+	start := core.PathJoin(tmp, "workspace", "repo", "service")
 	home := core.Env("DIR_HOME")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(home, "Code", Directory)))
-	core.RequireNoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, "Code", Directory)))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	repos, err := ResolveWorkspaceRegistryManifest(m, start)
 	core.RequireNoError(t, err)
@@ -447,10 +558,10 @@ func TestResolve_ResolveWorkspaceRegistryManifest_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
 	home := core.Env("DIR_HOME")
-	start := filepath.Join(tmp, "workspace", "repo", "service")
+	start := core.PathJoin(tmp, "workspace", "repo", "service")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(home, "Code", Directory)))
-	core.RequireNoError(t, m.Write(filepath.Join(home, "Code", Directory, FileRepos), "version: [broken"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, "Code", Directory)))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: [broken"))
 
 	repos, err := ResolveWorkspaceRegistryManifest(m, start)
 	core.AssertNil(t, repos)
@@ -462,8 +573,8 @@ func TestResolve_ResolveImagesManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
 
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(home, ".core", DirectoryImages)))
-	core.RequireNoError(t, m.Write(filepath.Join(home, ".core", DirectoryImages, FileImagesManifest), `{"images":{"core-dev":{"version":"1.2.3","downloaded":"2026-04-15T12:00:00Z","source":"github"}}}`))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, ".core", DirectoryImages)))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, ".core", DirectoryImages, FileImagesManifest), `{"images":{"core-dev":{"version":"1.2.3","downloaded":"2026-04-15T12:00:00Z","source":"github"}}}`))
 
 	manifest, err := ResolveImagesManifest(m)
 	core.RequireNoError(t, err)
@@ -474,15 +585,16 @@ func TestResolve_ResolveImagesManifest_Good(t *core.T) {
 
 func TestResolve_WorkspaceSandboxPath_Good(t *core.T) {
 	home := core.Env("DIR_HOME")
-	core.AssertEqual(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev"), WorkspaceSandboxRoot("repo", "dev"))
-	core.AssertEqual(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceSourceDirectory, "app", "main.go"), WorkspaceSandboxSourcePath("repo", "dev", "app", "main.go"))
-	core.AssertEqual(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceMetaDirectory, "status.json"), WorkspaceSandboxMetaPath("repo", "dev", "status.json"))
-	core.AssertEqual(t, filepath.Join(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceInstructionsFile), WorkspaceSandboxInstructionsPath("repo", "dev"))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", "src"), WorkspaceSandboxPath("repo", "dev", "src"))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev"), WorkspaceSandboxRoot("repo", "dev"))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceSourceDirectory, "app", "main.go"), WorkspaceSandboxSourcePath("repo", "dev", "app", "main.go"))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceMetaDirectory, "status.json"), WorkspaceSandboxMetaPath("repo", "dev", "status.json"))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceInstructionsFile), WorkspaceSandboxInstructionsPath("repo", "dev"))
 }
 
 func TestResolve_WorkspaceSandboxPath_Ugly(t *core.T) {
 	home := core.Env("DIR_HOME")
-	core.AssertEqual(t, filepath.Join(home, Directory, WorkspaceDirectory, "src"), WorkspaceSandboxPath("", "", "", "src", ""))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "src"), WorkspaceSandboxPath("", "", "", "src", ""))
 	core.AssertEmpty(t, WorkspaceSandboxPath("../repo", "dev"))
 	core.AssertEmpty(t, WorkspaceSandboxPath("repo", "../dev"))
 	core.AssertEmpty(t, WorkspaceSandboxPath("repo", "dev", "../secret"))
@@ -492,16 +604,16 @@ func TestResolve_ResolveConfigManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
 	home := core.Env("DIR_HOME")
-	start := filepath.Join(tmp, "workspace", "repo", "service")
+	start := core.PathJoin(tmp, "workspace", "repo", "service")
 
 	for _, dir := range []string{
-		filepath.Join(home, ".core"),
+		core.PathJoin(home, ".core"),
 		start,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
-	configPath := filepath.Join(home, ".core", FileConfig)
+	configPath := core.PathJoin(home, ".core", FileConfig)
 	core.AssertNoError(t, m.Write(configPath, "app:\n  name: global\n"))
 
 	cfg, err := ResolveConfigManifest(m, start)
@@ -516,7 +628,7 @@ func TestResolve_ResolveConfigManifest_Good(t *core.T) {
 
 func TestResolve_ResolveConfigManifest_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
+	start := core.PathJoin(t.TempDir(), "workspace", "repo", "service")
 
 	_, err := ResolveConfigManifest(m, start)
 	core.AssertError(t, err)
@@ -527,16 +639,16 @@ func TestResolve_ResolveConfigManifest_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
 	home := core.Env("DIR_HOME")
-	start := filepath.Join(tmp, "workspace", "repo", "service")
+	start := core.PathJoin(tmp, "workspace", "repo", "service")
 
 	for _, dir := range []string{
-		filepath.Join(home, ".core"),
+		core.PathJoin(home, ".core"),
 		start,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
-	configPath := filepath.Join(home, ".core", FileConfig)
+	configPath := core.PathJoin(home, ".core", FileConfig)
 	core.AssertNoError(t, m.Write(configPath, "app:\n  name: [broken yaml"))
 
 	_, err := ResolveConfigManifest(m, start)
@@ -544,29 +656,29 @@ func TestResolve_ResolveConfigManifest_Ugly(t *core.T) {
 	core.AssertContains(t, err.Error(), "failed to load config file")
 }
 
-func TestResolve_ResolveProjectManifests_Good(t *core.T) {
+func TestResolveResolveProjectManifestsGood(t *core.T) {
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", "")
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "workspace", "repo")
-	workspace := filepath.Join(tmp, "workspace")
-	child := filepath.Join(repo, "service")
+	repo := core.PathJoin(tmp, "workspace", "repo")
+	workspace := core.PathJoin(tmp, "workspace")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".git"),
 		child,
-		filepath.Join(workspace, ".core"),
+		core.PathJoin(workspace, ".core"),
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
-	buildPath := filepath.Join(repo, ".core", FileBuild)
-	releasePath := filepath.Join(repo, ".core", FileRelease)
-	runPath := filepath.Join(repo, ".core", FileRun)
-	viewPath := filepath.Join(repo, ".core", FileView)
-	packagePath := filepath.Join(repo, ".core", FileManifest)
-	idePath := filepath.Join(repo, ".core", FileIDE)
+	buildPath := core.PathJoin(repo, ".core", FileBuild)
+	releasePath := core.PathJoin(repo, ".core", FileRelease)
+	runPath := core.PathJoin(repo, ".core", FileRun)
+	viewPath := core.PathJoin(repo, ".core", FileView)
+	packagePath := core.PathJoin(repo, ".core", FileManifest)
+	idePath := core.PathJoin(repo, ".core", FileIDE)
 
 	core.AssertNoError(t, m.Write(buildPath, "name: core\noutput: dist\ntargets:\n  - linux/amd64\n"))
 	core.AssertNoError(t, m.Write(releasePath, "version: 1\narchive:\n  format: tar.gz\n  include:\n    - README.md\nchecksums: true\ngithub:\n  draft: false\n  prerelease: false\nchangelog:\n  include:\n    - feat\n"))
@@ -574,7 +686,7 @@ func TestResolve_ResolveProjectManifests_Good(t *core.T) {
 	core.AssertNoError(t, m.Write(viewPath, "code: photo-browser\nname: Photo Browser\nsign: "+base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))+"\npermissions:\n  clipboard: true\n"))
 	core.AssertNoError(t, m.Write(packagePath, packageManifestFixture(t)))
 	core.AssertNoError(t, m.Write(idePath, "version: 1\neditor: nvim\n"))
-	core.AssertNoError(t, m.Write(filepath.Join(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	build, err := ResolveBuildManifest(m, child)
 	core.AssertNoError(t, err)
@@ -612,10 +724,10 @@ func TestResolve_ResolveProjectManifests_Good(t *core.T) {
 	core.AssertLen(t, repos.Repos, 1)
 }
 
-func TestResolve_ResolveProjectManifests_Bad(t *core.T) {
+func TestResolveResolveProjectManifestsBad(t *core.T) {
 	t.Setenv("DIR_HOME", t.TempDir())
 	m := coreio.NewMockMedium()
-	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
+	start := core.PathJoin(t.TempDir(), "workspace", "repo", "service")
 
 	_, err := ResolveBuildManifest(m, start)
 	core.AssertError(t, err)
@@ -635,37 +747,37 @@ func TestResolve_ResolveProjectManifests_Bad(t *core.T) {
 
 func TestResolve_FindReposManifest_FallsBackToWorkspaceRoot_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	start := filepath.Join(t.TempDir(), "workspace", "repo", "service")
-	reposPath := filepath.Join(core.Env("DIR_HOME"), "Code", ".core", FileRepos)
+	start := core.PathJoin(t.TempDir(), "workspace", "repo", "service")
+	reposPath := core.PathJoin(core.Env("DIR_HOME"), "Code", ".core", FileRepos)
 
-	core.AssertNoError(t, m.EnsureDir(filepath.Dir(reposPath)))
+	core.AssertNoError(t, m.EnsureDir(core.PathDir(reposPath)))
 	core.AssertNoError(t, m.Write(reposPath, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
 
 	core.AssertEqual(t, reposPath, FindReposManifest(m, start))
 }
 
-func TestResolve_ResolveProjectManifests_Ugly(t *core.T) {
+func TestResolveResolveProjectManifestsUgly(t *core.T) {
 	m := coreio.NewMockMedium()
 	tmp := t.TempDir()
-	repo := filepath.Join(tmp, "workspace", "repo")
-	workspace := filepath.Join(tmp, "workspace")
-	child := filepath.Join(repo, "service")
+	repo := core.PathJoin(tmp, "workspace", "repo")
+	workspace := core.PathJoin(tmp, "workspace")
+	child := core.PathJoin(repo, "service")
 
 	for _, dir := range []string{
-		filepath.Join(repo, ".core"),
-		filepath.Join(repo, ".git"),
+		core.PathJoin(repo, ".core"),
+		core.PathJoin(repo, ".git"),
 		child,
-		filepath.Join(workspace, ".core"),
+		core.PathJoin(workspace, ".core"),
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
-	core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", FileBuild), "name: core\noutput: dist\ntargets:\n  - [broken yaml"))
-	core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", FileRelease), "version: 1\narchive:\n  format: [broken yaml"))
-	core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", FileRun), "version: 1\nservices: [broken yaml"))
-	core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", FileView), "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n"))
-	core.AssertNoError(t, m.Write(filepath.Join(repo, ".core", FileManifest), "code: go-io\nname: Core I/O\nsign: not-base64\nsign_key: \"\"\n"))
-	core.AssertNoError(t, m.Write(filepath.Join(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos: [broken yaml"))
+	core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", FileBuild), "name: core\noutput: dist\ntargets:\n  - [broken yaml"))
+	core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", FileRelease), "version: 1\narchive:\n  format: [broken yaml"))
+	core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", FileRun), "version: 1\nservices: [broken yaml"))
+	core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", FileView), "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", FileManifest), "code: go-io\nname: Core I/O\nsign: not-base64\nsign_key: \"\"\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos: [broken yaml"))
 
 	_, err := ResolveBuildManifest(m, child)
 	core.AssertError(t, err)
@@ -718,30 +830,30 @@ type axResolveProject struct {
 func axResolveProjectFixture(t *core.T) axResolveProject {
 	t.Helper()
 	m := coreio.NewMockMedium()
-	root := filepath.Join(t.TempDir(), "repo")
-	child := filepath.Join(root, "service")
-	coreDir := filepath.Join(root, Directory)
+	root := core.PathJoin(t.TempDir(), "repo")
+	child := core.PathJoin(root, "service")
+	coreDir := core.PathJoin(root, Directory)
 	core.RequireNoError(t, m.EnsureDir(coreDir))
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(root, ".git")))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(root, ".git")))
 	core.RequireNoError(t, m.EnsureDir(child))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileBuild), "version: 1\nproject:\n  name: core\nbuild:\n  flags: [-trimpath]\ntargets:\n  - linux/amd64\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileTest), "version: 1\ncommands:\n  - name: unit\n    run: go test ./...\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileRelease), "version: 1\narchive:\n  format: tar.gz\n  include: [README.md]\nchecksums: true\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileRun), "version: 1\nservices:\n  - name: db\n    image: postgres:16\n    port: 5432\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileBuild), "version: 1\nproject:\n  name: core\nbuild:\n  flags: [-trimpath]\ntargets:\n  - linux/amd64\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileTest), "version: 1\ncommands:\n  - name: unit\n    run: go test ./...\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileRelease), "version: 1\narchive:\n  format: tar.gz\n  include: [README.md]\nchecksums: true\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileRun), "version: 1\nservices:\n  - name: db\n    image: postgres:16\n    port: 5432\n"))
 	view, _ := axSignedView(t)
 	viewBody, err := yaml.Marshal(&view)
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileView), string(viewBody)))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileView), string(viewBody)))
 	pkg, pub := axSignedPackage(t)
 	setManifestTrustKeys(t, hex.EncodeToString(pub))
 	pkgBody, err := yaml.Marshal(&pkg)
 	core.RequireNoError(t, err)
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileManifest), string(pkgBody)))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileWorkspace), "version: 1\ndependencies: [core/go]\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileIDE), "version: 1\neditor: codex\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FilePHP), "version: 1\nserver:\n  type: php-fpm\n"))
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(coreDir, LinuxKitDirectory)))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, LinuxKitDirectory, FileLinuxKit), "kernel:\n  image: linuxkit/kernel:6.6.0\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileManifest), string(pkgBody)))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileWorkspace), "version: 1\ndependencies: [core/go]\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileIDE), "version: 1\neditor: codex\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FilePHP), "version: 1\nserver:\n  type: php-fpm\n"))
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(coreDir, LinuxKitDirectory)))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, LinuxKitDirectory, FileLinuxKit), "kernel:\n  image: linuxkit/kernel:6.6.0\n"))
 	return axResolveProject{medium: m, root: root, child: child, core: coreDir}
 }
 
@@ -749,21 +861,21 @@ func axResolveUserFixture(t *core.T) (*coreio.MockMedium, string) {
 	t.Helper()
 	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
-	coreDir := filepath.Join(home, Directory)
+	coreDir := core.PathJoin(home, Directory)
 	core.RequireNoError(t, m.EnsureDir(coreDir))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileAgent), "daemon:\n  enabled: true\nagents:\n  codex:\n    total: 1\n"))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n  services:\n    vpn:\n      enabled: true\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileAgent), "daemon:\n  enabled: true\nagents:\n  codex:\n    total: 1\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileZone), "zone:\n  name: alpha\n  identity: '@alpha@lthn'\n  services:\n    vpn:\n      enabled: true\n"))
 	for _, dir := range []string{DirectoryImages, DirectorySecrets, DirectoryDaemons, DirectoryWorkspaces} {
-		core.RequireNoError(t, m.EnsureDir(filepath.Join(coreDir, dir)))
+		core.RequireNoError(t, m.EnsureDir(core.PathJoin(coreDir, dir)))
 	}
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, DirectoryImages, FileImagesManifest), `{"images":{}}`))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, DirectoryImages, FileImagesManifest), `{"images":{}}`))
 	return m, home
 }
 
 func TestResolve_FindUserManifest_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserManifest(m, FileAgent)
-	core.AssertEqual(t, filepath.Join(home, Directory, FileAgent), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, FileAgent), got)
 }
 
 func TestResolve_FindUserManifest_Bad(t *core.T) {
@@ -774,7 +886,7 @@ func TestResolve_FindUserManifest_Bad(t *core.T) {
 
 func TestResolve_FindUserManifest_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindUserManifest(marked, FileAgent)
 	core.AssertEqual(t, "", got)
 }
@@ -782,7 +894,7 @@ func TestResolve_FindUserManifest_Ugly(t *core.T) {
 func TestResolve_FindUserDirectory_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserDirectory(m, DirectoryImages)
-	core.AssertEqual(t, filepath.Join(home, Directory, DirectoryImages), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, DirectoryImages), got)
 }
 
 func TestResolve_FindUserDirectory_Bad(t *core.T) {
@@ -800,7 +912,7 @@ func TestResolve_FindUserDirectory_Ugly(t *core.T) {
 func TestResolve_FindUserImagesManifest_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserImagesManifest(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, DirectoryImages, FileImagesManifest), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, DirectoryImages, FileImagesManifest), got)
 }
 
 func TestResolve_FindUserImagesManifest_Bad(t *core.T) {
@@ -811,7 +923,7 @@ func TestResolve_FindUserImagesManifest_Bad(t *core.T) {
 
 func TestResolve_FindUserImagesManifest_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindUserImagesManifest(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -819,7 +931,7 @@ func TestResolve_FindUserImagesManifest_Ugly(t *core.T) {
 func TestResolve_FindUserImagesDirectory_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserImagesDirectory(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, DirectoryImages), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, DirectoryImages), got)
 }
 
 func TestResolve_FindUserImagesDirectory_Bad(t *core.T) {
@@ -830,7 +942,7 @@ func TestResolve_FindUserImagesDirectory_Bad(t *core.T) {
 
 func TestResolve_FindUserImagesDirectory_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindUserImagesDirectory(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -838,7 +950,7 @@ func TestResolve_FindUserImagesDirectory_Ugly(t *core.T) {
 func TestResolve_FindUserSecretsDirectory_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserSecretsDirectory(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, DirectorySecrets), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, DirectorySecrets), got)
 }
 
 func TestResolve_FindUserSecretsDirectory_Bad(t *core.T) {
@@ -849,7 +961,7 @@ func TestResolve_FindUserSecretsDirectory_Bad(t *core.T) {
 
 func TestResolve_FindUserSecretsDirectory_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindUserSecretsDirectory(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -857,7 +969,7 @@ func TestResolve_FindUserSecretsDirectory_Ugly(t *core.T) {
 func TestResolve_FindUserDaemonsDirectory_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserDaemonsDirectory(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, DirectoryDaemons), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, DirectoryDaemons), got)
 }
 
 func TestResolve_FindUserDaemonsDirectory_Bad(t *core.T) {
@@ -868,7 +980,7 @@ func TestResolve_FindUserDaemonsDirectory_Bad(t *core.T) {
 
 func TestResolve_FindUserDaemonsDirectory_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindUserDaemonsDirectory(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -876,7 +988,7 @@ func TestResolve_FindUserDaemonsDirectory_Ugly(t *core.T) {
 func TestResolve_FindUserWorkspacesDirectory_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindUserWorkspacesDirectory(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, DirectoryWorkspaces), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, DirectoryWorkspaces), got)
 }
 
 func TestResolve_FindUserWorkspacesDirectory_Bad(t *core.T) {
@@ -887,7 +999,7 @@ func TestResolve_FindUserWorkspacesDirectory_Bad(t *core.T) {
 
 func TestResolve_FindUserWorkspacesDirectory_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindUserWorkspacesDirectory(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -895,7 +1007,7 @@ func TestResolve_FindUserWorkspacesDirectory_Ugly(t *core.T) {
 func TestResolve_FindBuildManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindBuildManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileBuild), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileBuild), got)
 }
 
 func TestResolve_FindBuildManifest_Bad(t *core.T) {
@@ -927,7 +1039,7 @@ func TestResolve_ResolveBuildManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveBuildManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, FileBuild), "targets:\n  - invalid-target\n"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileBuild), "targets:\n  - invalid-target\n"))
 	got, err := ResolveBuildManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -936,7 +1048,7 @@ func TestResolve_ResolveBuildManifest_Ugly(t *core.T) {
 func TestResolve_FindTestManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindTestManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileTest), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileTest), got)
 }
 
 func TestResolve_FindTestManifest_Bad(t *core.T) {
@@ -955,7 +1067,7 @@ func TestResolve_FindTestManifest_Ugly(t *core.T) {
 func TestResolve_FindReleaseManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindReleaseManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileRelease), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileRelease), got)
 }
 
 func TestResolve_FindReleaseManifest_Bad(t *core.T) {
@@ -987,7 +1099,7 @@ func TestResolve_ResolveReleaseManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveReleaseManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, FileRelease), "version: [broken"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileRelease), "version: [broken"))
 	got, err := ResolveReleaseManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -996,7 +1108,7 @@ func TestResolve_ResolveReleaseManifest_Ugly(t *core.T) {
 func TestResolve_FindRunManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindRunManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileRun), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileRun), got)
 }
 
 func TestResolve_FindRunManifest_Bad(t *core.T) {
@@ -1028,7 +1140,7 @@ func TestResolve_ResolveRunManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveRunManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, FileRun), "services: [broken"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileRun), "services: [broken"))
 	got, err := ResolveRunManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1037,7 +1149,7 @@ func TestResolve_ResolveRunManifest_Ugly(t *core.T) {
 func TestResolve_FindViewManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindViewManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileView), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileView), got)
 }
 
 func TestResolve_FindViewManifest_Bad(t *core.T) {
@@ -1069,7 +1181,7 @@ func TestResolve_ResolveViewManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveViewManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, FileView), "code: ax\nname: AX\n"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileView), "code: ax\nname: AX\n"))
 	got, err := ResolveViewManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1078,7 +1190,7 @@ func TestResolve_ResolveViewManifest_Ugly(t *core.T) {
 func TestResolve_FindPackageManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindPackageManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileManifest), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileManifest), got)
 }
 
 func TestResolve_FindPackageManifest_Bad(t *core.T) {
@@ -1110,7 +1222,7 @@ func TestResolve_ResolvePackageManifest_Bad(t *core.T) {
 
 func TestResolve_ResolvePackageManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, FileManifest), "code: ax\nname: AX\nsign: not-base64\nsign_key: \"\"\n"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileManifest), "code: ax\nname: AX\nsign: not-base64\nsign_key: \"\"\n"))
 	got, err := ResolvePackageManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1119,7 +1231,7 @@ func TestResolve_ResolvePackageManifest_Ugly(t *core.T) {
 func TestResolve_FindAgentManifest_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindAgentManifest(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, FileAgent), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, FileAgent), got)
 }
 
 func TestResolve_FindAgentManifest_Bad(t *core.T) {
@@ -1130,7 +1242,7 @@ func TestResolve_FindAgentManifest_Bad(t *core.T) {
 
 func TestResolve_FindAgentManifest_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindAgentManifest(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -1151,7 +1263,7 @@ func TestResolve_ResolveAgentManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveAgentManifest_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	core.RequireNoError(t, m.Write(filepath.Join(home, Directory, FileAgent), "daemon: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, Directory, FileAgent), "daemon: [broken"))
 	got, err := ResolveAgentManifest(m)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1160,7 +1272,7 @@ func TestResolve_ResolveAgentManifest_Ugly(t *core.T) {
 func TestResolve_FindZoneManifest_Good(t *core.T) {
 	m, home := axResolveUserFixture(t)
 	got := FindZoneManifest(m)
-	core.AssertEqual(t, filepath.Join(home, Directory, FileZone), got)
+	core.AssertEqual(t, core.PathJoin(home, Directory, FileZone), got)
 }
 
 func TestResolve_FindZoneManifest_Bad(t *core.T) {
@@ -1171,7 +1283,7 @@ func TestResolve_FindZoneManifest_Bad(t *core.T) {
 
 func TestResolve_FindZoneManifest_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{filepath.Join(home, Directory): true}}
+	marked := symlinkMockMedium{MockMedium: m, symlinks: map[string]bool{core.PathJoin(home, Directory): true}}
 	got := FindZoneManifest(marked)
 	core.AssertEqual(t, "", got)
 }
@@ -1192,10 +1304,23 @@ func TestResolve_ResolveZoneManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveZoneManifest_Ugly(t *core.T) {
 	m, home := axResolveUserFixture(t)
-	core.RequireNoError(t, m.Write(filepath.Join(home, Directory, FileZone), "zone: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, Directory, FileZone), "zone: [broken"))
 	got, err := ResolveZoneManifest(m)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
+}
+
+func TestResolve_FindWorkspaceManifest_Good(t *core.T) {
+	m := coreio.NewMockMedium()
+	root := core.PathJoin("/", "workspace", "repo")
+	child := core.PathJoin(root, "service")
+
+	core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".core")))
+	core.AssertNoError(t, m.EnsureDir(child))
+	core.AssertNoError(t, m.Write(core.PathJoin(root, ".core", FileWorkspace), "version: 1\ndependencies:\n  - core-php\nactive: core-php\npackages_dir: ./packages\n"))
+
+	path := FindWorkspaceManifest(m, child)
+	core.AssertEqual(t, core.PathJoin(root, ".core", FileWorkspace), path)
 }
 
 func TestResolve_FindWorkspaceManifest_Bad(t *core.T) {
@@ -1211,10 +1336,47 @@ func TestResolve_FindWorkspaceManifest_Ugly(t *core.T) {
 	core.AssertEqual(t, "", got)
 }
 
+func TestResolve_ResolveWorkspaceManifest_Good(t *core.T) {
+	m := coreio.NewMockMedium()
+	root := core.PathJoin("/", "workspace", "resolve")
+
+	core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".core")))
+	core.AssertNoError(t, m.Write(core.PathJoin(root, ".core", FileWorkspace), "version: 1\ndependencies:\n  - core-php\nactive: core-php\npackages_dir: ./packages\nsettings:\n  suggest_core_commands: true\n"))
+
+	manifest, err := ResolveWorkspaceManifest(m, root)
+	core.AssertNoError(t, err)
+	core.AssertNotNil(t, manifest)
+	core.AssertEqual(t, []string{"core-php"}, manifest.Dependencies)
+	core.AssertEqual(t, "core-php", manifest.Active)
+	core.AssertEqual(t, "./packages", manifest.PackagesDir)
+	core.AssertEqual(t, true, manifest.Settings["suggest_core_commands"])
+}
+
+func TestResolve_ResolveWorkspaceManifest_Bad(t *core.T) {
+	m := coreio.NewMockMedium()
+
+	manifest, err := ResolveWorkspaceManifest(m, core.PathJoin("/", "workspace", "missing"))
+	core.AssertNil(t, manifest)
+	core.AssertError(t, err)
+	core.AssertContains(t, err.Error(), "no workspace manifest could be detected")
+}
+
+func TestResolve_ResolveWorkspaceManifest_Ugly(t *core.T) {
+	m := coreio.NewMockMedium()
+	root := core.PathJoin("/", "workspace", "ugly")
+
+	core.AssertNoError(t, m.EnsureDir(core.PathJoin(root, ".core")))
+	core.AssertNoError(t, m.Write(core.PathJoin(root, ".core", FileWorkspace), "version: [broken yaml"))
+
+	manifest, err := ResolveWorkspaceManifest(m, root)
+	core.AssertNil(t, manifest)
+	core.AssertError(t, err)
+}
+
 func TestResolve_FindIDEManifest_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindIDEManifest(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, FileIDE), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, FileIDE), got)
 }
 
 func TestResolve_FindIDEManifest_Bad(t *core.T) {
@@ -1246,7 +1408,7 @@ func TestResolve_ResolveIDEManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveIDEManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, FileIDE), "version: [broken"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileIDE), "version: [broken"))
 	got, err := ResolveIDEManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1255,7 +1417,7 @@ func TestResolve_ResolveIDEManifest_Ugly(t *core.T) {
 func TestResolve_FindLinuxKitDirectory_Good(t *core.T) {
 	fixture := axResolveProjectFixture(t)
 	got := FindLinuxKitDirectory(fixture.medium, fixture.child)
-	core.AssertEqual(t, filepath.Join(fixture.core, LinuxKitDirectory), got)
+	core.AssertEqual(t, core.PathJoin(fixture.core, LinuxKitDirectory), got)
 }
 
 func TestResolve_FindLinuxKitDirectory_Bad(t *core.T) {
@@ -1286,7 +1448,7 @@ func TestResolve_FindLinuxKitManifest_Ugly(t *core.T) {
 
 func TestResolve_ResolveLinuxKitManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(filepath.Join(fixture.core, LinuxKitDirectory, FileLinuxKit), "kernel: [broken"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, LinuxKitDirectory, FileLinuxKit), "kernel: [broken"))
 	got, err := ResolveLinuxKitManifest(fixture.medium, fixture.child)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1294,7 +1456,7 @@ func TestResolve_ResolveLinuxKitManifest_Ugly(t *core.T) {
 
 func TestResolve_WorkspaceSandboxRoot_Good(t *core.T) {
 	got := WorkspaceSandboxRoot("repo", "dev")
-	core.AssertContains(t, got, filepath.Join(Directory, WorkspaceDirectory, "repo", "dev"))
+	core.AssertContains(t, got, core.PathJoin(Directory, WorkspaceDirectory, "repo", "dev"))
 	core.AssertNotContains(t, got, WorkspaceSourceDirectory)
 }
 
@@ -1306,13 +1468,13 @@ func TestResolve_WorkspaceSandboxRoot_Bad(t *core.T) {
 
 func TestResolve_WorkspaceSandboxRoot_Ugly(t *core.T) {
 	got := WorkspaceSandboxRoot("", "")
-	core.AssertEqual(t, filepath.Join(core.Env("DIR_HOME"), Directory, WorkspaceDirectory), got)
+	core.AssertEqual(t, core.PathJoin(core.Env("DIR_HOME"), Directory, WorkspaceDirectory), got)
 	core.AssertContains(t, got, WorkspaceDirectory)
 }
 
 func TestResolve_WorkspaceSandboxSourcePath_Good(t *core.T) {
 	got := WorkspaceSandboxSourcePath("repo", "dev", "app", "main.go")
-	core.AssertContains(t, got, filepath.Join(WorkspaceSourceDirectory, "app", "main.go"))
+	core.AssertContains(t, got, core.PathJoin(WorkspaceSourceDirectory, "app", "main.go"))
 	core.AssertContains(t, got, "repo")
 }
 
@@ -1324,13 +1486,13 @@ func TestResolve_WorkspaceSandboxSourcePath_Bad(t *core.T) {
 
 func TestResolve_WorkspaceSandboxSourcePath_Ugly(t *core.T) {
 	got := WorkspaceSandboxSourcePath("", "", "")
-	core.AssertEqual(t, filepath.Join(core.Env("DIR_HOME"), Directory, WorkspaceDirectory, WorkspaceSourceDirectory), got)
+	core.AssertEqual(t, core.PathJoin(core.Env("DIR_HOME"), Directory, WorkspaceDirectory, WorkspaceSourceDirectory), got)
 	core.AssertContains(t, got, WorkspaceSourceDirectory)
 }
 
 func TestResolve_WorkspaceSandboxMetaPath_Good(t *core.T) {
 	got := WorkspaceSandboxMetaPath("repo", "dev", "status.json")
-	core.AssertContains(t, got, filepath.Join(WorkspaceMetaDirectory, "status.json"))
+	core.AssertContains(t, got, core.PathJoin(WorkspaceMetaDirectory, "status.json"))
 	core.AssertContains(t, got, "dev")
 }
 
@@ -1342,7 +1504,7 @@ func TestResolve_WorkspaceSandboxMetaPath_Bad(t *core.T) {
 
 func TestResolve_WorkspaceSandboxMetaPath_Ugly(t *core.T) {
 	got := WorkspaceSandboxMetaPath("", "", "")
-	core.AssertEqual(t, filepath.Join(core.Env("DIR_HOME"), Directory, WorkspaceDirectory, WorkspaceMetaDirectory), got)
+	core.AssertEqual(t, core.PathJoin(core.Env("DIR_HOME"), Directory, WorkspaceDirectory, WorkspaceMetaDirectory), got)
 	core.AssertContains(t, got, WorkspaceMetaDirectory)
 }
 
@@ -1360,7 +1522,7 @@ func TestResolve_WorkspaceSandboxInstructionsPath_Bad(t *core.T) {
 
 func TestResolve_WorkspaceSandboxInstructionsPath_Ugly(t *core.T) {
 	got := WorkspaceSandboxInstructionsPath("", "")
-	core.AssertEqual(t, filepath.Join(core.Env("DIR_HOME"), Directory, WorkspaceDirectory, WorkspaceInstructionsFile), got)
+	core.AssertEqual(t, core.PathJoin(core.Env("DIR_HOME"), Directory, WorkspaceDirectory, WorkspaceInstructionsFile), got)
 	core.AssertContains(t, got, WorkspaceInstructionsFile)
 }
 
@@ -1372,27 +1534,27 @@ func TestResolve_WorkspaceSandboxPath_Bad(t *core.T) {
 
 func TestResolve_FindReposManifest_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	got := FindReposManifest(m, filepath.Join(t.TempDir(), "repo"))
+	got := FindReposManifest(m, core.PathJoin(t.TempDir(), "repo"))
 	core.AssertEqual(t, "", got)
 }
 
 func TestResolve_FindReposManifest_Ugly(t *core.T) {
 	home := core.Env("DIR_HOME")
-	coreDir := filepath.Join(home, "Code", Directory)
+	coreDir := core.PathJoin(home, "Code", Directory)
 	m := symlinkMockMedium{MockMedium: coreio.NewMockMedium(), symlinks: map[string]bool{coreDir: true}}
 	core.RequireNoError(t, m.EnsureDir(coreDir))
-	core.RequireNoError(t, m.Write(filepath.Join(coreDir, FileRepos), "version: 1\norg: ax\nrepos: []\n"))
-	got := FindReposManifest(m, filepath.Join(t.TempDir(), "repo"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileRepos), "version: 1\norg: ax\nrepos: []\n"))
+	got := FindReposManifest(m, core.PathJoin(t.TempDir(), "repo"))
 	core.AssertEqual(t, "", got)
 }
 
 func TestResolve_ResolveReposManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	workspace := filepath.Join(t.TempDir(), "workspace")
-	start := filepath.Join(workspace, "repo", "service")
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(workspace, Directory)))
+	workspace := core.PathJoin(t.TempDir(), "workspace")
+	start := core.PathJoin(workspace, "repo", "service")
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(workspace, Directory)))
 	core.RequireNoError(t, m.EnsureDir(start))
-	core.RequireNoError(t, m.Write(filepath.Join(workspace, Directory, FileRepos), "version: 1\norg: ax\nrepos:\n  - path: core/go\n    remote: ssh://example/core/go.git\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(workspace, Directory, FileRepos), "version: 1\norg: ax\nrepos:\n  - path: core/go\n    remote: ssh://example/core/go.git\n"))
 	got, err := ResolveReposManifest(m, start)
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "ax", got.Org)
@@ -1407,11 +1569,11 @@ func TestResolve_ResolveReposManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveReposManifest_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
-	workspace := filepath.Join(t.TempDir(), "workspace")
-	start := filepath.Join(workspace, "repo", "service")
-	core.RequireNoError(t, m.EnsureDir(filepath.Join(workspace, Directory)))
+	workspace := core.PathJoin(t.TempDir(), "workspace")
+	start := core.PathJoin(workspace, "repo", "service")
+	core.RequireNoError(t, m.EnsureDir(core.PathJoin(workspace, Directory)))
 	core.RequireNoError(t, m.EnsureDir(start))
-	core.RequireNoError(t, m.Write(filepath.Join(workspace, Directory, FileRepos), "version: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(workspace, Directory, FileRepos), "version: [broken"))
 	got, err := ResolveReposManifest(m, start)
 	core.AssertNil(t, got)
 	core.AssertError(t, err)

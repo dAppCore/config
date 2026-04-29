@@ -2,7 +2,6 @@ package config
 
 import (
 	core "dappco.re/go"
-	"errors"
 	"sync"
 	"time"
 
@@ -103,7 +102,7 @@ func TestWatch_Watch_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
 	path := "watch/missing.yaml"
 	backend := newFakeWatchBackend()
-	backend.addErr = errors.New("missing")
+	backend.addErr = core.NewError("missing")
 	useFakeWatchBackend(t, backend)
 
 	cfg, err := New(WithMedium(m), WithPath(path))
@@ -130,7 +129,7 @@ func TestWatch_Watch_Ugly(t *core.T) {
 	cfg.StopWatch()
 }
 
-func TestWatch_ReloadKeys_Good(t *core.T) {
+func TestWatchReloadKeysGood(t *core.T) {
 	// When a file is reloaded via the watcher, OnChange must fire once per
 	// changed key with the new value — not a single empty-key signal.
 	m := coreio.NewMockMedium()
@@ -165,7 +164,7 @@ func TestWatch_ReloadKeys_Good(t *core.T) {
 	core.AssertEqual(t, "1", seen["app.version"])
 }
 
-func TestWatch_AtomicSave_Good(t *core.T) {
+func TestWatchAtomicSaveGood(t *core.T) {
 	// Atomic-save editors (vim, VSCode, most IDE auto-formatters) replace a
 	// file via rename: write new inode, rename over the old path, unlink the
 	// original. fsnotify tracks the original inode and silently stops firing
@@ -233,7 +232,7 @@ func waitFor(t *core.T, mu *sync.Mutex, get func() int, target int) {
 	t.Fatalf("timed out waiting for %d events; got %d", target, got)
 }
 
-func TestWatch_DiffSnapshots_Good(t *core.T) {
+func TestWatch_diffSnapshots_Good(t *core.T) {
 	// diffSnapshots is the core of reload notifications — feed it the two
 	// snapshots a watcher would produce and verify the per-key changes.
 	before := map[string]any{
@@ -260,7 +259,7 @@ func TestWatch_DiffSnapshots_Good(t *core.T) {
 	core.AssertEqual(t, true, changes[2].Previous)
 }
 
-func TestWatch_DiffSnapshots_Ugly(t *core.T) {
+func TestWatch_diffSnapshots_Ugly(t *core.T) {
 	// Nested map values should compare structurally, not by pointer identity.
 	nested := map[string]any{"features": map[string]any{"dark-mode": true}}
 	same := map[string]any{"features": map[string]any{"dark-mode": true}}
@@ -383,7 +382,7 @@ func TestWatch_Config_Watch_Bad(t *core.T) {
 	path := "ax7/watch.yaml"
 	core.RequireNoError(t, m.Write(path, "name: one\n"))
 	backend := newFakeWatchBackend()
-	backend.addErr = errors.New("add failed")
+	backend.addErr = core.NewError("add failed")
 	useFakeWatchBackend(t, backend)
 	cfg, err := New(WithMedium(m), WithPath(path))
 	core.RequireNoError(t, err)

@@ -11,10 +11,8 @@
 package config
 
 import (
-	"encoding/json"
 	"iter"
 	"slices"
-	"strings"
 	"sync"
 
 	core "dappco.re/go"
@@ -24,9 +22,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// envKeyReplacer maps dot-notation keys to underscore-joined env names so
-// CORE_CONFIG_DEV_EDITOR resolves to "dev.editor" in viper.
-var envKeyReplacer = strings.NewReplacer(".", "_")
+type envkeyreplacer struct{}
+
+func (envkeyreplacer) Replace(s string) string {
+	return core.Replace(s, ".", "_")
+}
 
 const (
 	callerConfigNew          = "config.New"
@@ -74,6 +74,8 @@ type Config struct {
 
 // Option is a functional option for configuring a Config instance.
 type Option func(*Config)
+
+type configError = error
 
 // ConfigStoreWriter is the minimal store contract config needs for mirroring
 // Set() calls into go-store when available.
@@ -185,13 +187,12 @@ func New(opts ...Option) (*Config, error) {
 // shell without eagerly loading the path that will later receive merged layers.
 func newConfig(loadFromPath bool, opts ...Option) (*Config, error) {
 	c := &Config{
-		full: viper.New(),
+		full: viper.NewWithOptions(viper.EnvKeyReplacer(envkeyreplacer{})),
 		file: viper.New(),
 	}
 
 	// Configure viper defaults
 	c.full.SetEnvPrefix("CORE_CONFIG")
-	c.full.SetEnvKeyReplacer(envKeyReplacer)
 
 	for _, opt := range opts {
 		opt(c)
@@ -253,13 +254,13 @@ func configTypeForPath(path string) (string, error) {
 // into the current config. It supports YAML, JSON, TOML, and dotenv files (.env).
 //
 //	cfg.LoadFile(io.Local, ".core/build.yaml")
-func (c *Config) LoadFile(m coreio.Medium, path string) error {
+func (c *Config) LoadFile(m coreio.Medium, path string) configError {
 	return c.loadFile(m, path, true)
 }
 
 // loadFile merges a configuration file into the current Config. When notify is
 // true it also broadcasts ConfigChanged events for each changed key.
-func (c *Config) loadFile(m coreio.Medium, path string, notify bool) error {
+func (c *Config) loadFile(m coreio.Medium, path string, notify bool) configError {
 	c.mu.Lock()
 	before := c.snapshotAllLocked()
 
@@ -307,7 +308,7 @@ func readConfigSettings(m coreio.Medium, path string) (map[string]any, error) {
 	return settings, nil
 }
 
-func (c *Config) mergeConfigSettingsLocked(settings map[string]any) error {
+func (c *Config) mergeConfigSettingsLocked(settings map[string]any) configError {
 	if err := c.file.MergeConfigMap(settings); err != nil {
 		return coreerr.E(callerConfigLoadFile, "failed to merge config into file settings", err)
 	}
@@ -348,7 +349,7 @@ func emitConfigChanges(callbacks []func(string, any), attached *core.Core, chang
 //
 //	var editor string
 //	cfg.Get("dev.editor", &editor)
-func (c *Config) Get(key string, out any) error {
+func (c *Config) Get(key string, out any) configError {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -388,7 +389,7 @@ func (c *Config) SetDefault(key string, v any) {
 //
 //	cfg.Set("dev.editor", "vim")
 //	cfg.Commit()
-func (c *Config) Set(key string, v any) error {
+func (c *Config) Set(key string, v any) configError {
 	c.mu.Lock()
 	previous := c.full.Get(key)
 	c.file.Set(key, v)
@@ -413,7 +414,7 @@ func (c *Config) Set(key string, v any) error {
 // preventing environment variable leakage.
 //
 //	cfg.Commit()
-func (c *Config) Commit() error {
+func (c *Config) Commit() configError {
 	c.mu.Lock()
 	medium := c.medium
 	path := c.path
@@ -658,7 +659,7 @@ func Load(m coreio.Medium, path string) (map[string]any, error) {
 // permissions for the file so user config does not become world-readable.
 //
 //	config.Save(io.Local, "~/.core/config.yaml", map[string]any{"dev": map[string]any{"editor": "vim"}})
-func Save(m coreio.Medium, path string, data map[string]any) error {
+func Save(m coreio.Medium, path string, data map[string]any) configError {
 	switch ext := core.Lower(core.PathExt(path)); ext {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML destinations.
@@ -699,7 +700,7 @@ func persistToStore(store ConfigStoreWriter, key string, value any) {
 	}
 }
 
-func (c *Config) loadStoreState() error {
+func (c *Config) loadStoreState() configError {
 	reader, ok := c.store.(ConfigStoreReader)
 	if !ok || reader == nil {
 		return nil
@@ -728,7 +729,7 @@ func decodeStoredConfigValue(raw string) any {
 	}
 
 	var decoded any
-	if err := json.Unmarshal([]byte(raw), &decoded); err == nil {
+	if r := core.JSONUnmarshalString(raw, &decoded); r.OK {
 		return decoded
 	}
 

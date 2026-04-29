@@ -1,8 +1,8 @@
 package config
 
 import (
-	"os"
 	"strconv"
+	"syscall"
 
 	core "dappco.re/go"
 )
@@ -73,12 +73,8 @@ func (x *XDGPaths) Prefix() string {
 	return x.prefix
 }
 
-// xdgOrDefault reads an XDG_* environment variable, falling back to the
-// provided platform default when the variable is unset or empty. os.Getenv
-// is intentional — XDG variables are set by the user's shell and must be
-// read live rather than the DIR_* snapshot captured at core init.
 func xdgOrDefault(envVar, fallback string) string {
-	if v := os.Getenv(envVar); v != "" {
+	if v := core.Getenv(envVar); v != "" {
 		return v
 	}
 	return fallback
@@ -96,7 +92,7 @@ func defaultConfigHome() string {
 	case "darwin":
 		return core.Path(home(), "Library", "Application Support")
 	case "windows":
-		if v := os.Getenv("APPDATA"); v != "" {
+		if v := core.Getenv("APPDATA"); v != "" {
 			return v
 		}
 		return core.Path(home(), "AppData", "Roaming")
@@ -110,7 +106,7 @@ func defaultDataHome() string {
 	case "darwin":
 		return core.Path(home(), "Library", "Application Support")
 	case "windows":
-		if v := os.Getenv("LOCALAPPDATA"); v != "" {
+		if v := core.Getenv("LOCALAPPDATA"); v != "" {
 			return v
 		}
 		return core.Path(home(), "AppData", "Local")
@@ -124,7 +120,7 @@ func defaultCacheHome() string {
 	case "darwin":
 		return core.Path(home(), "Library", "Caches")
 	case "windows":
-		if v := os.Getenv("LOCALAPPDATA"); v != "" {
+		if v := core.Getenv("LOCALAPPDATA"); v != "" {
 			return core.Path(v, "cache")
 		}
 		return core.Path(home(), "AppData", "Local", "cache")
@@ -138,11 +134,11 @@ func defaultRuntimeDir() string {
 	case "darwin":
 		return core.Path(home(), "Library", "Caches")
 	case "windows":
-		if v := os.Getenv("LOCALAPPDATA"); v != "" {
+		if v := core.Getenv("LOCALAPPDATA"); v != "" {
 			return core.Path(v, "temp")
 		}
 		return core.Path(home(), "AppData", "Local", "temp")
 	default:
-		return core.Path("/run/user", strconv.Itoa(os.Getuid()))
+		return core.Path("/run/user", strconv.Itoa(syscall.Getuid()))
 	}
 }

@@ -1,10 +1,7 @@
 package config
 
 import (
-	"encoding/json"
-	"errors"
 	"io/fs"
-	"strings"
 	"time"
 
 	core "dappco.re/go"
@@ -70,21 +67,21 @@ func LoadImagesManifest(medium coreio.Medium, path string) (*ImagesManifest, err
 
 	content, err := medium.Read(path)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if core.Is(err, fs.ErrNotExist) {
 			return manifest, nil
 		}
 		return nil, coreerr.E(callerLoadImagesManifest, "failed to read images manifest: "+path, err)
 	}
 
 	var raw map[string]any
-	if err := json.Unmarshal([]byte(content), &raw); err != nil {
-		return nil, coreerr.E(callerLoadImagesManifest, "failed to parse images manifest: "+path, err)
+	if r := core.JSONUnmarshalString(content, &raw); !r.OK {
+		return nil, coreerr.E(callerLoadImagesManifest, "failed to parse images manifest: "+path, r.Value.(error))
 	}
 	if err := validateImagesSchema(path, raw); err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal([]byte(content), manifest); err != nil {
-		return nil, coreerr.E(callerLoadImagesManifest, "failed to decode images manifest: "+path, err)
+	if r := core.JSONUnmarshalString(content, manifest); !r.OK {
+		return nil, coreerr.E(callerLoadImagesManifest, "failed to decode images manifest: "+path, r.Value.(error))
 	}
 	if manifest.Images == nil {
 		manifest.Images = map[string]ImageInfo{}
@@ -93,7 +90,7 @@ func LoadImagesManifest(medium coreio.Medium, path string) (*ImagesManifest, err
 }
 
 // SaveImagesManifest writes the JSON images registry to disk.
-func SaveImagesManifest(medium coreio.Medium, path string, manifest *ImagesManifest) error {
+func SaveImagesManifest(medium coreio.Medium, path string, manifest *ImagesManifest) configError {
 	if medium == nil {
 		medium = defaultImagesManifestMedium()
 	}
@@ -104,10 +101,11 @@ func SaveImagesManifest(medium coreio.Medium, path string, manifest *ImagesManif
 		manifest.Images = map[string]ImageInfo{}
 	}
 
-	payload, err := json.Marshal(manifest)
-	if err != nil {
-		return coreerr.E(callerSaveImagesManifest, "failed to marshal images manifest", err)
+	payloadResult := core.JSONMarshal(manifest)
+	if !payloadResult.OK {
+		return coreerr.E(callerSaveImagesManifest, "failed to marshal images manifest", payloadResult.Value.(error))
 	}
+	payload := payloadResult.Value.([]byte)
 
 	dir := core.PathDir(path)
 	if err := medium.EnsureDir(dir); err != nil {
@@ -119,7 +117,7 @@ func SaveImagesManifest(medium coreio.Medium, path string, manifest *ImagesManif
 	return nil
 }
 
-func validateImagesSchema(path string, raw map[string]any) error {
+func validateImagesSchema(path string, raw map[string]any) configError {
 	if len(raw) == 0 {
 		return nil
 	}
@@ -129,10 +127,11 @@ func validateImagesSchema(path string, raw map[string]any) error {
 		return coreerr.E(callerValidateImagesSchema, "failed to read embedded schema: schema/images.schema.json", err)
 	}
 
-	documentBody, err := json.Marshal(raw)
-	if err != nil {
-		return coreerr.E(callerValidateImagesSchema, "failed to encode images manifest for schema validation: "+path, err)
+	documentResult := core.JSONMarshal(raw)
+	if !documentResult.OK {
+		return coreerr.E(callerValidateImagesSchema, "failed to encode images manifest for schema validation: "+path, documentResult.Value.(error))
 	}
+	documentBody := documentResult.Value.([]byte)
 
 	result, err := gojsonschema.Validate(
 		gojsonschema.NewBytesLoader(schemaBody),
@@ -149,5 +148,5 @@ func validateImagesSchema(path string, raw map[string]any) error {
 	for _, issue := range result.Errors() {
 		problems = append(problems, issue.String())
 	}
-	return coreerr.E(callerValidateImagesSchema, "schema validation failed: "+path+": "+strings.Join(problems, "; "), nil)
+	return coreerr.E(callerValidateImagesSchema, "schema validation failed: "+path+": "+core.Join("; ", problems...), nil)
 }

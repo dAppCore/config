@@ -1,9 +1,6 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
-
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 )
@@ -104,7 +101,7 @@ func TestDiscover_FindManifest_Ugly(t *core.T) {
 	core.AssertEmpty(t, got)
 }
 
-func TestDiscover_EnvOverridesDiscovered_Good(t *core.T) {
+func TestDiscoverEnvOverridesDiscoveredGood(t *core.T) {
 	// .core/ convention §5.3: "Env vars override everything."
 	// A discovered file value must be shadowed by CORE_CONFIG_* at Get time.
 	m := coreio.NewMockMedium()
@@ -125,7 +122,7 @@ func TestDiscover_EnvOverridesDiscovered_Good(t *core.T) {
 	core.AssertEqual(t, "env-wins", name)
 }
 
-func TestDiscover_MergeFillsGaps_Good(t *core.T) {
+func TestDiscoverMergeFillsGapsGood(t *core.T) {
 	// Project .core/ wins over global .core/ — global only fills gaps.
 	m := coreio.NewMockMedium()
 	repo := core.Path("merge-repo")
@@ -144,7 +141,7 @@ func TestDiscover_MergeFillsGaps_Good(t *core.T) {
 	core.AssertEqual(t, "project", name)
 }
 
-func TestDiscover_CommitDoesNotLeakInherited_Good(t *core.T) {
+func TestDiscoverCommitDoesNotLeakInheritedGood(t *core.T) {
 	// Regression guard: Commit on a discovered Config must only persist the
 	// owning file's keys + Set() calls, never inherited layer values — or
 	// global ~/.core/ secrets would spray into every project config.
@@ -192,13 +189,12 @@ func TestDiscover_DiscoverFrom_GlobalFallback_Good(t *core.T) {
 
 func TestDiscover_Discover_Good(t *core.T) {
 	root := t.TempDir()
-	coreDir := filepath.Join(root, ".core")
-	core.RequireNoError(t, os.MkdirAll(coreDir, 0o755))
-	core.RequireNoError(t, os.WriteFile(filepath.Join(coreDir, FileConfig), []byte("app:\n  name: discovered\n"), 0o600))
-	previous, err := os.Getwd()
-	core.RequireNoError(t, err)
-	core.RequireNoError(t, os.Chdir(root))
-	t.Cleanup(func() { core.AssertNoError(t, os.Chdir(previous)) })
+	coreDir := core.PathJoin(root, ".core")
+	testMkdirAll(t, coreDir, 0o755)
+	testWriteFile(t, core.PathJoin(coreDir, FileConfig), []byte("app:\n  name: discovered\n"), 0o600)
+	previous := testGetwd(t)
+	testChdir(t, root)
+	t.Cleanup(func() { testChdir(t, previous) })
 
 	cfg, err := Discover()
 	core.RequireNoError(t, err)
@@ -209,13 +205,12 @@ func TestDiscover_Discover_Good(t *core.T) {
 
 func TestDiscover_Discover_Bad(t *core.T) {
 	root := t.TempDir()
-	coreDir := filepath.Join(root, ".core")
-	core.RequireNoError(t, os.MkdirAll(coreDir, 0o755))
-	core.RequireNoError(t, os.WriteFile(filepath.Join(coreDir, FileConfig), []byte("bad: [yaml"), 0o600))
-	previous, err := os.Getwd()
-	core.RequireNoError(t, err)
-	core.RequireNoError(t, os.Chdir(root))
-	t.Cleanup(func() { core.AssertNoError(t, os.Chdir(previous)) })
+	coreDir := core.PathJoin(root, ".core")
+	testMkdirAll(t, coreDir, 0o755)
+	testWriteFile(t, core.PathJoin(coreDir, FileConfig), []byte("bad: [yaml"), 0o600)
+	previous := testGetwd(t)
+	testChdir(t, root)
+	t.Cleanup(func() { testChdir(t, previous) })
 
 	cfg, err := Discover()
 	core.AssertNil(t, cfg)
@@ -224,10 +219,9 @@ func TestDiscover_Discover_Bad(t *core.T) {
 
 func TestDiscover_Discover_Ugly(t *core.T) {
 	root := t.TempDir()
-	previous, err := os.Getwd()
-	core.RequireNoError(t, err)
-	core.RequireNoError(t, os.Chdir(root))
-	t.Cleanup(func() { core.AssertNoError(t, os.Chdir(previous)) })
+	previous := testGetwd(t)
+	testChdir(t, root)
+	t.Cleanup(func() { testChdir(t, previous) })
 
 	cfg, err := Discover()
 	core.RequireNoError(t, err)

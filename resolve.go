@@ -1,8 +1,6 @@
 package config
 
 import (
-	"path/filepath"
-
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 	coreerr "dappco.re/go/log"
@@ -509,7 +507,7 @@ func FindReposManifest(medium coreio.Medium, start string) string {
 		medium = coreio.Local
 	}
 
-	dir := filepath.Clean(normalizeUpwardStart(medium, start))
+	dir := core.CleanPath(normalizeUpwardStart(medium, start), string(core.PathSeparator))
 	if dir == "" {
 		dir = "."
 	}

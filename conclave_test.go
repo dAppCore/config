@@ -2,29 +2,21 @@ package config
 
 import (
 	core "dappco.re/go"
-	"errors"
-	"os"
-	"path/filepath"
 	"runtime"
 
 	coreio "dappco.re/go/io"
 )
 
-// osGetwd / osChdir wrap os.Getwd and os.Chdir so test helpers can stay
-// explicit about their side-effects without spreading raw os calls around.
-func osGetwd() (string, error) { return os.Getwd() }
-func osChdir(dir string) error { return os.Chdir(dir) }
-
 func TestConclave_ForConclave_Good(t *core.T) {
 	tmp := t.TempDir()
 	SetConclaveRootFunc(func(name string) (string, error) {
-		return filepath.Join(tmp, name), nil
+		return core.PathJoin(tmp, name), nil
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
-	root := filepath.Join(tmp, "alpha", ".core")
+	root := core.PathJoin(tmp, "alpha", ".core")
 	core.AssertNoError(t, coreio.Local.EnsureDir(root))
-	core.AssertNoError(t, coreio.Local.Write(filepath.Join(root, "config.yaml"), "theme: dark\n"))
+	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(root, "config.yaml"), "theme: dark\n"))
 
 	cfg, err := ForConclave("alpha", WithMedium(coreio.Local))
 	core.AssertNoError(t, err)
@@ -65,13 +57,13 @@ func TestConclave_ForConclave_SymlinkedCore_Bad(t *core.T) {
 	}
 
 	tmp := t.TempDir()
-	conclaveDir := filepath.Join(tmp, "conclave")
-	realCore := filepath.Join(tmp, "real-core")
+	conclaveDir := core.PathJoin(tmp, "conclave")
+	realCore := core.PathJoin(tmp, "real-core")
 
 	core.AssertNoError(t, coreio.Local.EnsureDir(conclaveDir))
 	core.AssertNoError(t, coreio.Local.EnsureDir(realCore))
-	core.AssertNoError(t, coreio.Local.Write(filepath.Join(realCore, "config.yaml"), "theme: dark\n"))
-	core.AssertNoError(t, os.Symlink(realCore, filepath.Join(conclaveDir, ".core")))
+	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(realCore, "config.yaml"), "theme: dark\n"))
+	testSymlink(t, realCore, core.PathJoin(conclaveDir, ".core"))
 
 	SetConclaveRootFunc(func(_ string) (string, error) {
 		return conclaveDir, nil
@@ -90,16 +82,16 @@ func TestConclave_ForConclave_InheritsProject_Good(t *core.T) {
 	projectDir := t.TempDir()
 	conclaveDir := t.TempDir()
 
-	core.AssertNoError(t, coreio.Local.EnsureDir(filepath.Join(projectDir, ".core")))
-	core.AssertNoError(t, coreio.Local.EnsureDir(filepath.Join(projectDir, ".git")))
+	core.AssertNoError(t, coreio.Local.EnsureDir(core.PathJoin(projectDir, ".core")))
+	core.AssertNoError(t, coreio.Local.EnsureDir(core.PathJoin(projectDir, ".git")))
 	core.AssertNoError(t, coreio.Local.Write(
-		filepath.Join(projectDir, ".core", "config.yaml"),
+		core.PathJoin(projectDir, ".core", "config.yaml"),
 		"dev:\n  editor: vim\napp:\n  name: project\n",
 	))
 
-	core.AssertNoError(t, coreio.Local.EnsureDir(filepath.Join(conclaveDir, ".core")))
+	core.AssertNoError(t, coreio.Local.EnsureDir(core.PathJoin(conclaveDir, ".core")))
 	core.AssertNoError(t, coreio.Local.Write(
-		filepath.Join(conclaveDir, ".core", "config.yaml"),
+		core.PathJoin(conclaveDir, ".core", "config.yaml"),
 		"app:\n  name: conclave\n",
 	))
 
@@ -109,10 +101,9 @@ func TestConclave_ForConclave_InheritsProject_Good(t *core.T) {
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
 	// Switch cwd so Discover picks up the project layer.
-	prev, err := osGetwd()
-	core.AssertNoError(t, err)
-	core.AssertNoError(t, osChdir(projectDir))
-	t.Cleanup(func() { _ = osChdir(prev) })
+	prev := testGetwd(t)
+	testChdir(t, projectDir)
+	t.Cleanup(func() { testChdir(t, prev) })
 
 	cfg, err := ForConclave("alpha", WithMedium(coreio.Local))
 	core.AssertNoError(t, err)
@@ -143,7 +134,7 @@ func TestConclave_SetConclaveRootFunc_Good(t *core.T) {
 	core.AssertEqual(t, "/custom/a", root)
 }
 
-func TestConclave_Isolation_Good(t *core.T) {
+func TestConclaveIsolationGood(t *core.T) {
 	// RFC §12.3: "Writes are isolated to the Conclave's .core/ directory.
 	// alpha.Set("theme", "dark"), beta.Get("theme", &t) // unchanged"
 	//
@@ -152,7 +143,7 @@ func TestConclave_Isolation_Good(t *core.T) {
 	// .core/config.yaml.
 	tmp := t.TempDir()
 	SetConclaveRootFunc(func(name string) (string, error) {
-		return filepath.Join(tmp, name), nil
+		return core.PathJoin(tmp, name), nil
 	})
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 
@@ -170,8 +161,8 @@ func TestConclave_Isolation_Good(t *core.T) {
 	core.AssertError(t, err)
 
 	// Alpha's on-disk config contains theme; beta's root has no config file yet.
-	alphaFile := filepath.Join(tmp, "workspace-alpha", ".core", "config.yaml")
-	betaFile := filepath.Join(tmp, "workspace-beta", ".core", "config.yaml")
+	alphaFile := core.PathJoin(tmp, "workspace-alpha", ".core", "config.yaml")
+	betaFile := core.PathJoin(tmp, "workspace-beta", ".core", "config.yaml")
 
 	body, err := coreio.Local.Read(alphaFile)
 	core.AssertNoError(t, err)
@@ -197,11 +188,11 @@ func TestConclave_SetConclaveRootFunc_Bad(t *core.T) {
 	conclaveMu.RUnlock()
 	got, err := resolver("alpha")
 	core.AssertNoError(t, err)
-	core.AssertContains(t, got, filepath.Join("conclaves", "alpha"))
+	core.AssertContains(t, got, core.PathJoin("conclaves", "alpha"))
 }
 
 func TestConclave_SetConclaveRootFunc_Ugly(t *core.T) {
-	want := errors.New("resolver refused")
+	want := core.NewError("resolver refused")
 	SetConclaveRootFunc(func(string) (string, error) { return "", want })
 	t.Cleanup(func() { SetConclaveRootFunc(nil) })
 	conclaveMu.RLock()

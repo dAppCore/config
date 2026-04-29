@@ -17,7 +17,7 @@ func (m symlinkMockMedium) IsSymlink(path string) bool {
 	return m.symlinks[path]
 }
 
-func TestPaths_IsSafePathElement_Good(t *core.T) {
+func TestPaths_isSafePathElement_Good(t *core.T) {
 	for _, part := range []string{
 		"repo",
 		"config.yaml",
@@ -30,7 +30,7 @@ func TestPaths_IsSafePathElement_Good(t *core.T) {
 	}
 }
 
-func TestPaths_IsSafePathElement_Bad(t *core.T) {
+func TestPaths_isSafePathElement_Bad(t *core.T) {
 	for _, part := range []string{
 		"",
 		".",
@@ -42,7 +42,7 @@ func TestPaths_IsSafePathElement_Bad(t *core.T) {
 	}
 }
 
-func TestPaths_IsSafePathElement_Ugly(t *core.T) {
+func TestPaths_isSafePathElement_Ugly(t *core.T) {
 	for _, part := range []string{
 		"./repo",
 		"repo/../repo",
@@ -56,7 +56,7 @@ func TestPaths_IsSafePathElement_Ugly(t *core.T) {
 	}
 }
 
-func TestPaths_IsSymlinkedCoreDir_Good(t *core.T) {
+func TestPaths_isSymlinkedCoreDir_Good(t *core.T) {
 	coreDir := core.Path("repo", ".core")
 	m := symlinkMockMedium{
 		MockMedium: coreio.NewMockMedium(),
@@ -67,7 +67,7 @@ func TestPaths_IsSymlinkedCoreDir_Good(t *core.T) {
 	core.AssertTrue(t, isSymlinkedCoreDir(m, coreDir))
 }
 
-func TestPaths_IsSymlinkedCoreDir_Bad(t *core.T) {
+func TestPaths_isSymlinkedCoreDir_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
 	coreDir := core.Path("repo", ".core")
 
@@ -76,7 +76,7 @@ func TestPaths_IsSymlinkedCoreDir_Bad(t *core.T) {
 	core.AssertFalse(t, isSymlinkedCoreDir(m, coreDir))
 }
 
-func TestPaths_IsSymlinkedCoreDir_Ugly(t *core.T) {
+func TestPaths_isSymlinkedCoreDir_Ugly(t *core.T) {
 	previous := localLstat
 	localLstat = func(string) (fs.FileInfo, error) {
 		return coreio.NewFileInfo(".core", 0, fs.ModeSymlink, time.Now(), false), nil

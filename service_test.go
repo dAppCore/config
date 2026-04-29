@@ -2,8 +2,6 @@ package config
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"runtime"
 
 	core "dappco.re/go"
@@ -98,25 +96,25 @@ func TestService_OnStartup_MergesProjectOverGlobal_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	home := core.Env("DIR_HOME")
 
-	projectRoot := filepath.Join("/", "service-merge", "repo")
-	serviceDir := filepath.Join(projectRoot, "app")
+	projectRoot := core.PathJoin("/", "service-merge", "repo")
+	serviceDir := core.PathJoin(projectRoot, "app")
 
 	for _, dir := range []string{
-		filepath.Join(home, ".core"),
-		filepath.Join(projectRoot, ".core"),
-		filepath.Join(projectRoot, ".git"),
+		core.PathJoin(home, ".core"),
+		core.PathJoin(projectRoot, ".core"),
+		core.PathJoin(projectRoot, ".git"),
 		serviceDir,
 	} {
 		core.AssertNoError(t, m.EnsureDir(dir))
 	}
 
-	core.AssertNoError(t, m.Write(filepath.Join(home, ".core", FileConfig), "app:\n  name: global\nservices:\n  ollama:\n    url: http://global\n"))
-	core.AssertNoError(t, m.Write(filepath.Join(projectRoot, ".core", FileConfig), "app:\n  name: project\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(home, ".core", FileConfig), "app:\n  name: global\nservices:\n  ollama:\n    url: http://global\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(projectRoot, ".core", FileConfig), "app:\n  name: project\n"))
 
 	c := core.New()
 	svc := &Service{
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
-			Path:   filepath.Join(projectRoot, ".core", FileConfig),
+			Path:   core.PathJoin(projectRoot, ".core", FileConfig),
 			Medium: m,
 		}),
 	}
@@ -197,6 +195,9 @@ func TestService_NewConfigService_Bad(t *core.T) {
 	// gracefully and return a non-OK Result rather than panicking.
 	m := coreio.NewMockMedium()
 	m.Files["/broken.txt"] = "ignored"
+	direct := NewConfigService(core.New())
+	core.AssertTrue(t, direct.OK)
+
 	c := core.New(core.WithService(NewConfigServiceWith(ServiceOptions{
 		Path:   "/broken.txt",
 		Medium: m,
@@ -336,7 +337,7 @@ func TestService_LoadFile_Ugly(t *core.T) {
 	}
 	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
 
-	err := svc.LoadFile(m, filepath.Join("tmp", "svc", "config.yaml"))
+	err := svc.LoadFile(m, core.PathJoin("tmp", "svc", "config.yaml"))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "config paths must remain under .core/")
 }
@@ -347,16 +348,16 @@ func TestService_LoadFile_RejectsSymlinkedCore(t *core.T) {
 	}
 
 	projectRoot := t.TempDir()
-	externalCore := filepath.Join(t.TempDir(), "shared-core")
-	core.AssertNoError(t, os.MkdirAll(externalCore, 0755))
-	core.AssertNoError(t, os.WriteFile(filepath.Join(externalCore, "override.yaml"), []byte("dev:\n  shell: zsh\n"), 0600))
-	core.AssertNoError(t, os.Symlink(externalCore, filepath.Join(projectRoot, ".core")))
-	core.AssertNoError(t, os.WriteFile(filepath.Join(projectRoot, "config.yaml"), []byte("app:\n  name: svc\n"), 0600))
+	externalCore := core.PathJoin(t.TempDir(), "shared-core")
+	testMkdirAll(t, externalCore, 0755)
+	testWriteFile(t, core.PathJoin(externalCore, "override.yaml"), []byte("dev:\n  shell: zsh\n"), 0600)
+	testSymlink(t, externalCore, core.PathJoin(projectRoot, ".core"))
+	testWriteFile(t, core.PathJoin(projectRoot, "config.yaml"), []byte("app:\n  name: svc\n"), 0600)
 
 	c := core.New()
 	svc := &Service{
 		ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{
-			Path:   filepath.Join(projectRoot, "config.yaml"),
+			Path:   core.PathJoin(projectRoot, "config.yaml"),
 			Medium: coreio.Local,
 		}),
 	}
@@ -367,25 +368,25 @@ func TestService_LoadFile_RejectsSymlinkedCore(t *core.T) {
 	core.AssertContains(t, err.Error(), "symlinked .core directories are not allowed")
 }
 
-func TestService_ResolveValidatedServiceLoadPath_Good(t *core.T) {
+func TestService_resolveValidatedServiceLoadPath_Good(t *core.T) {
 	projectRoot := t.TempDir()
-	coreDir := filepath.Join(projectRoot, ".core")
-	configPath := filepath.Join(projectRoot, "config.yaml")
-	overridePath := filepath.Join(coreDir, "override.yaml")
+	coreDir := core.PathJoin(projectRoot, ".core")
+	configPath := core.PathJoin(projectRoot, "config.yaml")
+	overridePath := core.PathJoin(coreDir, "override.yaml")
 
-	core.AssertNoError(t, os.MkdirAll(coreDir, 0755))
-	core.AssertNoError(t, os.WriteFile(configPath, []byte("app:\n  name: svc\n"), 0600))
-	core.AssertNoError(t, os.WriteFile(overridePath, []byte("dev:\n  editor: vim\n"), 0600))
+	testMkdirAll(t, coreDir, 0755)
+	testWriteFile(t, configPath, []byte("app:\n  name: svc\n"), 0600)
+	testWriteFile(t, overridePath, []byte("dev:\n  editor: vim\n"), 0600)
 
 	resolved, err := resolveValidatedServiceLoadPath(configPath, ".core/override.yaml")
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, overridePath, resolved)
 }
 
-func TestService_ResolveValidatedServiceLoadPath_Bad(t *core.T) {
+func TestService_resolveValidatedServiceLoadPath_Bad(t *core.T) {
 	projectRoot := t.TempDir()
-	configPath := filepath.Join(projectRoot, "config.yaml")
-	core.AssertNoError(t, os.WriteFile(configPath, []byte("app:\n  name: svc\n"), 0600))
+	configPath := core.PathJoin(projectRoot, "config.yaml")
+	testWriteFile(t, configPath, []byte("app:\n  name: svc\n"), 0600)
 
 	cases := []struct {
 		name string
@@ -409,18 +410,18 @@ func TestService_ResolveValidatedServiceLoadPath_Bad(t *core.T) {
 	}
 }
 
-func TestService_ResolveValidatedServiceLoadPath_Ugly(t *core.T) {
+func TestService_resolveValidatedServiceLoadPath_Ugly(t *core.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
 	projectRoot := t.TempDir()
-	externalCore := filepath.Join(t.TempDir(), "shared-core")
-	configPath := filepath.Join(projectRoot, "config.yaml")
+	externalCore := core.PathJoin(t.TempDir(), "shared-core")
+	configPath := core.PathJoin(projectRoot, "config.yaml")
 
-	core.AssertNoError(t, os.MkdirAll(externalCore, 0755))
-	core.AssertNoError(t, os.WriteFile(configPath, []byte("app:\n  name: svc\n"), 0600))
-	core.AssertNoError(t, os.Symlink(externalCore, filepath.Join(projectRoot, ".core")))
+	testMkdirAll(t, externalCore, 0755)
+	testWriteFile(t, configPath, []byte("app:\n  name: svc\n"), 0600)
+	testSymlink(t, externalCore, core.PathJoin(projectRoot, ".core"))
 
 	resolved, err := resolveValidatedServiceLoadPath(configPath, ".core/override.yaml")
 	core.AssertEmpty(t, resolved)
@@ -428,51 +429,45 @@ func TestService_ResolveValidatedServiceLoadPath_Ugly(t *core.T) {
 	core.AssertContains(t, err.Error(), "symlinked .core directories are not allowed")
 }
 
-func TestService_ResolveServiceLoadPath_Good(t *core.T) {
+func TestService_resolveServiceLoadPath_Good(t *core.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
 	projectRoot := t.TempDir()
-	coreDir := filepath.Join(projectRoot, ".core")
-	realFile := filepath.Join(projectRoot, "override.yaml")
-	symlinkFile := filepath.Join(coreDir, "override.yaml")
+	coreDir := core.PathJoin(projectRoot, ".core")
+	realFile := core.PathJoin(projectRoot, "override.yaml")
+	symlinkFile := core.PathJoin(coreDir, "override.yaml")
 
-	core.AssertNoError(t, os.MkdirAll(coreDir, 0755))
-	core.AssertNoError(t, os.WriteFile(realFile, []byte("dev:\n  shell: zsh\n"), 0600))
-	core.AssertNoError(t, os.Symlink(realFile, symlinkFile))
+	testMkdirAll(t, coreDir, 0755)
+	testWriteFile(t, realFile, []byte("dev:\n  shell: zsh\n"), 0600)
+	testSymlink(t, realFile, symlinkFile)
 
-	absCorePath, err := filepath.Abs(coreDir)
-	core.AssertNoError(t, err)
-	absCandidate, err := filepath.Abs(symlinkFile)
-	core.AssertNoError(t, err)
+	absCorePath := testPathAbs(t, coreDir)
+	absCandidate := testPathAbs(t, symlinkFile)
 
 	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(symlinkFile, absCorePath, absCandidate)
 	core.AssertNoError(t, err)
-	realCandidate, err := filepath.EvalSymlinks(realFile)
-	core.AssertNoError(t, err)
-	realCore, err := filepath.EvalSymlinks(coreDir)
-	core.AssertNoError(t, err)
+	realCandidate := testPathEvalSymlinks(t, realFile)
+	realCore := testPathEvalSymlinks(t, coreDir)
 	core.AssertEqual(t, realCandidate, resolvedCandidate)
 	core.AssertEqual(t, realCore, resolvedCore)
 }
 
-func TestService_ResolveServiceLoadPath_Bad(t *core.T) {
+func TestService_resolveServiceLoadPath_Bad(t *core.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink test is not portable on Windows in this environment")
 	}
 
 	projectRoot := t.TempDir()
-	externalCore := filepath.Join(t.TempDir(), "shared-core")
-	candidatePath := filepath.Join(projectRoot, ".core", "override.yaml")
+	externalCore := core.PathJoin(t.TempDir(), "shared-core")
+	candidatePath := core.PathJoin(projectRoot, ".core", "override.yaml")
 
-	core.AssertNoError(t, os.MkdirAll(externalCore, 0755))
-	core.AssertNoError(t, os.Symlink(externalCore, filepath.Join(projectRoot, ".core")))
+	testMkdirAll(t, externalCore, 0755)
+	testSymlink(t, externalCore, core.PathJoin(projectRoot, ".core"))
 
-	absCorePath, err := filepath.Abs(filepath.Join(projectRoot, ".core"))
-	core.AssertNoError(t, err)
-	absCandidate, err := filepath.Abs(candidatePath)
-	core.AssertNoError(t, err)
+	absCorePath := testPathAbs(t, core.PathJoin(projectRoot, ".core"))
+	absCandidate := testPathAbs(t, candidatePath)
 
 	resolvedCandidate, resolvedCore, err := resolveServiceLoadPath(candidatePath, absCorePath, absCandidate)
 	core.AssertEmpty(t, resolvedCandidate)
@@ -483,7 +478,7 @@ func TestService_ResolveServiceLoadPath_Bad(t *core.T) {
 
 func TestService_OnShutdown_StopsWatcher_Good(t *core.T) {
 	tmp := t.TempDir()
-	path := filepath.Join(tmp, "config.yaml")
+	path := core.PathJoin(tmp, "config.yaml")
 	core.AssertNoError(t, coreio.Local.Write(path, "app:\n  name: svc\n"))
 
 	c := core.New()
@@ -502,7 +497,7 @@ func TestService_OnShutdown_StopsWatcher_Good(t *core.T) {
 	core.AssertNil(t, svc.Config().watcher)
 }
 
-func TestService_RegistersActionsAndCommands_Good(t *core.T) {
+func TestServiceRegistersActionsAndCommandsGood(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
 	m.Files["/tmp/svc/.core/loaded.yaml"] = "dev:\n  editor: nano\n"
@@ -534,7 +529,7 @@ func TestService_RegistersActionsAndCommands_Good(t *core.T) {
 		core.Option{Key: "value", Value: "zsh"},
 	)).OK)
 	core.AssertTrue(t, runAction("config.commit", core.NewOptions()).OK)
-	core.AssertTrue(t, runAction("config.load", core.NewOptions(core.Option{Key: "path", Value: ".core/loaded.yaml"})).OK)
+	core.AssertTrue(t, runAction("config.load", core.NewOptions(core.Option{Key: optionKeyPath, Value: ".core/loaded.yaml"})).OK)
 
 	all := runAction("config.all", core.NewOptions())
 	core.AssertTrue(t, all.OK)
@@ -550,12 +545,12 @@ func TestService_RegistersActionsAndCommands_Good(t *core.T) {
 		core.Option{Key: "value", Value: "dark"},
 	)).OK)
 	core.AssertTrue(t, runCommand("config/commit", core.NewOptions()).OK)
-	core.AssertTrue(t, runCommand("config/load", core.NewOptions(core.Option{Key: "path", Value: ".core/loaded.yaml"})).OK)
+	core.AssertTrue(t, runCommand("config/load", core.NewOptions(core.Option{Key: optionKeyPath, Value: ".core/loaded.yaml"})).OK)
 	core.AssertTrue(t, runCommand("config/list", core.NewOptions()).OK)
 	core.AssertTrue(t, runCommand("config/path", core.NewOptions()).OK)
 }
 
-func TestService_ReadCommands_RequireEntitlement(t *core.T) {
+func TestServiceReadCommandsRequireEntitlement(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
 
@@ -590,7 +585,7 @@ func TestService_ReadCommands_RequireEntitlement(t *core.T) {
 	}
 }
 
-func TestService_ReadActions_RequireEntitlement_Bad(t *core.T) {
+func TestServiceReadActionsRequireEntitlementBad(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/tmp/svc/config.yaml"] = "app:\n  name: svc\n"
 
@@ -660,7 +655,7 @@ func TestService_NewConfigServiceWith_Ugly(t *core.T) {
 	core.AssertEqual(t, "/ax7/config.yaml", svc.Options().Path)
 }
 
-func TestService_Service_OnStartup_Good(t *core.T) {
+func TestServiceServiceOnStartupGood(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
 	var got string
 	err := svc.Get("app.name", &got)

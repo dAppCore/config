@@ -3,7 +3,6 @@ package config
 import (
 	"cmp"
 	"iter"
-	"os"
 	"slices"
 
 	core "dappco.re/go"
@@ -35,9 +34,7 @@ func Env(prefix string) iter.Seq2[string, any] {
 
 		var entries []entry
 
-		// os.Environ is the canonical way to walk every variable — core has no
-		// equivalent enumerator, so this is a framework-boundary stdlib call.
-		for _, env := range os.Environ() {
+		for _, env := range core.Environ() {
 			if !core.HasPrefix(env, prefix) {
 				continue
 			}
