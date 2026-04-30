@@ -12,20 +12,20 @@ func exampleConfigMedium(prefix string) (*Fs, string, func()) {
 	if resolved.OK {
 		dir = resolved.Value.(string)
 	}
-	return (&Fs{}).New(dir), "/config.yaml", func() {
-		root.DeleteAll(dir)
+	return (&Fs{}).New(dir), testConfigYAMLPath, func() {
+		_ = root.DeleteAll(dir)
 	}
 }
 
 func ExampleWithMedium() {
 	fs, path, cleanup := exampleConfigMedium("go-config-medium")
 	defer cleanup()
-	fs.Write(path, "agent: codex\n")
+	_ = fs.Write(path, testAgentCodexYAML)
 
 	r := config.New(config.WithMedium(fs), config.WithPath(path))
 	cfg := r.Value.(*config.Config)
 	var agent string
-	cfg.Get("agent", &agent)
+	_ = cfg.Get("agent", &agent)
 
 	Println(agent)
 	// Output: codex
@@ -43,15 +43,17 @@ func ExampleWithPath() {
 }
 
 func ExampleWithEnvPrefix() {
-	Setenv("APP_MODE", "test")
-	defer Unsetenv("APP_MODE")
+	_ = Setenv("APP_MODE", "test")
+	defer func() {
+		_ = Unsetenv("APP_MODE")
+	}()
 	fs, path, cleanup := exampleConfigMedium("go-config-env-prefix")
 	defer cleanup()
 
 	r := config.New(config.WithMedium(fs), config.WithPath(path), config.WithEnvPrefix("APP"))
 	cfg := r.Value.(*config.Config)
 	var mode string
-	cfg.Get("mode", &mode)
+	_ = cfg.Get("mode", &mode)
 
 	Println(mode)
 	// Output: test
@@ -70,12 +72,12 @@ func ExampleNew() {
 func ExampleConfig_LoadFile() {
 	fs, path, cleanup := exampleConfigMedium("go-config-loadfile")
 	defer cleanup()
-	fs.Write("/extra.yaml", "agent: codex\n")
+	_ = fs.Write(testExtraYAMLPath, testAgentCodexYAML)
 	cfg := config.New(config.WithMedium(fs), config.WithPath(path)).Value.(*config.Config)
 
-	r := cfg.LoadFile(fs, "/extra.yaml")
+	r := cfg.LoadFile(fs, testExtraYAMLPath)
 	var agent string
-	cfg.Get("agent", &agent)
+	_ = cfg.Get("agent", &agent)
 
 	Println(r.OK)
 	Println(agent)
@@ -88,7 +90,7 @@ func ExampleConfig_Get() {
 	fs, path, cleanup := exampleConfigMedium("go-config-get")
 	defer cleanup()
 	cfg := config.New(config.WithMedium(fs), config.WithPath(path)).Value.(*config.Config)
-	cfg.Set("agent", "codex")
+	_ = cfg.Set("agent", "codex")
 
 	var agent string
 	r := cfg.Get("agent", &agent)
@@ -107,7 +109,7 @@ func ExampleConfig_Set() {
 
 	r := cfg.Set("agent", "codex")
 	var agent string
-	cfg.Get("agent", &agent)
+	_ = cfg.Get("agent", &agent)
 
 	Println(r.OK)
 	Println(agent)
@@ -120,13 +122,13 @@ func ExampleConfig_Commit() {
 	fs, path, cleanup := exampleConfigMedium("go-config-commit")
 	defer cleanup()
 	cfg := config.New(config.WithMedium(fs), config.WithPath(path)).Value.(*config.Config)
-	cfg.Set("agent", "codex")
+	_ = cfg.Set("agent", "codex")
 
 	r := cfg.Commit()
 	content := fs.Read(path)
 
 	Println(r.OK)
-	Println(Contains(content.Value.(string), "agent: codex"))
+	Println(Contains(content.Value.(string), testAgentCodexText))
 	// Output:
 	// true
 	// true
@@ -136,8 +138,8 @@ func ExampleConfig_All() {
 	fs, path, cleanup := exampleConfigMedium("go-config-all")
 	defer cleanup()
 	cfg := config.New(config.WithMedium(fs), config.WithPath(path)).Value.(*config.Config)
-	cfg.Set("zulu", "last")
-	cfg.Set("alpha", "first")
+	_ = cfg.Set("zulu", "last")
+	_ = cfg.Set("alpha", "first")
 
 	for key, value := range cfg.All() {
 		Println(key, value)
@@ -159,9 +161,9 @@ func ExampleConfig_Path() {
 func ExampleLoad() {
 	fs, _, cleanup := exampleConfigMedium("go-config-load")
 	defer cleanup()
-	fs.Write("/config.yaml", "agent: codex\n")
+	_ = fs.Write(testConfigYAMLPath, testAgentCodexYAML)
 
-	r := config.Load(fs, "/config.yaml")
+	r := config.Load(fs, testConfigYAMLPath)
 	data := r.Value.(map[string]any)
 
 	Println(data["agent"])
@@ -172,11 +174,11 @@ func ExampleSave() {
 	fs, _, cleanup := exampleConfigMedium("go-config-save")
 	defer cleanup()
 
-	r := config.Save(fs, "/config.yaml", map[string]any{"agent": "codex"})
-	content := fs.Read("/config.yaml")
+	r := config.Save(fs, testConfigYAMLPath, map[string]any{"agent": "codex"})
+	content := fs.Read(testConfigYAMLPath)
 
 	Println(r.OK)
-	Println(Contains(content.Value.(string), "agent: codex"))
+	Println(Contains(content.Value.(string), testAgentCodexText))
 	// Output:
 	// true
 	// true

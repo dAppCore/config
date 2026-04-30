@@ -19,12 +19,12 @@ func ExampleNewConfigService() {
 func ExampleService_OnStartup() {
 	fs, path, cleanup := exampleConfigMedium("go-config-service-startup")
 	defer cleanup()
-	fs.Write(path, "agent: service\n")
+	_ = fs.Write(path, "agent: service\n")
 	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, Medium: fs})}
 
 	r := svc.OnStartup(Background())
 	var agent string
-	svc.Get("agent", &agent)
+	_ = svc.Get("agent", &agent)
 
 	Println(r.OK)
 	Println(agent)
@@ -37,8 +37,8 @@ func ExampleService_Get() {
 	fs, path, cleanup := exampleConfigMedium("go-config-service-get")
 	defer cleanup()
 	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, Medium: fs})}
-	svc.OnStartup(Background())
-	svc.Set("agent", "codex")
+	_ = svc.OnStartup(Background())
+	_ = svc.Set("agent", "codex")
 
 	var agent string
 	r := svc.Get("agent", &agent)
@@ -54,11 +54,11 @@ func ExampleService_Set() {
 	fs, path, cleanup := exampleConfigMedium("go-config-service-set")
 	defer cleanup()
 	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, Medium: fs})}
-	svc.OnStartup(Background())
+	_ = svc.OnStartup(Background())
 
 	r := svc.Set("agent", "codex")
 	var agent string
-	svc.Get("agent", &agent)
+	_ = svc.Get("agent", &agent)
 
 	Println(r.OK)
 	Println(agent)
@@ -71,14 +71,14 @@ func ExampleService_Commit() {
 	fs, path, cleanup := exampleConfigMedium("go-config-service-commit")
 	defer cleanup()
 	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, Medium: fs})}
-	svc.OnStartup(Background())
-	svc.Set("agent", "codex")
+	_ = svc.OnStartup(Background())
+	_ = svc.Set("agent", "codex")
 
 	r := svc.Commit()
 	content := fs.Read(path)
 
 	Println(r.OK)
-	Println(Contains(content.Value.(string), "agent: codex"))
+	Println(Contains(content.Value.(string), testAgentCodexText))
 	// Output:
 	// true
 	// true
@@ -87,13 +87,13 @@ func ExampleService_Commit() {
 func ExampleService_LoadFile() {
 	fs, path, cleanup := exampleConfigMedium("go-config-service-loadfile")
 	defer cleanup()
-	fs.Write("/extra.yaml", "agent: codex\n")
+	_ = fs.Write(testExtraYAMLPath, testAgentCodexYAML)
 	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: path, Medium: fs})}
-	svc.OnStartup(Background())
+	_ = svc.OnStartup(Background())
 
-	r := svc.LoadFile(fs, "/extra.yaml")
+	r := svc.LoadFile(fs, testExtraYAMLPath)
 	var agent string
-	svc.Get("agent", &agent)
+	_ = svc.Get("agent", &agent)
 
 	Println(r.OK)
 	Println(agent)

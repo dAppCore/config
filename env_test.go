@@ -6,25 +6,25 @@ import (
 )
 
 func TestEnv_Env_Good(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
+	t.Setenv(testFooBarEnv, testFooBarValue)
 	t.Setenv("AX_CONFIG_ALPHA", "first")
 
 	var keys []string
 	var values []any
-	for key, value := range config.Env("AX_CONFIG_") {
+	for key, value := range config.Env(testAXConfigPrefixWithSeparator) {
 		keys = append(keys, key)
 		values = append(values, value)
 	}
 
-	AssertEqual(t, []string{"alpha", "foo.bar"}, keys)
-	AssertEqual(t, []any{"first", "baz"}, values)
+	AssertEqual(t, []string{"alpha", testFooBarKey}, keys)
+	AssertEqual(t, []any{"first", testFooBarValue}, values)
 }
 
 func TestEnv_Env_Bad(t *T) {
 	t.Setenv("AX_CONFIG_FOO", "bar")
 
 	var keys []string
-	for key := range config.Env("OTHER_CONFIG_") {
+	for key := range config.Env(testOtherConfigPrefix) {
 		keys = append(keys, key)
 	}
 
@@ -32,38 +32,38 @@ func TestEnv_Env_Bad(t *T) {
 }
 
 func TestEnv_Env_Ugly(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
+	t.Setenv(testFooBarEnv, testFooBarValue)
 
 	var keys []string
-	for key := range config.Env("AX_CONFIG") {
+	for key := range config.Env(testAXConfigPrefix) {
 		keys = append(keys, key)
 	}
 
-	AssertEqual(t, []string{"foo.bar"}, keys)
+	AssertEqual(t, []string{testFooBarKey}, keys)
 }
 
 func TestEnv_LoadEnv_Good(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
+	t.Setenv(testFooBarEnv, testFooBarValue)
 
-	data := config.LoadEnv("AX_CONFIG_")
+	data := config.LoadEnv(testAXConfigPrefixWithSeparator)
 
 	AssertLen(t, data, 1)
-	AssertEqual(t, "baz", data["foo.bar"])
+	AssertEqual(t, testFooBarValue, data[testFooBarKey])
 }
 
 func TestEnv_LoadEnv_Bad(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
+	t.Setenv(testFooBarEnv, testFooBarValue)
 
-	data := config.LoadEnv("OTHER_CONFIG_")
+	data := config.LoadEnv(testOtherConfigPrefix)
 
 	AssertEmpty(t, data)
 }
 
 func TestEnv_LoadEnv_Ugly(t *T) {
-	t.Setenv("AX_CONFIG_FOO_BAR", "baz")
+	t.Setenv(testFooBarEnv, testFooBarValue)
 
-	data := config.LoadEnv("AX_CONFIG")
+	data := config.LoadEnv(testAXConfigPrefix)
 
 	AssertLen(t, data, 1)
-	AssertEqual(t, "baz", data["foo.bar"])
+	AssertEqual(t, testFooBarValue, data[testFooBarKey])
 }

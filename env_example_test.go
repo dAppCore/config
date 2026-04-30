@@ -6,8 +6,10 @@ import (
 )
 
 func ExampleEnv() {
-	Setenv("GO_CONFIG_EXAMPLE_HOST", "localhost")
-	defer Unsetenv("GO_CONFIG_EXAMPLE_HOST")
+	_ = Setenv("GO_CONFIG_EXAMPLE_HOST", "localhost")
+	defer func() {
+		_ = Unsetenv("GO_CONFIG_EXAMPLE_HOST")
+	}()
 
 	for key, value := range config.Env("GO_CONFIG_EXAMPLE") {
 		Println(key, value)
@@ -16,8 +18,10 @@ func ExampleEnv() {
 }
 
 func ExampleLoadEnv() {
-	Setenv("GO_CONFIG_EXAMPLE_HOST", "localhost")
-	defer Unsetenv("GO_CONFIG_EXAMPLE_HOST")
+	_ = Setenv("GO_CONFIG_EXAMPLE_HOST", "localhost")
+	defer func() {
+		_ = Unsetenv("GO_CONFIG_EXAMPLE_HOST")
+	}()
 
 	data := config.LoadEnv("GO_CONFIG_EXAMPLE")
 

@@ -2,6 +2,8 @@ package config
 
 import core "dappco.re/go"
 
+const errConfigNotLoaded = "config not loaded"
+
 // Service wraps Config as a framework service with lifecycle support.
 type Service struct {
 	*core.ServiceRuntime[ServiceOptions]
@@ -54,7 +56,7 @@ func (s *Service) OnStartup(_ core.Context) core.Result {
 // Get retrieves a configuration value by key.
 func (s *Service) Get(key string, out any) core.Result {
 	if s == nil || s.config == nil {
-		return core.Fail(core.E("config.Service.Get", "config not loaded", nil))
+		return core.Fail(core.E("config.Service.Get", errConfigNotLoaded, nil))
 	}
 	return s.config.Get(key, out)
 }
@@ -62,7 +64,7 @@ func (s *Service) Get(key string, out any) core.Result {
 // Set stores a configuration value by key.
 func (s *Service) Set(key string, v any) core.Result {
 	if s == nil || s.config == nil {
-		return core.Fail(core.E("config.Service.Set", "config not loaded", nil))
+		return core.Fail(core.E("config.Service.Set", errConfigNotLoaded, nil))
 	}
 	return s.config.Set(key, v)
 }
@@ -70,7 +72,7 @@ func (s *Service) Set(key string, v any) core.Result {
 // Commit persists any configuration changes to disk.
 func (s *Service) Commit() core.Result {
 	if s == nil || s.config == nil {
-		return core.Fail(core.E("config.Service.Commit", "config not loaded", nil))
+		return core.Fail(core.E("config.Service.Commit", errConfigNotLoaded, nil))
 	}
 	return s.config.Commit()
 }
@@ -78,7 +80,7 @@ func (s *Service) Commit() core.Result {
 // LoadFile merges a configuration file into the central configuration.
 func (s *Service) LoadFile(m Medium, path string) core.Result {
 	if s == nil || s.config == nil {
-		return core.Fail(core.E("config.Service.LoadFile", "config not loaded", nil))
+		return core.Fail(core.E("config.Service.LoadFile", errConfigNotLoaded, nil))
 	}
 	return s.config.LoadFile(m, path)
 }

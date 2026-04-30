@@ -23,7 +23,7 @@ func TestService_NewConfigService_Bad(t *T) {
 	get := svc.Get("missing", &value)
 
 	AssertFalse(t, get.OK)
-	AssertContains(t, get.Error(), "config not loaded")
+	AssertContains(t, get.Error(), testConfigNotLoaded)
 }
 
 func TestService_NewConfigService_Ugly(t *T) {
@@ -44,20 +44,20 @@ func TestService_Service_OnStartup_Good(t *T) {
 
 	AssertTrue(t, r.OK, r.Error())
 	var name string
-	get := svc.Get("app.name", &name)
+	get := svc.Get(testAppNameKey, &name)
 	AssertTrue(t, get.OK, get.Error())
 	AssertEqual(t, "service", name)
 }
 
 func TestService_Service_OnStartup_Bad(t *T) {
 	fs := configTestFS(t)
-	writeConfigFile(t, fs, "/config.txt", "app.name=service")
-	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: "/config.txt", Medium: fs})}
+	writeConfigFile(t, fs, testConfigTextPath, "app.name=service")
+	svc := &config.Service{ServiceRuntime: NewServiceRuntime(nil, config.ServiceOptions{Path: testConfigTextPath, Medium: fs})}
 
 	r := svc.OnStartup(Background())
 
 	AssertFalse(t, r.OK)
-	AssertContains(t, r.Error(), "unsupported config file type")
+	AssertContains(t, r.Error(), testUnsupportedConfigFileType)
 }
 
 func TestService_Service_OnStartup_Ugly(t *T) {
@@ -95,13 +95,13 @@ func TestService_Service_Get_Bad(t *T) {
 	r := svc.Get("agent", &agent)
 
 	AssertFalse(t, r.OK)
-	AssertContains(t, r.Error(), "config not loaded")
+	AssertContains(t, r.Error(), testConfigNotLoaded)
 }
 
 func TestService_Service_Get_Ugly(t *T) {
 	fs := configTestFS(t)
-	writeConfigFile(t, fs, "/config.yaml", "app:\n  name: service\n")
-	svc := startedService(t, config.ServiceOptions{Path: "/config.yaml", Medium: fs})
+	writeConfigFile(t, fs, testConfigYAMLPath, "app:\n  name: service\n")
+	svc := startedService(t, config.ServiceOptions{Path: testConfigYAMLPath, Medium: fs})
 
 	var full struct {
 		App struct {
@@ -133,7 +133,7 @@ func TestService_Service_Set_Bad(t *T) {
 	r := svc.Set("agent", "codex")
 
 	AssertFalse(t, r.OK)
-	AssertContains(t, r.Error(), "config not loaded")
+	AssertContains(t, r.Error(), testConfigNotLoaded)
 }
 
 func TestService_Service_Set_Ugly(t *T) {
@@ -159,7 +159,7 @@ func TestService_Service_Commit_Good(t *T) {
 	AssertTrue(t, r.OK, r.Error())
 	content := fs.Read(path)
 	RequireTrue(t, content.OK, content.Error())
-	AssertContains(t, content.Value.(string), "agent: codex")
+	AssertContains(t, content.Value.(string), testAgentCodexText)
 }
 
 func TestService_Service_Commit_Bad(t *T) {
@@ -168,26 +168,26 @@ func TestService_Service_Commit_Bad(t *T) {
 	r := svc.Commit()
 
 	AssertFalse(t, r.OK)
-	AssertContains(t, r.Error(), "config not loaded")
+	AssertContains(t, r.Error(), testConfigNotLoaded)
 }
 
 func TestService_Service_Commit_Ugly(t *T) {
 	fs := configTestFS(t)
-	svc := startedService(t, config.ServiceOptions{Path: "/config.json", Medium: fs})
+	svc := startedService(t, config.ServiceOptions{Path: testConfigJSONPath, Medium: fs})
 	RequireTrue(t, svc.Set("agent", "codex").OK)
 
 	r := svc.Commit()
 
 	AssertFalse(t, r.OK)
-	AssertContains(t, r.Error(), "unsupported config file type")
+	AssertContains(t, r.Error(), testUnsupportedConfigFileType)
 }
 
 func TestService_Service_LoadFile_Good(t *T) {
 	fs, path := configTestMedium(t)
-	writeConfigFile(t, fs, "/extra.yaml", "agent: codex\n")
+	writeConfigFile(t, fs, testExtraYAMLPath, testAgentCodexYAML)
 	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
 
-	r := svc.LoadFile(fs, "/extra.yaml")
+	r := svc.LoadFile(fs, testExtraYAMLPath)
 
 	AssertTrue(t, r.OK, r.Error())
 	var agent string
@@ -203,15 +203,15 @@ func TestService_Service_LoadFile_Bad(t *T) {
 	r := svc.LoadFile(fs, path)
 
 	AssertFalse(t, r.OK)
-	AssertContains(t, r.Error(), "config not loaded")
+	AssertContains(t, r.Error(), testConfigNotLoaded)
 }
 
 func TestService_Service_LoadFile_Ugly(t *T) {
 	fs, path := configTestMedium(t)
-	writeConfigFile(t, fs, "/.env", "TOKEN=abc\n")
+	writeConfigFile(t, fs, testDotEnvPath, "TOKEN=abc\n")
 	svc := startedService(t, config.ServiceOptions{Path: path, Medium: fs})
 
-	r := svc.LoadFile(fs, "/.env")
+	r := svc.LoadFile(fs, testDotEnvPath)
 
 	AssertTrue(t, r.OK, r.Error())
 	var token string
