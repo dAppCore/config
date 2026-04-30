@@ -2,21 +2,68 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repo Layout
+
+```text
+core/config/
+├── go/
+│   ├── *.go                      ← Go source files moved from repository root
+│   ├── tests/                    ← Go CLI tests moved from repository root
+│   ├── go.mod
+│   ├── go.sum
+│   ├── README.md -> ../README.md  ← symlink
+│   ├── CLAUDE.md -> ../CLAUDE.md  ← symlink
+│   ├── AGENTS.md -> ../AGENTS.md  ← symlink
+│   └── docs -> ../docs            ← symlink
+├── docs/
+├── schema/
+├── README.md
+├── CLAUDE.md
+├── AGENTS.md
+├── LICENSE/
+├── SONAR-project files
+└── other non-Go/cross-language assets
+```
+
+The Go module path remains `dappco.re/go/config`; only repository layout changed.
+
+## Go Resolution Modes
+
+This repository is module-local under `go/` and does not use a local workspace file in this module root. Consumer commands should either:
+
+1. Run from `go/` directly.
+2. Prefix Go commands with `cd go &&` when executed from repository root.
+
+Examples:
+
+```bash
+cd go && go test ./...
+cd go && golangci-lint run ./...
+cd go && core go qa
+```
+
+For CI-style reproducible builds, force module-only behavior:
+
+```bash
+GOWORK=off go test ./...
+GOFLAGS=-mod=mod go vet ./...
+```
+
 ## Build & Test Commands
 
 This project uses the Core CLI (`core` binary), not `go` directly.
 
 ```bash
-go test ./...                                    # run all tests
-go test -run TestConfig_Get_Good ./...           # run a single test
-go test -cover ./...                             # test with coverage
+cd go && go test ./...                                    # run all tests
+cd go && GOWORK=off go test -run TestConfig_Get_Good ./...  # run a single test
+cd go && GOWORK=off go test -cover ./...                   # test with coverage
 
-core go qa                            # format, vet, lint, test
-core go qa full                       # adds race detector, vuln scan, security audit
+cd go && core go qa                            # format, vet, lint, test
+cd go && core go qa full                       # adds race detector, vuln scan, security audit
 
-core go fmt                           # format
-core go vet                           # vet
-core go lint                          # lint
+cd go && core go fmt                           # format
+cd go && core go vet                           # vet
+cd go && core go lint                          # lint
 ```
 
 This is a library package — there is no binary to build or run.
@@ -42,7 +89,7 @@ This prevents environment variables from leaking into saved config files. When i
 - **Test naming**: `_Good` (happy path), `_Bad` (expected errors), `_Ugly` (panics/edge cases)
 - **Functional options**: `New()` takes `...Option` (e.g. `WithMedium`, `WithPath`, `WithEnvPrefix`)
 - **Conventional commits**: `type(scope): description`
-- **Go workspace**: module is part of `~/Code/go.work`
+- **Go workspace**: no per-repo `go.work`; this module resolves with `GOWORK=off`
 
 ## Dependencies
 
