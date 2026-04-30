@@ -298,13 +298,13 @@ func (s *Service) registerActions(c *core.Core) {
 //
 //	core config/get --key dev.editor
 func (s *Service) registerCommands(c *core.Core) {
-	c.Command(commandConfigGet, s.configCommand("Read a config value", c, commandConfigGet, configGetOperation))
-	c.Command(commandConfigSet, s.configCommand("Set a config value", c, commandConfigSet, configSetOperation))
-	c.Command(commandConfigList, s.configCommand("List all config values", c, commandConfigList, configAllOperation))
-	c.Command(commandConfigCommit, s.configCommand("Persist config changes", c, commandConfigCommit, configCommitOperation))
-	c.Command(commandConfigLoad, s.configCommand("Load a config file", c, commandConfigLoad, configLoadOperation))
-	c.Command(commandConfigAll, s.configCommand("List all config values", c, commandConfigAll, configAllOperation))
-	c.Command(commandConfigPath, s.configCommand("Show the config file path", c, commandConfigPath, configPathOperation))
+	_ = c.Command(commandConfigGet, s.configCommand("Read a config value", c, commandConfigGet, configGetOperation))
+	_ = c.Command(commandConfigSet, s.configCommand("Set a config value", c, commandConfigSet, configSetOperation))
+	_ = c.Command(commandConfigList, s.configCommand("List all config values", c, commandConfigList, configAllOperation))
+	_ = c.Command(commandConfigCommit, s.configCommand("Persist config changes", c, commandConfigCommit, configCommitOperation))
+	_ = c.Command(commandConfigLoad, s.configCommand("Load a config file", c, commandConfigLoad, configLoadOperation))
+	_ = c.Command(commandConfigAll, s.configCommand("List all config values", c, commandConfigAll, configAllOperation))
+	_ = c.Command(commandConfigPath, s.configCommand("Show the config file path", c, commandConfigPath, configPathOperation))
 }
 
 func (s *Service) actionHandler(c *core.Core, name string, op configOperation) core.ActionHandler {

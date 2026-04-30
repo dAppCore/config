@@ -333,7 +333,7 @@ func emitConfigChanges(callbacks []func(string, any), attached *core.Core, chang
 			fn(change.Key, change.Value)
 		}
 		if attached != nil {
-			attached.ACTION(ConfigChanged{
+			_ = attached.ACTION(ConfigChanged{
 				Key:      change.Key,
 				Value:    change.Value,
 				Previous: change.Previous,
@@ -403,7 +403,7 @@ func (c *Config) Set(key string, v any) core.Result {
 		fn(key, v)
 	}
 	if attached != nil {
-		attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: configChangeSourceSet})
+		_ = attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: configChangeSourceSet})
 	}
 	persistToStore(store, key, v)
 	return core.Ok(nil)
@@ -426,7 +426,7 @@ func (c *Config) Commit() core.Result {
 		return core.Fail(coreerr.E("config.Commit", "failed to save config", resultCause(r).(error)))
 	}
 	if attached != nil {
-		attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: configChangeSourceCommit})
+		_ = attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: configChangeSourceCommit})
 	}
 	return core.Ok(nil)
 }

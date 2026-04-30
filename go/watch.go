@@ -118,9 +118,7 @@ func (c *Config) StopWatch() {
 	if !fw.stopped {
 		fw.stopped = true
 		close(fw.stop)
-		if r := fw.w.Close(); !r.OK {
-			// StopWatch is best-effort; callers cannot act on watcher close errors.
-		}
+		_ = fw.w.Close()
 	}
 	fw.mu.Unlock()
 }
@@ -152,9 +150,7 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 				// Best-effort for atomic-save editors: the replacement file may
 				// not exist during the swap. There is no automatic retry loop;
 				// another fsnotify event is required to attempt Add again.
-				if r := fw.w.Add(path); !r.OK {
-					// The current filesystem event still requests a reload below.
-				}
+				_ = fw.w.Add(path)
 			}
 			requestReload(reloadRequests)
 		case _, ok := <-fw.w.Errors():
@@ -234,7 +230,7 @@ func (c *Config) reloadAndNotify() {
 			fn(change.Key, change.Value)
 		}
 		if attached != nil {
-			attached.ACTION(ConfigChanged{
+			_ = attached.ACTION(ConfigChanged{
 				Key:      change.Key,
 				Value:    change.Value,
 				Previous: change.Previous,

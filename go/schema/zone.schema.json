@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["zone"],
+  "properties": {
+    "zone": {
+      "type": "object",
+      "required": ["name", "identity"],
+      "properties": {
+        "name": { "type": "string" },
+        "identity": { "type": "string" },
+        "chain": {
+          "type": "object",
+          "required": ["mode", "daemon"],
+          "properties": {
+            "mode": { "type": "string" },
+            "daemon": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "network": {
+          "type": "object",
+          "required": ["wireguard"],
+          "properties": {
+            "wireguard": {
+              "type": "object",
+              "required": ["interface", "listen"],
+              "properties": {
+                "interface": { "type": "string" },
+                "listen": { "type": "integer", "minimum": 1, "maximum": 65535 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "services": {
+          "type": "object",
+          "properties": {
+            "vpn": {
+              "type": "object",
+              "required": ["enabled"],
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "price": { "type": "number", "minimum": 0 },
+                "capacity": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            },
+            "dns": {
+              "type": "object",
+              "required": ["enabled"],
+              "properties": {
+                "enabled": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            },
+            "compute": {
+              "type": "object",
+              "required": ["enabled", "models"],
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "models": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "staking": {
+          "type": "object",
+          "required": ["amount", "tier"],
+          "properties": {
+            "amount": { "type": "integer", "minimum": 0 },
+            "tier": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
