@@ -1,49 +1,32 @@
-# Agent Guide
+# Agent Notes
 
-This repository is the `dappco.re/go/config` consumer module for Core
-configuration. Work here should follow the current `dappco.re/go` conventions:
-public operations return `core.Result`, tests use the Core assertion helpers,
-and examples print through `core.Println`.
+This repository is the `dappco.re/go/config` module. It provides layered
+configuration, manifest loading, discovery, feature flags, XDG paths, and the
+Core framework service adapter used by other Core projects.
 
-## Repository Shape
+When changing code here, keep the public API aligned with `dappco.re/go` v0.9
+patterns. Use the Core wrappers for formatting, JSON, filesystem paths,
+environment reads, and assertions in tests. Do not add direct imports of the
+stdlib packages banned by the upgrade audit, and do not create compatibility
+packages that shadow those stdlib names.
 
-- `config.go` contains the `Config` type, functional options, file loading,
-  typed retrieval, persistence, and legacy `Load` / `Save` helpers.
-- `env.go` contains environment scanning helpers. It maps prefixed variables to
-  lower-case dot keys without importing banned stdlib packages directly.
-- `service.go` wraps `Config` as a Core lifecycle service.
-- Each production file has a matching `_test.go` and `_example_test.go` sibling.
-  Keep tests next to their source file; do not create aggregate compliance
-  files.
-- `docs/` contains the human-facing architecture and development notes.
+Tests are source-file aware. Public symbols in `config.go` are tested in
+`config_test.go`, public symbols in `resolve.go` are tested in
+`resolve_test.go`, and so on. Each public symbol needs the Good, Bad, and Ugly
+triplet in that sibling file plus a runnable example in the matching
+`*_example_test.go` file. Supplemental tests may exist, but their names should
+describe the behaviour they cover rather than pretending to be another
+symbol's canonical triplet.
 
-## Compliance Rules
-
-The audit script is the work provider:
+The normal verification gate for this repository is:
 
 ```bash
+GOWORK=off go mod tidy
+GOWORK=off go vet ./...
+GOWORK=off go test -count=1 ./...
+gofmt -l .
 bash /Users/snider/Code/core/go/tests/cli/v090-upgrade/audit.sh .
 ```
 
-Do not stop on partial progress. A compliant run has every counter at `0` and
-prints `verdict: COMPLIANT`.
-
-The important local patterns are:
-
-- Use `core.Result` with `core.Ok`, `core.Fail`, or `core.ResultOf`.
-- Do not import banned stdlib packages such as `fmt`, `os`, `strings`,
-  `path/filepath`, or `encoding/json` in this consumer module.
-- Use `core.Path*`, `core.Environ`, `core.SplitN`, `core.Replace`, and
-  `core.Sprintf` instead of direct stdlib helpers.
-- Public symbols require `Good`, `Bad`, and `Ugly` tests in the matching source
-  test file.
-- Public symbols require examples in the matching source example file.
-
-## Editing Notes
-
-Keep the dual-view config invariant intact. File-backed and explicitly set
-values belong in `Config.file`; the read view in `Config.full` is rebuilt from
-file settings, environment variables, and explicit overrides. That separation is
-what prevents environment-derived secrets from being written during `Commit`.
-
-Do not edit `BRIEF.md`, `.git`, `.codex`, or any `third_party` directory.
+`BRIEF.md` is a local work brief and should be left untracked. Do not edit
+`third_party/`, `.git/`, or `.codex/` while applying compliance changes.

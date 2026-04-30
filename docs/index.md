@@ -1,64 +1,147 @@
 ---
-title: go-config
-description: Layered configuration management for dappco.re/go services.
+title: config
+description: Layered configuration management for the Core framework with file, environment, and in-memory resolution.
 ---
 
-# go-config
+# config
 
-`dappco.re/go/config` is the configuration package for Core-based services. It
-loads structured settings from YAML, JSON, TOML, dotenv files, environment
-variables, and explicit runtime overrides while presenting a small
-`core.Result`-based API.
+`dappco.re/go/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
 
-## Module
+## Module Path
 
-```text
-dappco.re/go/config
+```
+dappco.re/go/core/config
 ```
 
-The module requires Go 1.26 or newer.
+Requires **Go 1.26+**.
 
-## Main APIs
+## Quick Start
 
-- `New(opts ...Option) core.Result` constructs a `*Config`.
-- `WithMedium`, `WithPath`, and `WithEnvPrefix` customise storage, path, and
-  environment prefix.
-- `(*Config).Get`, `Set`, `Commit`, `LoadFile`, `All`, and `Path` operate on a
-  configuration instance.
-- `Env` iterates prefixed environment variables as lower-case dot keys.
-- `NewConfigService` exposes the same configuration surface as a Core service.
-
-## Result Shape
-
-All operational APIs return `core.Result`. Callers should branch on `r.OK`:
+### Standalone usage
 
 ```go
-r := config.New()
-if !r.OK {
-    panic(r.Error())
+package main
+
+import (
+    "fmt"
+    config "dappco.re/go/core/config"
+)
+
+func main() {
+    cfg, err := config.New()  // loads ~/.core/config.yaml if it exists
+    if err != nil {
+        panic(err)
+    }
+
+    // Write a value and persist it
+    _ = cfg.Set("dev.editor", "vim")
+    _ = cfg.Commit()
+
+    // Read it back
+    var editor string
+    _ = cfg.Get("dev.editor", &editor)
+    fmt.Println(editor) // "vim"
 }
-cfg := r.Value.(*config.Config)
 ```
 
-This is the same shape used by `dappco.re/go` for filesystem, JSON, process,
-and service operations.
+### As a Core framework service
 
-## Environment Mapping
+```go
+import (
+    config "dappco.re/go/core/config"
+    "dappco.re/go/core"
+)
 
-Environment variables are mapped by stripping the configured prefix, lowering
-the remaining name, and replacing `_` with `.`. With the default prefix,
-`CORE_CONFIG_DEV_EDITOR=vim` becomes key `dev.editor`.
+app, _ := core.New(
+    core.WithService(config.NewConfigService),
+)
+// The config service loads automatically during OnStartup.
+// Retrieve it later via core.ServiceFor[*config.Service](app).
+```
 
-Use `WithEnvPrefix("MYAPP")` when an application has its own prefix. The
-trailing underscore is optional.
+## Package Layout
 
-## Persistence
+| File           | Purpose                                                        |
+|----------------|----------------------------------------------------------------|
+| `config.go`    | Core `Config` struct -- layered Get/Set, file load, commit     |
+| `conclave.go`  | Conclave-scoped config (`ForConclave`, `SetConclaveRootFunc`)  |
+| `discover.go`  | `.core/` directory walk (`Discover`, `CoreDirs`, `FindManifest`) |
+| `env.go`       | Environment variable iteration and prefix-based loading        |
+| `feature.go`   | Feature flags (`Feature`, `SetFeatureSource`, env overrides)   |
+| `manifest.go`  | Known file constants + typed manifests (`BuildManifest`, ...)  |
+| `service.go`   | Framework service wrapper with lifecycle (`Startable`) support |
+| `watch.go`     | Filesystem watcher with 100ms debounce + `OnChange` callbacks  |
+| `xdg.go`       | Platform-aware XDG paths (`Config`, `Data`, `Cache`, `Runtime`) |
+| `*_test.go`    | Tests following the `_Good` / `_Bad` / `_Ugly` convention     |
 
-`Set` updates both the persisted view and the read view. `Commit` writes only
-the persisted view to disk. Environment variables participate in reads but are
-not written back, which avoids leaking deployment secrets into config files.
+## Dependencies
 
-## Related Pages
+| Module                            | Role                                    |
+|-----------------------------------|-----------------------------------------|
+| `dappco.re/go/core`              | Core framework (`core.Core`, `ServiceRuntime`, primitives) |
+| `dappco.re/go/core/io`           | Storage abstraction (`Medium` for reading/writing files)   |
+| `dappco.re/go/core/log`          | Contextual error helper (`E()`)                            |
+| `github.com/spf13/viper`         | Underlying configuration engine         |
+| `gopkg.in/yaml.v3`               | YAML serialisation for `Commit()`       |
 
-- [Architecture](architecture.md)
-- [Development](development.md)
+## Configuration Priority
+
+Values are resolved in ascending priority order:
+
+1. **Defaults** -- hardcoded fallbacks (via `Set()` before any file load)
+2. **File** -- YAML loaded from `~/.core/config.yaml` (or a custom path)
+3. **Environment variables** -- prefixed with `CORE_CONFIG_` by default
+4. **Explicit Set()** -- in-memory overrides applied at runtime
+
+Environment variables always override file values. An explicit `Set()` call overrides everything.
+
+## Key Access
+
+All keys use **dot notation** for nested values:
+
+```go
+cfg.Set("a.b.c", "deep")
+
+var val string
+cfg.Get("a.b.c", &val) // "deep"
+```
+
+This maps to YAML structure:
+
+```yaml
+a:
+  b:
+    c: deep
+```
+
+## Environment Variable Mapping
+
+Environment variables are mapped to dot-notation keys by:
+
+1. Stripping the prefix (default `CORE_CONFIG_`)
+2. Lowercasing
+3. Replacing `_` with `.`
+
+For example, `CORE_CONFIG_DEV_EDITOR=nano` resolves to key `dev.editor` with value `"nano"`.
+
+You can change the prefix with `WithEnvPrefix`:
+
+```go
+cfg, _ := config.New(config.WithEnvPrefix("MYAPP"))
+// MYAPP_SETTING=secret -> key "setting"
+```
+
+## Persisting Changes
+
+`Set()` only writes to memory. Call `Commit()` to flush changes to disk:
+
+```go
+cfg.Set("dev.editor", "vim")
+cfg.Commit() // writes to ~/.core/config.yaml
+```
+
+`Commit()` only persists values that were loaded from the file or explicitly set via `Set()`. Environment variable values are never leaked into the config file.
+
+## Licence
+
+EUPL-1.2

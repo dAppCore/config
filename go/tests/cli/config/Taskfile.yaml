@@ -1,0 +1,13 @@
+---
+version: "3"
+
+tasks:
+  default:
+    deps:
+      - qa
+
+  qa:
+    desc: Run repository QA checks for config.
+    dir: ../../..
+    cmds:
+      - GOWORK=off core go qa

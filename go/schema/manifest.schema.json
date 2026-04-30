@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "code": { "type": "string" },
+    "name": { "type": "string" },
+    "module": { "type": "string" },
+    "version": { "type": "string" },
+    "description": { "type": "string" },
+    "licence": { "type": "string" },
+    "sign": { "type": "string" },
+    "sign_key": { "type": "string" },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": true
+}
