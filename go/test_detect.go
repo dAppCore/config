@@ -3,7 +3,6 @@ package config
 import (
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
-	coreerr "dappco.re/go/log"
 )
 
 const callerResolveTestManifest = "config.ResolveTestManifest"
@@ -59,14 +58,14 @@ func detectTestCommandAtDir(medium coreio.Medium, dir string) core.Result {
 func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) core.Result {
 	content, err := medium.Read(path)
 	if err != nil {
-		return core.Fail(coreerr.E(callerResolveTestManifest, "failed to read "+label+" manifest: "+path, err))
+		return core.Fail(core.E(callerResolveTestManifest, "failed to read "+label+" manifest: "+path, err))
 	}
 
 	var data struct {
 		Scripts map[string]any `json:"scripts"`
 	}
 	if r := core.JSONUnmarshalString(content, &data); !r.OK {
-		return core.Fail(coreerr.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, resultCause(r).(error)))
+		return core.Fail(core.E(callerResolveTestManifest, "failed to parse "+label+" manifest: "+path, resultCause(r).(error)))
 	}
 
 	raw, ok := data.Scripts["test"]
@@ -76,7 +75,7 @@ func detectJSONTestCommand(medium coreio.Medium, path, label, fallback string) c
 
 	script, ok := raw.(string)
 	if !ok {
-		return core.Fail(coreerr.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, nil))
+		return core.Fail(core.E(callerResolveTestManifest, "invalid "+label+" test script: "+path, nil))
 	}
 	if script == "" {
 		return core.Ok(detectedTestCommand{Command: fallback, Found: true})

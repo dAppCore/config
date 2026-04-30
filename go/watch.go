@@ -7,7 +7,6 @@ import (
 	"time"
 
 	core "dappco.re/go"
-	coreerr "dappco.re/go/log"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -80,7 +79,7 @@ func (c *Config) Watch() core.Result {
 	wResult := newWatchBackend()
 	if !wResult.OK {
 		c.mu.Unlock()
-		return core.Fail(coreerr.E("config.Watch", "failed to create watcher", resultCause(wResult).(error)))
+		return core.Fail(core.E("config.Watch", "failed to create watcher", resultCause(wResult).(error)))
 	}
 	w := wResult.Value.(watchBackend)
 	path := c.path
@@ -96,7 +95,7 @@ func (c *Config) Watch() core.Result {
 		c.mu.Lock()
 		c.watcher = nil
 		c.mu.Unlock()
-		return core.Fail(coreerr.E("config.Watch", "failed to watch path: "+path, watchErr))
+		return core.Fail(core.E("config.Watch", "failed to watch path: "+path, watchErr))
 	}
 
 	go c.watchLoop(fw)

@@ -113,7 +113,7 @@ func SetFeature(name string, enabled bool) {
 // registry. Environment overrides are not included in the returned slice.
 //
 //	for _, flag := range config.Features() {
-//	    fmt.Println(flag)
+//	    core.Println(flag)
 //	}
 func Features() []string {
 	featureMu.RLock()
