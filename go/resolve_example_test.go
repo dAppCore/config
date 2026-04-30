@@ -12,7 +12,7 @@ func exampleResolveMedium() (*coreio.MockMedium, string, func()) {
 	root := core.PathJoin(workspace, "repo")
 	child := core.PathJoin(root, "service")
 	home := core.Env("DIR_HOME")
-	cleanup := func() {}
+	var cleanup func()
 
 	for _, dir := range []string{
 		core.PathJoin(workspace, Directory),

@@ -8,6 +8,8 @@ import (
 	coreio "dappco.re/go/io"
 )
 
+const imagesManifestCoreDev = "core-dev"
+
 type failingImagesWriteMedium struct {
 	*coreio.MockMedium
 }
@@ -33,7 +35,7 @@ func TestImagesManifest_SaveImagesManifest_LoadSave_Good(t *core.T) {
 
 	manifest := &ImagesManifest{
 		Images: map[string]ImageInfo{
-			"core-dev": {
+			imagesManifestCoreDev: {
 				Version:    "1.2.3",
 				SHA256:     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 				Downloaded: time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC),
@@ -48,7 +50,7 @@ func TestImagesManifest_SaveImagesManifest_LoadSave_Good(t *core.T) {
 	core.RequireNoError(t, err)
 	core.RequireTrue(t, loaded != nil)
 	core.AssertLen(t, loaded.Images, 1)
-	core.AssertEqual(t, manifest.Images["core-dev"], loaded.Images["core-dev"])
+	core.AssertEqual(t, manifest.Images[imagesManifestCoreDev], loaded.Images[imagesManifestCoreDev])
 }
 
 func TestImagesManifest_ResolveImagesManifest_Good(t *core.T) {
@@ -134,7 +136,7 @@ func TestImagesManifest_LoadImagesManifest_Ugly(t *core.T) {
 	core.RequireNoError(t, m.EnsureDir(core.PathDir(path)))
 	bad := map[string]any{
 		"images": map[string]any{
-			"core-dev": map[string]any{
+			imagesManifestCoreDev: map[string]any{
 				"version": 123,
 			},
 		},
@@ -178,13 +180,13 @@ func TestImagesManifest_LoadImagesManifest_Good(t *core.T) {
 
 	manifest, err := imagesManifestResult(LoadImagesManifest(m, path))
 	core.RequireNoError(t, err)
-	core.AssertEqual(t, "1.0.0", manifest.Images["core-dev"].Version)
+	core.AssertEqual(t, "1.0.0", manifest.Images[imagesManifestCoreDev].Version)
 }
 
 func TestImagesManifest_SaveImagesManifest_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	path := core.PathJoin("home", ".core", DirectoryImages, FileImagesManifest)
-	manifest := &ImagesManifest{Images: map[string]ImageInfo{"core-dev": {Version: "1.0.0", Downloaded: time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC), Source: "github"}}}
+	manifest := &ImagesManifest{Images: map[string]ImageInfo{imagesManifestCoreDev: {Version: "1.0.0", Downloaded: time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC), Source: "github"}}}
 
 	err := resultError(SaveImagesManifest(m, path, manifest))
 	core.AssertNoError(t, err)

@@ -7,6 +7,14 @@ import (
 	coreio "dappco.re/go/io"
 )
 
+const (
+	configExtraAppNameKey     = "app.name"
+	configExtraDevEditorKey   = "dev.editor"
+	configExtraDefaultsPath   = "/defaults.yaml"
+	configExtraFeatureBetaKey = "feature.beta"
+	configExtraStorePath      = "/store.yaml"
+)
+
 type mockConfigStore struct {
 	bucket   string
 	key      string
@@ -30,19 +38,19 @@ func TestConfig_MergeFrom_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	base, err := configResult(New(WithMedium(m), WithPath("/base.yaml")))
 	core.AssertNoError(t, err)
-	core.AssertNoError(t, resultError(base.Set("app.name", "base")))
+	core.AssertNoError(t, resultError(base.Set(configExtraAppNameKey, "base")))
 
 	src, err := configResult(New(WithMedium(m), WithPath("/src.yaml")))
 	core.AssertNoError(t, err)
-	core.AssertNoError(t, resultError(src.Set("app.name", "src")))
-	core.AssertNoError(t, resultError(src.Set("dev.editor", "vim")))
+	core.AssertNoError(t, resultError(src.Set(configExtraAppNameKey, "src")))
+	core.AssertNoError(t, resultError(src.Set(configExtraDevEditorKey, "vim")))
 
 	base.MergeFrom(src)
 
 	var name, editor string
-	core.AssertNoError(t, resultError(base.Get("app.name", &name)))
+	core.AssertNoError(t, resultError(base.Get(configExtraAppNameKey, &name)))
 	core.AssertEqual(t, "base", name) // closest wins — base not overridden
-	core.AssertNoError(t, resultError(base.Get("dev.editor", &editor)))
+	core.AssertNoError(t, resultError(base.Get(configExtraDevEditorKey, &editor)))
 	core.AssertEqual(t, "vim", editor) // gap filled from src
 }
 
@@ -68,11 +76,11 @@ func TestConfig_OnChange_Good(t *core.T) {
 		seen[key] = value
 	})
 
-	core.AssertNoError(t, resultError(cfg.Set("dev.editor", "vim")))
+	core.AssertNoError(t, resultError(cfg.Set(configExtraDevEditorKey, "vim")))
 
 	mu.Lock()
 	defer mu.Unlock()
-	core.AssertEqual(t, "vim", seen["dev.editor"])
+	core.AssertEqual(t, "vim", seen[configExtraDevEditorKey])
 }
 
 func TestConfig_OnChange_Ugly(t *core.T) {
@@ -82,7 +90,7 @@ func TestConfig_OnChange_Ugly(t *core.T) {
 
 	// Nil callback is silently ignored, not stored.
 	cfg.OnChange(nil)
-	core.AssertNoError(t, resultError(cfg.Set("dev.editor", "vim")))
+	core.AssertNoError(t, resultError(cfg.Set(configExtraDevEditorKey, "vim")))
 }
 
 func TestConfig_Set_BroadcastsConfigChanged_Good(t *core.T) {
@@ -103,12 +111,12 @@ func TestConfig_Set_BroadcastsConfigChanged_Good(t *core.T) {
 	cfg, err := configResult(New(WithMedium(m), WithPath("/b.yaml"), WithCore(c)))
 	core.AssertNoError(t, err)
 
-	core.AssertNoError(t, resultError(cfg.Set("dev.editor", "vim")))
+	core.AssertNoError(t, resultError(cfg.Set(configExtraDevEditorKey, "vim")))
 
 	mu.Lock()
 	defer mu.Unlock()
 	core.AssertGreaterOrEqual(t, len(events), 1)
-	core.AssertEqual(t, "dev.editor", events[0].Key)
+	core.AssertEqual(t, configExtraDevEditorKey, events[0].Key)
 	core.AssertEqual(t, "vim", events[0].Value)
 	core.AssertEqual(t, "set", events[0].Source)
 }
@@ -127,10 +135,10 @@ func TestConfig_SetDefault_Good(t *core.T) {
 	cfg, err := configResult(New(WithMedium(m), WithPath("/d.yaml")))
 	core.AssertNoError(t, err)
 
-	cfg.SetDefault("feature.beta", true)
+	cfg.SetDefault(configExtraFeatureBetaKey, true)
 
 	var beta bool
-	core.AssertNoError(t, resultError(cfg.Get("feature.beta", &beta)))
+	core.AssertNoError(t, resultError(cfg.Get(configExtraFeatureBetaKey, &beta)))
 	core.AssertTrue(t, beta)
 }
 
@@ -153,7 +161,7 @@ func TestConfig_SetDefault_Ugly(t *core.T) {
 	cfg, err := configResult(New(WithMedium(m), WithPath("/d.yaml"), WithCore(c)))
 	core.AssertNoError(t, err)
 
-	cfg.SetDefault("feature.beta", true)
+	cfg.SetDefault(configExtraFeatureBetaKey, true)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -163,17 +171,17 @@ func TestConfig_SetDefault_Ugly(t *core.T) {
 func TestConfig_WithDefaults_FileWins_Good(t *core.T) {
 	// File values shadow defaults even when both are present.
 	m := coreio.NewMockMedium()
-	m.Files["/defaults.yaml"] = "dev:\n  editor: nano\n"
+	m.Files[configExtraDefaultsPath] = "dev:\n  editor: nano\n"
 
 	cfg, err := configResult(New(
 		WithMedium(m),
-		WithPath("/defaults.yaml"),
-		WithDefaults(map[string]any{"dev.editor": "vim"}),
+		WithPath(configExtraDefaultsPath),
+		WithDefaults(map[string]any{configExtraDevEditorKey: "vim"}),
 	))
 	core.AssertNoError(t, err)
 
 	var editor string
-	core.AssertNoError(t, resultError(cfg.Get("dev.editor", &editor)))
+	core.AssertNoError(t, resultError(cfg.Get(configExtraDevEditorKey, &editor)))
 	core.AssertEqual(t, "nano", editor)
 }
 
@@ -228,35 +236,35 @@ func TestConfig_AttachCore_Ugly(t *core.T) {
 func TestConfig_Config_Set_PersistToStore_Good(t *core.T) {
 	store := &mockConfigStore{}
 	m := coreio.NewMockMedium()
-	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath("/store.yaml")))
+	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
 	core.AssertNoError(t, err)
 
-	core.AssertNoError(t, resultError(cfg.Set("app.name", "core")))
+	core.AssertNoError(t, resultError(cfg.Set(configExtraAppNameKey, "core")))
 
 	core.AssertEqual(t, 1, store.calls)
 	core.AssertEqual(t, "config", store.bucket)
-	core.AssertEqual(t, "app.name", store.key)
+	core.AssertEqual(t, configExtraAppNameKey, store.key)
 	core.AssertEqual(t, "\"core\"", store.value)
 }
 
 func TestConfig_Config_Set_PersistToStore_Bad(t *core.T) {
 	store := &mockConfigStore{failWith: core.NewError("store write failed")}
 	m := coreio.NewMockMedium()
-	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath("/store.yaml")))
+	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
 	core.AssertNoError(t, err)
 
-	core.AssertNoError(t, resultError(cfg.Set("app.name", "core")))
+	core.AssertNoError(t, resultError(cfg.Set(configExtraAppNameKey, "core")))
 	core.AssertEqual(t, 1, store.calls)
 }
 
 func TestConfig_persistToStore_Ugly(t *core.T) {
 	store := &mockConfigStore{}
 	m := coreio.NewMockMedium()
-	_, err := configResult(New(WithStore(store), WithMedium(m), WithPath("/store.yaml")))
+	_, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
 	core.AssertNoError(t, err)
 
 	core.AssertNotPanics(t, func() {
-		persistToStore(nil, "app.name", "core")
+		persistToStore(nil, configExtraAppNameKey, "core")
 		persistToStore(store, "", "core")
 	})
 	core.AssertEqual(t, 0, store.calls)

@@ -4,13 +4,19 @@ import (
 	core "dappco.re/go"
 )
 
+const (
+	xdgCoreSuffixUnix    = "/core"
+	xdgCoreSuffixWindows = "\\core"
+	xdgCoreToolsPrefix   = "core tools"
+)
+
 func TestXdg_XDG_Good(t *core.T) {
 	paths := XDG()
 	core.AssertEqual(t, "core", paths.Prefix())
-	core.AssertTrue(t, core.HasSuffix(paths.Config(), "/core") || core.HasSuffix(paths.Config(), "\\core"))
-	core.AssertTrue(t, core.HasSuffix(paths.Data(), "/core") || core.HasSuffix(paths.Data(), "\\core"))
-	core.AssertTrue(t, core.HasSuffix(paths.Cache(), "/core") || core.HasSuffix(paths.Cache(), "\\core"))
-	core.AssertTrue(t, core.HasSuffix(paths.Runtime(), "/core") || core.HasSuffix(paths.Runtime(), "\\core"))
+	core.AssertTrue(t, core.HasSuffix(paths.Config(), xdgCoreSuffixUnix) || core.HasSuffix(paths.Config(), xdgCoreSuffixWindows))
+	core.AssertTrue(t, core.HasSuffix(paths.Data(), xdgCoreSuffixUnix) || core.HasSuffix(paths.Data(), xdgCoreSuffixWindows))
+	core.AssertTrue(t, core.HasSuffix(paths.Cache(), xdgCoreSuffixUnix) || core.HasSuffix(paths.Cache(), xdgCoreSuffixWindows))
+	core.AssertTrue(t, core.HasSuffix(paths.Runtime(), xdgCoreSuffixUnix) || core.HasSuffix(paths.Runtime(), xdgCoreSuffixWindows))
 }
 
 func TestXdg_XDG_Bad(t *core.T) {
@@ -52,9 +58,9 @@ func TestXdg_XDGWithPrefix_Bad(t *core.T) {
 }
 
 func TestXdg_XDGWithPrefix_Ugly(t *core.T) {
-	paths := XDGWithPrefix("core tools")
+	paths := XDGWithPrefix(xdgCoreToolsPrefix)
 	got := paths.Config()
-	core.AssertContains(t, got, "core tools")
+	core.AssertContains(t, got, xdgCoreToolsPrefix)
 }
 
 func TestXdg_XDGPaths_Config_Good(t *core.T) {
@@ -143,10 +149,11 @@ func TestXdg_XDGPaths_Prefix_Bad(t *core.T) {
 	paths := XDGWithPrefix("")
 	got := paths.Prefix()
 	core.AssertEqual(t, "core", got)
+	core.AssertContains(t, paths.Config(), xdgCoreSuffixUnix)
 }
 
 func TestXdg_XDGPaths_Prefix_Ugly(t *core.T) {
-	paths := XDGWithPrefix("core tools")
+	paths := XDGWithPrefix(xdgCoreToolsPrefix)
 	got := paths.Prefix()
-	core.AssertEqual(t, "core tools", got)
+	core.AssertEqual(t, xdgCoreToolsPrefix, got)
 }

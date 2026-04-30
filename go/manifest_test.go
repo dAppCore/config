@@ -11,6 +11,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	manifestTestNotHex                     = "not-hex"
+	manifestTestTrustedPubFile             = "trusted.pub"
+	manifestTestPhotoBrowserCode           = "photo-browser"
+	manifestTestPhotoBrowserName           = "Photo Browser"
+	manifestTestCoreIOName                 = "Core I/O"
+	manifestTestMandatoryIODescription     = "Mandatory I/O abstraction layer"
+	manifestTestEUPL                       = "EUPL-1.2"
+	manifestTestDecodePackageSignKeyFailed = "decode package sign_key failed"
+	manifestTestSignPrefix                 = "\nsign: "
+	manifestTestBuildPath                  = "/.core/" + FileBuild
+	manifestTestViewPath                   = "/.core/" + FileView
+	manifestTestManifestPath               = "/.core/" + FileManifest
+	manifestTestPackageContentPrefix       = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: "
+	manifestTestKeepMe                     = "keep-me"
+)
+
 func setManifestTrustKeys(t *core.T, keys ...string) {
 	t.Helper()
 	t.Setenv("CORE_MANIFEST_TRUST_KEYS", core.Join(",", keys...))
@@ -44,7 +61,7 @@ func TestManifest_parseManifestPublicKey_Good(t *core.T) {
 }
 
 func TestManifest_parseManifestPublicKey_Bad(t *core.T) {
-	_, err := publicKeyResult(parseManifestPublicKey("not-hex"))
+	_, err := publicKeyResult(parseManifestPublicKey(manifestTestNotHex))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "decode manifest public key failed")
 }
@@ -119,7 +136,7 @@ func TestManifest_TrustedManifestPublicKeys_Good(t *core.T) {
 }
 
 func TestManifest_TrustedManifestPublicKeys_Bad(t *core.T) {
-	setManifestTrustKeys(t, "not-hex")
+	setManifestTrustKeys(t, manifestTestNotHex)
 	_, err := trustedKeysResult(TrustedManifestPublicKeys())
 	core.AssertError(t, err)
 }
@@ -134,7 +151,7 @@ func TestManifest_TrustedManifestPublicKeys_Ugly(t *core.T) {
 
 	pub, _, err := ed25519.GenerateKey(nil)
 	core.AssertNoError(t, err)
-	testWriteFile(t, core.PathJoin(keysDir, "trusted.pub"), []byte(core.Sprintf("%x\n", pub)), 0o644)
+	testWriteFile(t, core.PathJoin(keysDir, manifestTestTrustedPubFile), []byte(core.Sprintf("%x\n", pub)), 0o644)
 
 	got, err := trustedKeysResult(TrustedManifestPublicKeys())
 	core.AssertNoError(t, err)
@@ -143,7 +160,7 @@ func TestManifest_TrustedManifestPublicKeys_Ugly(t *core.T) {
 
 func TestManifest_TrustedManifestPublicKeys_SymlinkedCore_Bad(t *core.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("symlink test is not portable on Windows in this environment")
+		t.Skip(serviceTestWindowsSymlinkSkipMessage)
 	}
 
 	home := t.TempDir()
@@ -162,7 +179,7 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedCore_Bad(t *core.T) {
 
 func TestManifest_TrustedManifestPublicKeys_SymlinkedKeysDir_Bad(t *core.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("symlink test is not portable on Windows in this environment")
+		t.Skip(serviceTestWindowsSymlinkSkipMessage)
 	}
 
 	home := t.TempDir()
@@ -185,7 +202,7 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedKeysDir_Bad(t *core.T) {
 
 func TestManifest_TrustedManifestPublicKeys_SymlinkedKeyFile_Bad(t *core.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("symlink test is not portable on Windows in this environment")
+		t.Skip(serviceTestWindowsSymlinkSkipMessage)
 	}
 
 	home := t.TempDir()
@@ -200,9 +217,9 @@ func TestManifest_TrustedManifestPublicKeys_SymlinkedKeyFile_Bad(t *core.T) {
 	keysDir := core.PathJoin(coreDir, "keys")
 	testMkdirAll(t, keysDir, 0o755)
 	testMkdirAll(t, realKeys, 0o755)
-	testWriteFile(t, core.PathJoin(realKeys, "trusted.pub"), []byte(core.Sprintf("%x\n", pub)), 0o644)
-	symlinkPath := core.PathJoin(keysDir, "trusted.pub")
-	testSymlink(t, core.PathJoin(realKeys, "trusted.pub"), symlinkPath)
+	testWriteFile(t, core.PathJoin(realKeys, manifestTestTrustedPubFile), []byte(core.Sprintf("%x\n", pub)), 0o644)
+	symlinkPath := core.PathJoin(keysDir, manifestTestTrustedPubFile)
+	testSymlink(t, core.PathJoin(realKeys, manifestTestTrustedPubFile), symlinkPath)
 	t.Cleanup(func() { testRemove(symlinkPath) })
 
 	_, err = trustedKeysResult(TrustedManifestPublicKeys())
@@ -226,8 +243,8 @@ func TestManifest_SignViewManifest_ViewSignatureHelpers_Good(t *core.T) {
 	core.AssertNoError(t, err)
 
 	view := &ViewManifest{
-		Code:    "photo-browser",
-		Name:    "Photo Browser",
+		Code:    manifestTestPhotoBrowserCode,
+		Name:    manifestTestPhotoBrowserName,
 		Version: ViewVersion("0.1.0"),
 		Layout:  "HLCRF",
 		Slots: map[string]any{
@@ -248,8 +265,8 @@ func TestManifest_SignViewManifest_ViewSignatureHelpers_Good(t *core.T) {
 
 func TestManifest_ValidateViewManifestSignature_ViewSignatureHelpers_Bad(t *core.T) {
 	view := &ViewManifest{
-		Code: "photo-browser",
-		Name: "Photo Browser",
+		Code: manifestTestPhotoBrowserCode,
+		Name: manifestTestPhotoBrowserName,
 		Sign: "not-base64!!",
 	}
 
@@ -263,8 +280,8 @@ func TestManifest_VerifyViewManifestSignature_ViewSignatureHelpers_Ugly(t *core.
 	core.AssertNoError(t, err)
 
 	view := &ViewManifest{
-		Code: "photo-browser",
-		Name: "Photo Browser",
+		Code: manifestTestPhotoBrowserCode,
+		Name: manifestTestPhotoBrowserName,
 		Sign: base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)),
 	}
 
@@ -280,10 +297,10 @@ func TestManifest_SignPackageManifest_PackageSignatureHelpers_Good(t *core.T) {
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
-		Name:        "Core I/O",
+		Name:        manifestTestCoreIOName,
 		Version:     "0.3.0",
-		Description: "Mandatory I/O abstraction layer",
-		Licence:     "EUPL-1.2",
+		Description: manifestTestMandatoryIODescription,
+		Licence:     manifestTestEUPL,
 	}
 
 	body, err := bytesResult(CanonicalPackageManifestBytes(pkg))
@@ -301,15 +318,15 @@ func TestManifest_SignPackageManifest_PackageSignatureHelpers_Good(t *core.T) {
 func TestManifest_VerifyPackageManifest_PackageSignatureHelpers_Bad(t *core.T) {
 	pkg := &PackageManifest{
 		Code:    "go-io",
-		Name:    "Core I/O",
+		Name:    manifestTestCoreIOName,
 		Version: "0.3.0",
-		SignKey: "not-hex",
+		SignKey: manifestTestNotHex,
 		Sign:    base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)),
 	}
 
 	err := resultError(VerifyPackageManifest(pkg))
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "decode package sign_key failed")
+	core.AssertContains(t, err.Error(), manifestTestDecodePackageSignKeyFailed)
 }
 
 func TestManifest_VerifyPackageManifest_PackageSignatureHelpers_Ugly(t *core.T) {
@@ -319,10 +336,10 @@ func TestManifest_VerifyPackageManifest_PackageSignatureHelpers_Ugly(t *core.T) 
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
-		Name:        "Core I/O",
+		Name:        manifestTestCoreIOName,
 		Version:     "0.3.0",
-		Description: "Mandatory I/O abstraction layer",
-		Licence:     "EUPL-1.2",
+		Description: manifestTestMandatoryIODescription,
+		Licence:     manifestTestEUPL,
 	}
 
 	err = resultError(SignPackageManifest(pkg, priv))
@@ -342,23 +359,23 @@ func TestManifest_LoadManifest_Good(t *core.T) {
 
 	signedPkg := &PackageManifest{
 		Code:    "go-io",
-		Name:    "Core I/O",
+		Name:    manifestTestCoreIOName,
 		Version: "0.3.0",
-		Licence: "EUPL-1.2",
+		Licence: manifestTestEUPL,
 		SignKey: hex.EncodeToString(pub),
 	}
 	msg, err := bytesResult(packageManifestBytes(signedPkg))
 	core.AssertNoError(t, err)
 	signedPkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
-	m.Files["/pkg/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign_key: " + signedPkg.SignKey + "\nsign: " + signedPkg.Sign + "\n"
+	m.Files["/pkg/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign_key: " + signedPkg.SignKey + manifestTestSignPrefix + signedPkg.Sign + "\n"
 
 	var pkg PackageManifest
 	err = resultError(LoadManifest(m, "/pkg/.core/manifest.yaml", &pkg))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "go-io", pkg.Code)
-	core.AssertEqual(t, "Core I/O", pkg.Name)
+	core.AssertEqual(t, manifestTestCoreIOName, pkg.Name)
 	core.AssertEqual(t, "0.3.0", pkg.Version)
-	core.AssertEqual(t, "EUPL-1.2", pkg.Licence)
+	core.AssertEqual(t, manifestTestEUPL, pkg.Licence)
 }
 
 func TestManifest_LoadManifest_Bad(t *core.T) {
@@ -379,10 +396,10 @@ func TestManifest_LoadManifest_Ugly(t *core.T) {
 
 func TestManifest_LoadManifest_Build_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/build.yaml"] = "name: core\noutput: dist\ncgo: false\ntargets:\n  - os: linux\n    arch: amd64\n  - os: darwin\n    arch: arm64\n"
+	m.Files[manifestTestBuildPath] = "name: core\noutput: dist\ncgo: false\ntargets:\n  - os: linux\n    arch: amd64\n  - os: darwin\n    arch: arm64\n"
 
 	var build BuildManifest
-	err := resultError(LoadManifest(m, "/.core/build.yaml", &build))
+	err := resultError(LoadManifest(m, manifestTestBuildPath, &build))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "core", build.Name)
 	core.AssertEqual(t, "dist", build.Output)
@@ -393,10 +410,10 @@ func TestManifest_LoadManifest_Build_Good(t *core.T) {
 
 func TestManifest_LoadManifest_Build_ShorthandTargets_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/build.yaml"] = "name: core\noutput: dist\ntargets:\n  - linux/amd64\n  - darwin/arm64\nsign:\n  enabled: true\n  gpg:\n    key: $GPG_KEY_ID\n  macos:\n    identity: 'Developer ID Application: Example'\n    notarize: false\nsdk:\n  spec: openapi.yaml\n  languages:\n    - typescript\n    - go\n  output: sdk/\n  diff: true\n"
+	m.Files[manifestTestBuildPath] = "name: core\noutput: dist\ntargets:\n  - linux/amd64\n  - darwin/arm64\nsign:\n  enabled: true\n  gpg:\n    key: $GPG_KEY_ID\n  macos:\n    identity: 'Developer ID Application: Example'\n    notarize: false\nsdk:\n  spec: openapi.yaml\n  languages:\n    - typescript\n    - go\n  output: sdk/\n  diff: true\n"
 
 	var build BuildManifest
-	err := resultError(LoadManifest(m, "/.core/build.yaml", &build))
+	err := resultError(LoadManifest(m, manifestTestBuildPath, &build))
 	core.AssertNoError(t, err)
 	core.AssertLen(t, build.Targets, 2)
 	core.AssertEqual(t, "linux", build.Targets[0].OS)
@@ -411,10 +428,10 @@ func TestManifest_LoadManifest_Build_ShorthandTargets_Good(t *core.T) {
 
 func TestManifest_LoadManifest_Build_LegacyFlat_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/build.yaml"] = "name: core\nmain: ./cmd/core\nbinary: core\noutput: dist\nflags:\n  - -trimpath\nldflags: -s -w\ncgo: false\ntargets:\n  - linux/amd64\n"
+	m.Files[manifestTestBuildPath] = "name: core\nmain: ./cmd/core\nbinary: core\noutput: dist\nflags:\n  - -trimpath\nldflags: -s -w\ncgo: false\ntargets:\n  - linux/amd64\n"
 
 	var build BuildManifest
-	err := resultError(LoadManifest(m, "/.core/build.yaml", &build))
+	err := resultError(LoadManifest(m, manifestTestBuildPath, &build))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, "core", build.Name)
 	core.AssertEqual(t, "./cmd/core", build.Main)
@@ -507,8 +524,8 @@ func TestManifest_LoadManifest_View_Good(t *core.T) {
 	setManifestTrustKeys(t, hex.EncodeToString(pub))
 
 	signedView := &ViewManifest{
-		Code:    "photo-browser",
-		Name:    "Photo Browser",
+		Code:    manifestTestPhotoBrowserCode,
+		Name:    manifestTestPhotoBrowserName,
 		Version: ViewVersion("0.1.0"),
 		Permissions: ViewPermissions{
 			Clipboard:  true,
@@ -518,42 +535,42 @@ func TestManifest_LoadManifest_View_Good(t *core.T) {
 	msg, err := bytesResult(viewManifestBytes(signedView))
 	core.AssertNoError(t, err)
 	signedView.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nversion: 0.1.0\npermissions:\n  clipboard: true\n  filesystem: true\nsign: " + signedView.Sign + "\n"
+	m.Files[manifestTestViewPath] = "code: photo-browser\nname: Photo Browser\nversion: 0.1.0\npermissions:\n  clipboard: true\n  filesystem: true\nsign: " + signedView.Sign + "\n"
 
 	var got ViewManifest
-	err = resultError(LoadManifest(m, "/.core/view.yaml", &got))
+	err = resultError(LoadManifest(m, manifestTestViewPath, &got))
 	core.AssertNoError(t, err)
-	core.AssertEqual(t, "photo-browser", got.Code)
+	core.AssertEqual(t, manifestTestPhotoBrowserCode, got.Code)
 	core.AssertTrue(t, got.Permissions.Clipboard)
 	core.AssertTrue(t, got.Permissions.Filesystem)
 }
 
 func TestManifest_LoadManifest_View_VersionInteger_Good(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nversion: 1\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\n"
+	m.Files[manifestTestViewPath] = "code: photo-browser\nname: Photo Browser\nversion: 1\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\n"
 
 	var view ViewManifest
-	err := resultError(LoadManifest(m, "/.core/view.yaml", &view))
+	err := resultError(LoadManifest(m, manifestTestViewPath, &view))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, ViewVersion("1"), view.Version)
 }
 
 func TestManifest_LoadManifest_View_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n"
+	m.Files[manifestTestViewPath] = "code: photo-browser\nname: Photo Browser\npermissions:\n  clipboard: true\n"
 
 	var view ViewManifest
-	err := resultError(LoadManifest(m, "/.core/view.yaml", &view))
+	err := resultError(LoadManifest(m, manifestTestViewPath, &view))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "unsigned view manifest rejected")
 }
 
 func TestManifest_LoadManifest_View_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize-1)) + "\npermissions:\n  clipboard: true\n"
+	m.Files[manifestTestViewPath] = "code: photo-browser\nname: Photo Browser\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize-1)) + "\npermissions:\n  clipboard: true\n"
 
 	var view ViewManifest
-	err := resultError(LoadManifest(m, "/.core/view.yaml", &view))
+	err := resultError(LoadManifest(m, manifestTestViewPath, &view))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "view manifest signature is not ed25519-sized")
 }
@@ -613,12 +630,12 @@ func TestManifest_LoadManifest_Repos_Bad(t *core.T) {
 
 func TestManifest_LoadManifest_Package_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\nsign_key: not-hex\n"
+	m.Files[manifestTestManifestPath] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\nsign: " + base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize)) + "\nsign_key: not-hex\n"
 
 	var pkg PackageManifest
-	err := resultError(LoadManifest(m, "/.core/manifest.yaml", &pkg))
+	err := resultError(LoadManifest(m, manifestTestManifestPath, &pkg))
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "decode package sign_key failed")
+	core.AssertContains(t, err.Error(), manifestTestDecodePackageSignKeyFailed)
 }
 
 func TestManifest_LoadManifest_Package_Ugly(t *core.T) {
@@ -631,9 +648,9 @@ func TestManifest_LoadManifest_Package_Ugly(t *core.T) {
 
 	pkg := &PackageManifest{
 		Code:    "go-io",
-		Name:    "Core I/O",
+		Name:    manifestTestCoreIOName,
 		Version: "0.3.0",
-		Licence: "EUPL-1.2",
+		Licence: manifestTestEUPL,
 		SignKey: hex.EncodeToString(pub1),
 	}
 	msg, err := bytesResult(packageManifestBytes(pkg))
@@ -642,10 +659,10 @@ func TestManifest_LoadManifest_Package_Ugly(t *core.T) {
 
 	out, err := yaml.Marshal(pkg)
 	core.AssertNoError(t, err)
-	m.Files["/.core/manifest.yaml"] = string(out)
+	m.Files[manifestTestManifestPath] = string(out)
 
 	var got PackageManifest
-	err = resultError(LoadManifest(m, "/.core/manifest.yaml", &got))
+	err = resultError(LoadManifest(m, manifestTestManifestPath, &got))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "package manifest signature mismatch")
 }
@@ -693,10 +710,10 @@ func TestManifest_LoadManifest_Zone_Good(t *core.T) {
 
 func TestManifest_LoadManifest_Schema_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/build.yaml"] = "targets: 42\n"
+	m.Files[manifestTestBuildPath] = "targets: 42\n"
 
 	var build BuildManifest
-	err := resultError(LoadManifest(m, "/.core/build.yaml", &build))
+	err := resultError(LoadManifest(m, manifestTestBuildPath, &build))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "schema validation failed")
 }
@@ -708,10 +725,10 @@ func TestManifest_LoadManifest_PackageSignature_Good(t *core.T) {
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
-		Name:        "Core I/O",
+		Name:        manifestTestCoreIOName,
 		Version:     "0.3.0",
-		Description: "Mandatory I/O abstraction layer",
-		Licence:     "EUPL-1.2",
+		Description: manifestTestMandatoryIODescription,
+		Licence:     manifestTestEUPL,
 		SignKey:     hex.EncodeToString(pub),
 	}
 
@@ -720,10 +737,10 @@ func TestManifest_LoadManifest_PackageSignature_Good(t *core.T) {
 	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
 
 	m := coreio.NewMockMedium()
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+	m.Files[manifestTestManifestPath] = manifestTestPackageContentPrefix + pkg.SignKey + manifestTestSignPrefix + pkg.Sign + "\n"
 
 	var round PackageManifest
-	err = resultError(LoadManifest(m, "/.core/manifest.yaml", &round))
+	err = resultError(LoadManifest(m, manifestTestManifestPath, &round))
 	core.AssertNoError(t, err)
 	core.AssertEqual(t, pkg.Code, round.Code)
 	core.AssertEqual(t, pkg.SignKey, round.SignKey)
@@ -738,10 +755,10 @@ func TestManifest_LoadManifest_PackageSignature_UntrustedKey_Bad(t *core.T) {
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
-		Name:        "Core I/O",
+		Name:        manifestTestCoreIOName,
 		Version:     "0.3.0",
-		Description: "Mandatory I/O abstraction layer",
-		Licence:     "EUPL-1.2",
+		Description: manifestTestMandatoryIODescription,
+		Licence:     manifestTestEUPL,
 		SignKey:     hex.EncodeToString(untrustedPub),
 	}
 
@@ -750,10 +767,10 @@ func TestManifest_LoadManifest_PackageSignature_UntrustedKey_Bad(t *core.T) {
 	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
 
 	m := coreio.NewMockMedium()
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+	m.Files[manifestTestManifestPath] = manifestTestPackageContentPrefix + pkg.SignKey + manifestTestSignPrefix + pkg.Sign + "\n"
 
 	var round PackageManifest
-	err = resultError(LoadManifest(m, "/.core/manifest.yaml", &round))
+	err = resultError(LoadManifest(m, manifestTestManifestPath, &round))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "package sign_key is not trusted")
 }
@@ -765,10 +782,10 @@ func TestManifest_LoadManifest_PackageSignature_Bad(t *core.T) {
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
-		Name:        "Core I/O",
+		Name:        manifestTestCoreIOName,
 		Version:     "0.3.0",
-		Description: "Mandatory I/O abstraction layer",
-		Licence:     "EUPL-1.2",
+		Description: manifestTestMandatoryIODescription,
+		Licence:     manifestTestEUPL,
 		SignKey:     hex.EncodeToString(pub),
 	}
 
@@ -777,43 +794,43 @@ func TestManifest_LoadManifest_PackageSignature_Bad(t *core.T) {
 	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
 
 	m := coreio.NewMockMedium()
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+	m.Files[manifestTestManifestPath] = manifestTestPackageContentPrefix + pkg.SignKey + manifestTestSignPrefix + pkg.Sign + "\n"
 
 	// Tamper with the persisted content after signing.
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Tampered description\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + "\nsign: " + pkg.Sign + "\n"
+	m.Files[manifestTestManifestPath] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Tampered description\nlicence: EUPL-1.2\nsign_key: " + pkg.SignKey + manifestTestSignPrefix + pkg.Sign + "\n"
 
 	var round PackageManifest
-	err = resultError(LoadManifest(m, "/.core/manifest.yaml", &round))
+	err = resultError(LoadManifest(m, manifestTestManifestPath, &round))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "signature mismatch")
 }
 
 func TestManifest_LoadManifest_ViewSignatureShape_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\nsign: not-base64!!\n"
+	m.Files[manifestTestViewPath] = "code: photo-browser\nname: Photo Browser\nsign: not-base64!!\n"
 
 	var view ViewManifest
-	err := resultError(LoadManifest(m, "/.core/view.yaml", &view))
+	err := resultError(LoadManifest(m, manifestTestViewPath, &view))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "invalid view manifest signature")
 }
 
 func TestManifest_LoadManifest_ViewUnsigned_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/view.yaml"] = "code: photo-browser\nname: Photo Browser\n"
+	m.Files[manifestTestViewPath] = "code: photo-browser\nname: Photo Browser\n"
 
 	var view ViewManifest
-	err := resultError(LoadManifest(m, "/.core/view.yaml", &view))
+	err := resultError(LoadManifest(m, manifestTestViewPath, &view))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "unsigned view manifest rejected")
 }
 
 func TestManifest_LoadManifest_PackageUnsigned_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\n"
+	m.Files[manifestTestManifestPath] = "code: go-io\nname: Core I/O\nversion: 0.3.0\nlicence: EUPL-1.2\n"
 
 	var pkg PackageManifest
-	err := resultError(LoadManifest(m, "/.core/manifest.yaml", &pkg))
+	err := resultError(LoadManifest(m, manifestTestManifestPath, &pkg))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "unsigned package manifest rejected")
 }
@@ -825,10 +842,10 @@ func TestManifest_LoadManifest_PackageMissingSignKey_Bad(t *core.T) {
 
 	pkg := &PackageManifest{
 		Code:        "go-io",
-		Name:        "Core I/O",
+		Name:        manifestTestCoreIOName,
 		Version:     "0.3.0",
-		Description: "Mandatory I/O abstraction layer",
-		Licence:     "EUPL-1.2",
+		Description: manifestTestMandatoryIODescription,
+		Licence:     manifestTestEUPL,
 		SignKey:     hex.EncodeToString(pub),
 	}
 	msg, err := bytesResult(packageManifestBytes(pkg))
@@ -836,10 +853,10 @@ func TestManifest_LoadManifest_PackageMissingSignKey_Bad(t *core.T) {
 	pkg.Sign = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, msg))
 
 	m := coreio.NewMockMedium()
-	m.Files["/.core/manifest.yaml"] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign: " + pkg.Sign + "\n"
+	m.Files[manifestTestManifestPath] = "code: go-io\nname: Core I/O\nversion: 0.3.0\ndescription: Mandatory I/O abstraction layer\nlicence: EUPL-1.2\nsign: " + pkg.Sign + "\n"
 
 	var round PackageManifest
-	err = resultError(LoadManifest(m, "/.core/manifest.yaml", &round))
+	err = resultError(LoadManifest(m, manifestTestManifestPath, &round))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), "missing package sign_key")
 }
@@ -877,8 +894,8 @@ func TestManifest_KnownFiles_Good(t *core.T) {
 func axManifestView() ViewManifest {
 	return ViewManifest{
 		Version:   "1",
-		Code:      "photo-browser",
-		Name:      "Photo Browser",
+		Code:      manifestTestPhotoBrowserCode,
+		Name:      manifestTestPhotoBrowserName,
 		Title:     "Photos",
 		Width:     800,
 		Height:    600,
@@ -893,7 +910,7 @@ func axManifestPackage() PackageManifest {
 		Module:      "dappco.re/go/config",
 		Version:     "0.9.0",
 		Description: "config package",
-		Licence:     "EUPL-1.2",
+		Licence:     manifestTestEUPL,
 	}
 }
 
@@ -976,6 +993,7 @@ func TestManifest_buildmanifestldflags_String_Good(t *core.T) {
 	flags := buildmanifestldflags{"-s", "-w"}
 	got := flags.String()
 	core.AssertEqual(t, "-s -w", got)
+	core.AssertNotEmpty(t, got)
 }
 
 func TestManifest_buildmanifestldflags_String_Bad(t *core.T) {
@@ -1029,10 +1047,10 @@ func TestManifest_CanonicalViewManifestBytes_Bad(t *core.T) {
 
 func TestManifest_CanonicalViewManifestBytes_Ugly(t *core.T) {
 	view := axManifestView()
-	view.Sign = "keep-me"
+	view.Sign = manifestTestKeepMe
 	_, err := bytesResult(CanonicalViewManifestBytes(&view))
 	core.AssertNoError(t, err)
-	core.AssertEqual(t, "keep-me", view.Sign)
+	core.AssertEqual(t, manifestTestKeepMe, view.Sign)
 }
 
 func TestManifest_ValidateViewManifestSignature_Good(t *core.T) {
@@ -1116,10 +1134,10 @@ func TestManifest_CanonicalPackageManifestBytes_Bad(t *core.T) {
 
 func TestManifest_CanonicalPackageManifestBytes_Ugly(t *core.T) {
 	pkg := axManifestPackage()
-	pkg.Sign = "keep-me"
+	pkg.Sign = manifestTestKeepMe
 	_, err := bytesResult(CanonicalPackageManifestBytes(&pkg))
 	core.AssertNoError(t, err)
-	core.AssertEqual(t, "keep-me", pkg.Sign)
+	core.AssertEqual(t, manifestTestKeepMe, pkg.Sign)
 }
 
 func TestManifest_SignPackageManifest_Good(t *core.T) {
@@ -1162,8 +1180,8 @@ func TestManifest_VerifyPackageManifest_Bad(t *core.T) {
 func TestManifest_VerifyPackageManifest_Ugly(t *core.T) {
 	pkg := axManifestPackage()
 	pkg.Sign = base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
-	pkg.SignKey = "not-hex"
+	pkg.SignKey = manifestTestNotHex
 	err := resultError(VerifyPackageManifest(&pkg))
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "decode package sign_key failed")
+	core.AssertContains(t, err.Error(), manifestTestDecodePackageSignKeyFailed)
 }

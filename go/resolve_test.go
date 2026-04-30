@@ -10,6 +10,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	resolveTestWorkspaceReposYAML    = "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"
+	resolveTestFailedToParseManifest = "failed to parse manifest"
+	resolveTestBrokenVersionYAML     = "version: [broken"
+	resolveTestEmptyReposYAML        = "version: 1\norg: host-uk\nrepos: []\n"
+	resolveTestMainGo                = "main.go"
+	resolveTestStatusJSON            = "status.json"
+	resolveTestParentRepoPath        = "../repo"
+)
+
 type falseExistsMedium struct {
 	*coreio.MockMedium
 }
@@ -39,7 +49,7 @@ func TestResolve_FindConfigManifest_Good(t *core.T) {
 	workspaceRepos := core.PathJoin(base, ".core", FileRepos)
 	core.AssertNoError(t, m.Write(globalConfig, "app:\n  name: global\n"))
 	core.AssertNoError(t, m.Write(projectConfig, "app:\n  name: project\n"))
-	core.AssertNoError(t, m.Write(workspaceRepos, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertNoError(t, m.Write(workspaceRepos, resolveTestWorkspaceReposYAML))
 
 	core.AssertEqual(t, projectConfig, FindConfigManifest(m, child))
 }
@@ -89,7 +99,7 @@ func TestResolve_FindProjectManifest_Good(t *core.T) {
 		core.AssertNoError(t, m.Write(core.PathJoin(repo, ".core", name), content))
 	}
 	core.AssertNoError(t, m.Write(core.PathJoin(base, ".core", FileBuild), "name: external\noutput: ext\n"))
-	core.AssertNoError(t, m.Write(core.PathJoin(base, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(base, ".core", FileRepos), resolveTestWorkspaceReposYAML))
 	core.AssertEqual(t, core.PathJoin(repo, ".core", FileBuild), FindProjectManifest(m, child, FileBuild))
 
 	cases := []struct {
@@ -421,12 +431,12 @@ func TestResolve_ResolveAgentManifest_UserManifests_Ugly(t *core.T) {
 	agent, err := agentManifestResult(ResolveAgentManifest(m))
 	core.AssertNil(t, agent)
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "failed to parse manifest")
+	core.AssertContains(t, err.Error(), resolveTestFailedToParseManifest)
 
 	zone, err := zoneManifestResult(ResolveZoneManifest(m))
 	core.AssertNil(t, zone)
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "failed to parse manifest")
+	core.AssertContains(t, err.Error(), resolveTestFailedToParseManifest)
 }
 
 func TestResolve_FindPHPManifest_Good(t *core.T) {
@@ -460,12 +470,12 @@ func TestResolve_ResolvePHPManifest_Ugly(t *core.T) {
 	repo := core.PathJoin(tmp, "repo")
 
 	core.RequireNoError(t, m.EnsureDir(core.PathJoin(repo, ".core")))
-	core.RequireNoError(t, m.Write(core.PathJoin(repo, ".core", FilePHP), "version: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(repo, ".core", FilePHP), resolveTestBrokenVersionYAML))
 
 	php, err := phpManifestResult(ResolvePHPManifest(m, repo))
 	core.AssertNil(t, php)
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "failed to parse manifest")
+	core.AssertContains(t, err.Error(), resolveTestFailedToParseManifest)
 }
 
 func TestResolve_ResolvePHPManifest_Good(t *core.T) {
@@ -491,7 +501,7 @@ func TestResolve_FindReposManifest_Good(t *core.T) {
 
 	core.RequireNoError(t, m.EnsureDir(start))
 	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, "Code", Directory)))
-	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), resolveTestEmptyReposYAML))
 
 	core.AssertEqual(t, core.PathJoin(home, "Code", Directory, FileRepos), FindReposManifest(m, start))
 }
@@ -503,7 +513,7 @@ func TestResolve_FindWorkspaceRegistryManifest_Good(t *core.T) {
 	home := core.Env("DIR_HOME")
 
 	core.RequireNoError(t, m.EnsureDir(core.PathDir(core.PathJoin(home, "Code", Directory, FileRepos))))
-	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), resolveTestEmptyReposYAML))
 
 	core.AssertEqual(t, FindReposManifest(m, start), FindWorkspaceRegistryManifest(m, start))
 }
@@ -524,7 +534,7 @@ func TestResolve_FindWorkspaceRegistryManifest_Ugly(t *core.T) {
 		symlinks:   map[string]bool{coreDir: true},
 	}
 	core.RequireNoError(t, m.EnsureDir(coreDir))
-	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileRepos), "version: 1\norg: host-uk\nrepos: []\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(coreDir, FileRepos), resolveTestEmptyReposYAML))
 
 	core.AssertEmpty(t, FindWorkspaceRegistryManifest(m, start))
 }
@@ -536,7 +546,7 @@ func TestResolve_ResolveWorkspaceRegistryManifest_Good(t *core.T) {
 	home := core.Env("DIR_HOME")
 
 	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, "Code", Directory)))
-	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), resolveTestWorkspaceReposYAML))
 
 	repos, err := reposManifestResult(ResolveWorkspaceRegistryManifest(m, start))
 	core.RequireNoError(t, err)
@@ -561,12 +571,12 @@ func TestResolve_ResolveWorkspaceRegistryManifest_Ugly(t *core.T) {
 	start := core.PathJoin(tmp, "workspace", "repo", "service")
 
 	core.RequireNoError(t, m.EnsureDir(core.PathJoin(home, "Code", Directory)))
-	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), "version: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(home, "Code", Directory, FileRepos), resolveTestBrokenVersionYAML))
 
 	repos, err := reposManifestResult(ResolveWorkspaceRegistryManifest(m, start))
 	core.AssertNil(t, repos)
 	core.AssertError(t, err)
-	core.AssertContains(t, err.Error(), "failed to parse manifest")
+	core.AssertContains(t, err.Error(), resolveTestFailedToParseManifest)
 }
 
 func TestResolve_ResolveImagesManifest_Good(t *core.T) {
@@ -587,15 +597,15 @@ func TestResolve_WorkspaceSandboxPath_Good(t *core.T) {
 	home := core.Env("DIR_HOME")
 	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", "src"), WorkspaceSandboxPath("repo", "dev", "src"))
 	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev"), WorkspaceSandboxRoot("repo", "dev"))
-	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceSourceDirectory, "app", "main.go"), WorkspaceSandboxSourcePath("repo", "dev", "app", "main.go"))
-	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceMetaDirectory, "status.json"), WorkspaceSandboxMetaPath("repo", "dev", "status.json"))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceSourceDirectory, "app", resolveTestMainGo), WorkspaceSandboxSourcePath("repo", "dev", "app", resolveTestMainGo))
+	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceMetaDirectory, resolveTestStatusJSON), WorkspaceSandboxMetaPath("repo", "dev", resolveTestStatusJSON))
 	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "repo", "dev", WorkspaceInstructionsFile), WorkspaceSandboxInstructionsPath("repo", "dev"))
 }
 
 func TestResolve_WorkspaceSandboxPath_Ugly(t *core.T) {
 	home := core.Env("DIR_HOME")
 	core.AssertEqual(t, core.PathJoin(home, Directory, WorkspaceDirectory, "src"), WorkspaceSandboxPath("", "", "", "src", ""))
-	core.AssertEmpty(t, WorkspaceSandboxPath("../repo", "dev"))
+	core.AssertEmpty(t, WorkspaceSandboxPath(resolveTestParentRepoPath, "dev"))
 	core.AssertEmpty(t, WorkspaceSandboxPath("repo", "../dev"))
 	core.AssertEmpty(t, WorkspaceSandboxPath("repo", "dev", "../secret"))
 }
@@ -686,7 +696,7 @@ func TestResolve_ResolveBuildManifest_ProjectManifests_Good(t *core.T) {
 	core.AssertNoError(t, m.Write(viewPath, "code: photo-browser\nname: Photo Browser\nsign: "+base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))+"\npermissions:\n  clipboard: true\n"))
 	core.AssertNoError(t, m.Write(packagePath, packageManifestFixture(t)))
 	core.AssertNoError(t, m.Write(idePath, "version: 1\neditor: nvim\n"))
-	core.AssertNoError(t, m.Write(core.PathJoin(workspace, ".core", FileRepos), "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertNoError(t, m.Write(core.PathJoin(workspace, ".core", FileRepos), resolveTestWorkspaceReposYAML))
 
 	build, err := buildManifestResult(ResolveBuildManifest(m, child))
 	core.AssertNoError(t, err)
@@ -751,7 +761,7 @@ func TestResolve_FindReposManifest_FallsBackToWorkspaceRoot_Good(t *core.T) {
 	reposPath := core.PathJoin(core.Env("DIR_HOME"), "Code", ".core", FileRepos)
 
 	core.AssertNoError(t, m.EnsureDir(core.PathDir(reposPath)))
-	core.AssertNoError(t, m.Write(reposPath, "version: 1\norg: host-uk\nrepos:\n  - path: core/go\n    remote: ssh://forge.example/core/go.git\n"))
+	core.AssertNoError(t, m.Write(reposPath, resolveTestWorkspaceReposYAML))
 
 	core.AssertEqual(t, reposPath, FindReposManifest(m, start))
 }
@@ -1099,7 +1109,7 @@ func TestResolve_ResolveReleaseManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveReleaseManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileRelease), "version: [broken"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileRelease), resolveTestBrokenVersionYAML))
 	got, err := releaseManifestResult(ResolveReleaseManifest(fixture.medium, fixture.child))
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1408,7 +1418,7 @@ func TestResolve_ResolveIDEManifest_Bad(t *core.T) {
 
 func TestResolve_ResolveIDEManifest_Ugly(t *core.T) {
 	fixture := axResolveProjectFixture(t)
-	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileIDE), "version: [broken"))
+	core.RequireNoError(t, fixture.medium.Write(core.PathJoin(fixture.core, FileIDE), resolveTestBrokenVersionYAML))
 	got, err := ideManifestResult(ResolveIDEManifest(fixture.medium, fixture.child))
 	core.AssertNil(t, got)
 	core.AssertError(t, err)
@@ -1461,7 +1471,7 @@ func TestResolve_WorkspaceSandboxRoot_Good(t *core.T) {
 }
 
 func TestResolve_WorkspaceSandboxRoot_Bad(t *core.T) {
-	got := WorkspaceSandboxRoot("../repo", "dev")
+	got := WorkspaceSandboxRoot(resolveTestParentRepoPath, "dev")
 	core.AssertEqual(t, "", got)
 	core.AssertEmpty(t, got)
 }
@@ -1473,8 +1483,8 @@ func TestResolve_WorkspaceSandboxRoot_Ugly(t *core.T) {
 }
 
 func TestResolve_WorkspaceSandboxSourcePath_Good(t *core.T) {
-	got := WorkspaceSandboxSourcePath("repo", "dev", "app", "main.go")
-	core.AssertContains(t, got, core.PathJoin(WorkspaceSourceDirectory, "app", "main.go"))
+	got := WorkspaceSandboxSourcePath("repo", "dev", "app", resolveTestMainGo)
+	core.AssertContains(t, got, core.PathJoin(WorkspaceSourceDirectory, "app", resolveTestMainGo))
 	core.AssertContains(t, got, "repo")
 }
 
@@ -1491,8 +1501,8 @@ func TestResolve_WorkspaceSandboxSourcePath_Ugly(t *core.T) {
 }
 
 func TestResolve_WorkspaceSandboxMetaPath_Good(t *core.T) {
-	got := WorkspaceSandboxMetaPath("repo", "dev", "status.json")
-	core.AssertContains(t, got, core.PathJoin(WorkspaceMetaDirectory, "status.json"))
+	got := WorkspaceSandboxMetaPath("repo", "dev", resolveTestStatusJSON)
+	core.AssertContains(t, got, core.PathJoin(WorkspaceMetaDirectory, resolveTestStatusJSON))
 	core.AssertContains(t, got, "dev")
 }
 
@@ -1515,7 +1525,7 @@ func TestResolve_WorkspaceSandboxInstructionsPath_Good(t *core.T) {
 }
 
 func TestResolve_WorkspaceSandboxInstructionsPath_Bad(t *core.T) {
-	got := WorkspaceSandboxInstructionsPath("../repo", "dev")
+	got := WorkspaceSandboxInstructionsPath(resolveTestParentRepoPath, "dev")
 	core.AssertEqual(t, "", got)
 	core.AssertEmpty(t, got)
 }
@@ -1573,7 +1583,7 @@ func TestResolve_ResolveReposManifest_Ugly(t *core.T) {
 	start := core.PathJoin(workspace, "repo", "service")
 	core.RequireNoError(t, m.EnsureDir(core.PathJoin(workspace, Directory)))
 	core.RequireNoError(t, m.EnsureDir(start))
-	core.RequireNoError(t, m.Write(core.PathJoin(workspace, Directory, FileRepos), "version: [broken"))
+	core.RequireNoError(t, m.Write(core.PathJoin(workspace, Directory, FileRepos), resolveTestBrokenVersionYAML))
 	got, err := reposManifestResult(ResolveReposManifest(m, start))
 	core.AssertNil(t, got)
 	core.AssertError(t, err)

@@ -16,7 +16,7 @@ func TestConclave_ForConclave_Good(t *core.T) {
 
 	root := core.PathJoin(tmp, "alpha", ".core")
 	core.AssertNoError(t, coreio.Local.EnsureDir(root))
-	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(root, "config.yaml"), "theme: dark\n"))
+	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(root, FileConfig), "theme: dark\n"))
 
 	cfg := requireResultValue[*Config](t, ForConclave("alpha", WithMedium(coreio.Local)))
 
@@ -60,7 +60,7 @@ func TestConclave_ForConclave_SymlinkedCore_Bad(t *core.T) {
 
 	core.AssertNoError(t, coreio.Local.EnsureDir(conclaveDir))
 	core.AssertNoError(t, coreio.Local.EnsureDir(realCore))
-	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(realCore, "config.yaml"), "theme: dark\n"))
+	core.AssertNoError(t, coreio.Local.Write(core.PathJoin(realCore, FileConfig), "theme: dark\n"))
 	testSymlink(t, realCore, core.PathJoin(conclaveDir, ".core"))
 
 	SetConclaveRootFunc(func(_ string) core.Result {
@@ -83,13 +83,13 @@ func TestConclave_ForConclave_InheritsProject_Good(t *core.T) {
 	core.AssertNoError(t, coreio.Local.EnsureDir(core.PathJoin(projectDir, ".core")))
 	core.AssertNoError(t, coreio.Local.EnsureDir(core.PathJoin(projectDir, ".git")))
 	core.AssertNoError(t, coreio.Local.Write(
-		core.PathJoin(projectDir, ".core", "config.yaml"),
+		core.PathJoin(projectDir, ".core", FileConfig),
 		"dev:\n  editor: vim\napp:\n  name: project\n",
 	))
 
 	core.AssertNoError(t, coreio.Local.EnsureDir(core.PathJoin(conclaveDir, ".core")))
 	core.AssertNoError(t, coreio.Local.Write(
-		core.PathJoin(conclaveDir, ".core", "config.yaml"),
+		core.PathJoin(conclaveDir, ".core", FileConfig),
 		"app:\n  name: conclave\n",
 	))
 

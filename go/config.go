@@ -29,12 +29,15 @@ func (envkeyreplacer) Replace(s string) string {
 }
 
 const (
-	callerConfigNew          = "config.New"
-	callerConfigLoad         = "config.Load"
-	callerConfigLoadFile     = "config.LoadFile"
-	configChangeSourceFile   = "file"
-	configChangeSourceSet    = "set"
-	configChangeSourceCommit = "commit"
+	callerConfigNew           = "config.New"
+	callerConfigLoad          = "config.Load"
+	callerConfigLoadFile      = "config.LoadFile"
+	callerConfigGet           = "config.Get"
+	callerConfigSave          = "config.Save"
+	unsupportedConfigFileType = "unsupported config file type"
+	configChangeSourceFile    = "file"
+	configChangeSourceSet     = "set"
+	configChangeSourceCommit  = "commit"
 )
 
 // ConfigChanged is broadcast on every Set() and Commit() call so other services
@@ -355,17 +358,17 @@ func (c *Config) Get(key string, out any) core.Result {
 
 	if key == "" {
 		if err := c.full.Unmarshal(out); err != nil {
-			return core.Fail(coreerr.E("config.Get", "failed to unmarshal full config", err))
+			return core.Fail(coreerr.E(callerConfigGet, "failed to unmarshal full config", err))
 		}
 		return core.Ok(nil)
 	}
 
 	if !c.full.IsSet(key) {
-		return core.Fail(coreerr.E("config.Get", core.Sprintf("key not found: %s", key), nil))
+		return core.Fail(coreerr.E(callerConfigGet, core.Sprintf("key not found: %s", key), nil))
 	}
 
 	if err := c.full.UnmarshalKey(key, out); err != nil {
-		return core.Fail(coreerr.E("config.Get", core.Sprintf("failed to unmarshal key: %s", key), err))
+		return core.Fail(coreerr.E(callerConfigGet, core.Sprintf("failed to unmarshal key: %s", key), err))
 	}
 	return core.Ok(nil)
 }
@@ -626,12 +629,12 @@ func Load(m coreio.Medium, path string) core.Result {
 	ext := core.Lower(core.PathExt(path))
 	switch ext {
 	case "", ".yaml", ".yml":
-		// These paths are safe to treat as YAML sources.
+	// These paths are safe to treat as YAML sources.
 	case ".env":
 		// dotenv sources are also supported by the RFC contract.
 	default:
 		if core.PathBase(path) != ".env" {
-			return core.Fail(coreerr.E(callerConfigLoad, "unsupported config file type: "+path, nil))
+			return core.Fail(coreerr.E(callerConfigLoad, unsupportedConfigFileType+": "+path, nil))
 		}
 	}
 
@@ -664,7 +667,7 @@ func Save(m coreio.Medium, path string, data map[string]any) core.Result {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML destinations.
 	default:
-		return core.Fail(coreerr.E("config.Save", "unsupported config file type: "+path, nil))
+		return core.Fail(coreerr.E(callerConfigSave, unsupportedConfigFileType+": "+path, nil))
 	}
 
 	payload := make(map[string]any, len(data)+1)
@@ -676,16 +679,16 @@ func Save(m coreio.Medium, path string, data map[string]any) core.Result {
 
 	out, err := yaml.Marshal(payload)
 	if err != nil {
-		return core.Fail(coreerr.E("config.Save", "failed to marshal config", err))
+		return core.Fail(coreerr.E(callerConfigSave, "failed to marshal config", err))
 	}
 
 	dir := core.PathDir(path)
 	if err := m.EnsureDir(dir); err != nil {
-		return core.Fail(coreerr.E("config.Save", "failed to create config directory: "+dir, err))
+		return core.Fail(coreerr.E(callerConfigSave, "failed to create config directory: "+dir, err))
 	}
 
 	if err := m.WriteMode(path, string(out), 0600); err != nil {
-		return core.Fail(coreerr.E("config.Save", "failed to write config file: "+path, err))
+		return core.Fail(coreerr.E(callerConfigSave, "failed to write config file: "+path, err))
 	}
 
 	return core.Ok(nil)

@@ -5,6 +5,11 @@ import (
 	coreio "dappco.re/go/io"
 )
 
+const (
+	discoverAppNameKey   = "app.name"
+	discoverDevEditorKey = "dev.editor"
+)
+
 func TestDiscover_DiscoverFrom_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	repo := core.Path("repo")
@@ -14,20 +19,20 @@ func TestDiscover_DiscoverFrom_Good(t *core.T) {
 	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
 	core.AssertNoError(t, m.EnsureDir(sub))
 
-	core.AssertNoError(t, m.Write(core.Path(repo, ".core", "config.yaml"), "dev:\n  editor: vim\napp:\n  name: repo\n"))
-	core.AssertNoError(t, m.Write(core.Path(sub, ".core", "config.yaml"), "app:\n  name: service\n"))
+	core.AssertNoError(t, m.Write(core.Path(repo, ".core", FileConfig), "dev:\n  editor: vim\napp:\n  name: repo\n"))
+	core.AssertNoError(t, m.Write(core.Path(sub, ".core", FileConfig), "app:\n  name: service\n"))
 
-	cfg, err := configResult(DiscoverFrom(sub, WithMedium(m), WithPath(core.Path(sub, ".core", "config.yaml"))))
+	cfg, err := configResult(DiscoverFrom(sub, WithMedium(m), WithPath(core.Path(sub, ".core", FileConfig))))
 	core.AssertNoError(t, err)
 
 	// Closest (service) wins on app.name.
 	var name string
-	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
+	core.AssertNoError(t, resultError(cfg.Get(discoverAppNameKey, &name)))
 	core.AssertEqual(t, "service", name)
 
 	// Parent fills the gap on dev.editor.
 	var editor string
-	core.AssertNoError(t, resultError(cfg.Get("dev.editor", &editor)))
+	core.AssertNoError(t, resultError(cfg.Get(discoverDevEditorKey, &editor)))
 	core.AssertEqual(t, "vim", editor)
 }
 
@@ -36,7 +41,7 @@ func TestDiscover_DiscoverFrom_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
 	root := core.Path("bad-repo")
 	core.AssertNoError(t, m.EnsureDir(core.Path(root, ".core")))
-	core.AssertNoError(t, m.Write(core.Path(root, ".core", "config.yaml"), "invalid: [yaml"))
+	core.AssertNoError(t, m.Write(core.Path(root, ".core", FileConfig), "invalid: [yaml"))
 
 	_, err := configResult(DiscoverFrom(root, WithMedium(m)))
 	core.AssertError(t, err)
@@ -46,7 +51,7 @@ func TestDiscover_DiscoverFrom_Ugly(t *core.T) {
 	// Empty start directory — uses filesystem root walk, should still return a
 	// usable (but empty) config rather than panicking.
 	m := coreio.NewMockMedium()
-	cfg, err := configResult(DiscoverFrom("/nonexistent/path", WithMedium(m), WithPath("/nonexistent/path/config.yaml")))
+	cfg, err := configResult(DiscoverFrom("/nonexistent/path", WithMedium(m), WithPath(core.Path("/nonexistent/path", FileConfig))))
 	core.AssertNoError(t, err)
 	core.AssertNotNil(t, cfg)
 }
@@ -110,7 +115,7 @@ func TestDiscover_DiscoverFrom_EnvOverridesDiscovered_Good(t *core.T) {
 
 	core.AssertNoError(t, m.EnsureDir(core.Path(root, ".core")))
 	core.AssertNoError(t, m.Write(
-		core.Path(root, ".core", "config.yaml"),
+		core.Path(root, ".core", FileConfig),
 		"app:\n  name: fromfile\n",
 	))
 
@@ -118,7 +123,7 @@ func TestDiscover_DiscoverFrom_EnvOverridesDiscovered_Good(t *core.T) {
 	core.AssertNoError(t, err)
 
 	var name string
-	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
+	core.AssertNoError(t, resultError(cfg.Get(discoverAppNameKey, &name)))
 	core.AssertEqual(t, "env-wins", name)
 }
 
@@ -129,7 +134,7 @@ func TestDiscover_DiscoverFrom_MergeFillsGaps_Good(t *core.T) {
 	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
 	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
 	core.AssertNoError(t, m.Write(
-		core.Path(repo, ".core", "config.yaml"),
+		core.Path(repo, ".core", FileConfig),
 		"app:\n  name: project\n",
 	))
 
@@ -137,7 +142,7 @@ func TestDiscover_DiscoverFrom_MergeFillsGaps_Good(t *core.T) {
 	core.AssertNoError(t, err)
 
 	var name string
-	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
+	core.AssertNoError(t, resultError(cfg.Get(discoverAppNameKey, &name)))
 	core.AssertEqual(t, "project", name)
 }
 
@@ -150,7 +155,7 @@ func TestDiscover_DiscoverFrom_CommitDoesNotLeakInherited_Good(t *core.T) {
 	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".core")))
 	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
 	core.AssertNoError(t, m.Write(
-		core.Path(repo, ".core", "config.yaml"),
+		core.Path(repo, ".core", FileConfig),
 		"secret:\n  token: GLOBAL_ONLY\n",
 	))
 
@@ -177,13 +182,13 @@ func TestDiscover_DiscoverFrom_GlobalFallback_Good(t *core.T) {
 
 	core.AssertNoError(t, m.EnsureDir(core.Path(repo, ".git")))
 	core.AssertNoError(t, m.EnsureDir(core.Path(home, ".core")))
-	core.AssertNoError(t, m.Write(core.Path(home, ".core", "config.yaml"), "app:\n  name: global\n"))
+	core.AssertNoError(t, m.Write(core.Path(home, ".core", FileConfig), "app:\n  name: global\n"))
 
 	cfg, err := configResult(DiscoverFrom(repo, WithMedium(m)))
 	core.AssertNoError(t, err)
 
 	var name string
-	core.AssertNoError(t, resultError(cfg.Get("app.name", &name)))
+	core.AssertNoError(t, resultError(cfg.Get(discoverAppNameKey, &name)))
 	core.AssertEqual(t, "global", name)
 }
 
@@ -199,7 +204,7 @@ func TestDiscover_Discover_Good(t *core.T) {
 	cfg, err := configResult(Discover())
 	core.RequireNoError(t, err)
 	var got string
-	core.AssertNoError(t, resultError(cfg.Get("app.name", &got)))
+	core.AssertNoError(t, resultError(cfg.Get(discoverAppNameKey, &got)))
 	core.AssertEqual(t, "discovered", got)
 }
 

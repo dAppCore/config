@@ -666,16 +666,12 @@ func (m *BuildManifest) UnmarshalYAML(value *yaml.Node) core.Result {
 	}
 
 	targetsResult := buildTargetsFromYAML(raw.Targets)
-	if !targetsResult.OK {
-		return targetsResult
-	}
 	buildLDFlagsResult := buildLDFlagsFromYAML(raw.Build.LDFlags)
-	if !buildLDFlagsResult.OK {
-		return buildLDFlagsResult
-	}
 	legacyLDFlagsResult := buildLDFlagsFromYAML(raw.LDFlags)
-	if !legacyLDFlagsResult.OK {
-		return legacyLDFlagsResult
+	for _, result := range []core.Result{targetsResult, buildLDFlagsResult, legacyLDFlagsResult} {
+		if !result.OK {
+			return result
+		}
 	}
 
 	m.Version = raw.Version
