@@ -18,8 +18,8 @@ require (
 
 require (
 	dappco.re/go/core v0.8.0-alpha.1 // indirect
-	dappco.re/go/io v0.8.0-alpha.1
-	dappco.re/go/log v0.8.0-alpha.1
+	dappco.re/go/io v0.9.0
+	dappco.re/go/log v0.9.0
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
