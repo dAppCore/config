@@ -1,4 +1,20 @@
+<!-- SPDX-License-Identifier: EUPL-1.2 -->
+
 # config
+
+> Config primitives — schemas, conclave, env, watch, resolve, workspace
+
+[![CI](https://github.com/dappcore/config/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/dappcore/config/actions/workflows/ci.yml)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=alert_status)](https://sonarcloud.io/dashboard?id=dappcore_config)
+[![Coverage](https://codecov.io/gh/dappcore/config/branch/dev/graph/badge.svg)](https://codecov.io/gh/dappcore/config)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=security_rating)](https://sonarcloud.io/dashboard?id=dappcore_config)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=dappcore_config)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=dappcore_config)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=code_smells)](https://sonarcloud.io/dashboard?id=dappcore_config)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=ncloc)](https://sonarcloud.io/dashboard?id=dappcore_config)
+[![Go Reference](https://pkg.go.dev/badge/dappco.re/go/config.svg)](https://pkg.go.dev/dappco.re/go/config)
+[![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](https://eupl.eu/1.2/en/)
+
 
 `dappco.re/go/config` is the Core configuration module. It gives Core services
 and command-line tools a single way to resolve configuration from defaults,
