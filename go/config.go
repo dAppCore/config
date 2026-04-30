@@ -17,7 +17,6 @@ import (
 
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
-	coreerr "dappco.re/go/log"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -206,7 +205,7 @@ func newConfig(loadFromPath bool, opts ...Option) core.Result {
 	if c.path == "" {
 		home := core.Env("DIR_HOME")
 		if home == "" {
-			return core.Fail(coreerr.E(callerConfigNew, "failed to determine home directory", nil))
+			return core.Fail(core.E(callerConfigNew, "failed to determine home directory", nil))
 		}
 		c.path = core.Path(home, ".core", "config.yaml")
 	}
@@ -216,12 +215,12 @@ func newConfig(loadFromPath bool, opts ...Option) core.Result {
 	// Load existing config file if it exists.
 	if loadFromPath && c.medium.Exists(c.path) {
 		if r := c.loadFile(c.medium, c.path, false); !r.OK {
-			return core.Fail(coreerr.E(callerConfigNew, "failed to load config file", resultCause(r).(error)))
+			return core.Fail(core.E(callerConfigNew, "failed to load config file", resultCause(r).(error)))
 		}
 	}
 	if loadFromPath {
 		if r := c.loadStoreState(); !r.OK {
-			return core.Fail(coreerr.E(callerConfigNew, "failed to load config store state", resultCause(r).(error)))
+			return core.Fail(core.E(callerConfigNew, "failed to load config store state", resultCause(r).(error)))
 		}
 	}
 
@@ -247,7 +246,7 @@ func configTypeForPath(path string) core.Result {
 	case ".env":
 		return core.Ok("env")
 	default:
-		return core.Fail(coreerr.E("config.configTypeForPath", "unsupported config file type: "+path, nil))
+		return core.Fail(core.E("config.configTypeForPath", "unsupported config file type: "+path, nil))
 	}
 }
 
@@ -289,19 +288,19 @@ func (c *Config) loadFile(m coreio.Medium, path string, notify bool) core.Result
 func readConfigSettings(m coreio.Medium, path string) core.Result {
 	configTypeResult := configTypeForPath(path)
 	if !configTypeResult.OK {
-		return core.Fail(coreerr.E(callerConfigLoadFile, "failed to determine config file type: "+path, resultCause(configTypeResult).(error)))
+		return core.Fail(core.E(callerConfigLoadFile, "failed to determine config file type: "+path, resultCause(configTypeResult).(error)))
 	}
 	configType := configTypeResult.Value.(string)
 
 	content, err := m.Read(path)
 	if err != nil {
-		return core.Fail(coreerr.E(callerConfigLoadFile, "failed to read config file: "+path, err))
+		return core.Fail(core.E(callerConfigLoadFile, "failed to read config file: "+path, err))
 	}
 
 	parsed := viper.New()
 	parsed.SetConfigType(configType)
 	if err := parsed.MergeConfig(core.NewReader(content)); err != nil {
-		return core.Fail(coreerr.E(callerConfigLoadFile, core.Sprintf("failed to parse config file: %s", path), err))
+		return core.Fail(core.E(callerConfigLoadFile, core.Sprintf("failed to parse config file: %s", path), err))
 	}
 
 	settings := parsed.AllSettings()
@@ -313,10 +312,10 @@ func readConfigSettings(m coreio.Medium, path string) core.Result {
 
 func (c *Config) mergeConfigSettingsLocked(settings map[string]any) core.Result {
 	if err := c.file.MergeConfigMap(settings); err != nil {
-		return core.Fail(coreerr.E(callerConfigLoadFile, "failed to merge config into file settings", err))
+		return core.Fail(core.E(callerConfigLoadFile, "failed to merge config into file settings", err))
 	}
 	if err := c.full.MergeConfigMap(settings); err != nil {
-		return core.Fail(coreerr.E(callerConfigLoadFile, "failed to merge config into full settings", err))
+		return core.Fail(core.E(callerConfigLoadFile, "failed to merge config into full settings", err))
 	}
 	return core.Ok(nil)
 }
@@ -358,17 +357,17 @@ func (c *Config) Get(key string, out any) core.Result {
 
 	if key == "" {
 		if err := c.full.Unmarshal(out); err != nil {
-			return core.Fail(coreerr.E(callerConfigGet, "failed to unmarshal full config", err))
+			return core.Fail(core.E(callerConfigGet, "failed to unmarshal full config", err))
 		}
 		return core.Ok(nil)
 	}
 
 	if !c.full.IsSet(key) {
-		return core.Fail(coreerr.E(callerConfigGet, core.Sprintf("key not found: %s", key), nil))
+		return core.Fail(core.E(callerConfigGet, core.Sprintf("key not found: %s", key), nil))
 	}
 
 	if err := c.full.UnmarshalKey(key, out); err != nil {
-		return core.Fail(coreerr.E(callerConfigGet, core.Sprintf("failed to unmarshal key: %s", key), err))
+		return core.Fail(core.E(callerConfigGet, core.Sprintf("failed to unmarshal key: %s", key), err))
 	}
 	return core.Ok(nil)
 }
@@ -426,7 +425,7 @@ func (c *Config) Commit() core.Result {
 	c.mu.Unlock()
 
 	if r := Save(medium, path, settings); !r.OK {
-		return core.Fail(coreerr.E("config.Commit", "failed to save config", resultCause(r).(error)))
+		return core.Fail(core.E("config.Commit", "failed to save config", resultCause(r).(error)))
 	}
 	if attached != nil {
 		_ = attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: configChangeSourceCommit})
@@ -441,7 +440,7 @@ func (c *Config) Commit() core.Result {
 // (so CORE_CONFIG_DEV_EDITOR shows up as "dev.editor").
 //
 //	for key, value := range cfg.All() {
-//	    fmt.Println(key, value)   // "dev.editor" "vim"
+//	    core.Println(key, value)   // "dev.editor" "vim"
 //	}
 func (c *Config) All() iter.Seq2[string, any] {
 	c.mu.RLock()
@@ -607,7 +606,7 @@ func joinConfigPath(prefix, key string) string {
 //
 //	cfg.OnChange(func(key string, value any) {
 //	    if key == "dev.editor" {
-//	        fmt.Println("editor changed to", value)
+//	        core.Println("editor changed to", value)
 //	    }
 //	})
 func (c *Config) OnChange(fn func(key string, value any)) {
@@ -634,13 +633,13 @@ func Load(m coreio.Medium, path string) core.Result {
 		// dotenv sources are also supported by the RFC contract.
 	default:
 		if core.PathBase(path) != ".env" {
-			return core.Fail(coreerr.E(callerConfigLoad, unsupportedConfigFileType+": "+path, nil))
+			return core.Fail(core.E(callerConfigLoad, unsupportedConfigFileType+": "+path, nil))
 		}
 	}
 
 	content, err := m.Read(path)
 	if err != nil {
-		return core.Fail(coreerr.E(callerConfigLoad, "failed to read config file: "+path, err))
+		return core.Fail(core.E(callerConfigLoad, "failed to read config file: "+path, err))
 	}
 
 	v := viper.New()
@@ -651,7 +650,7 @@ func Load(m coreio.Medium, path string) core.Result {
 		v.SetConfigType("yaml")
 	}
 	if err := v.ReadConfig(core.NewReader(content)); err != nil {
-		return core.Fail(coreerr.E(callerConfigLoad, "failed to parse config file: "+path, err))
+		return core.Fail(core.E(callerConfigLoad, "failed to parse config file: "+path, err))
 	}
 
 	return core.Ok(v.AllSettings())
@@ -667,7 +666,7 @@ func Save(m coreio.Medium, path string, data map[string]any) core.Result {
 	case "", ".yaml", ".yml":
 		// These paths are safe to treat as YAML destinations.
 	default:
-		return core.Fail(coreerr.E(callerConfigSave, unsupportedConfigFileType+": "+path, nil))
+		return core.Fail(core.E(callerConfigSave, unsupportedConfigFileType+": "+path, nil))
 	}
 
 	payload := make(map[string]any, len(data)+1)
@@ -679,16 +678,16 @@ func Save(m coreio.Medium, path string, data map[string]any) core.Result {
 
 	out, err := yaml.Marshal(payload)
 	if err != nil {
-		return core.Fail(coreerr.E(callerConfigSave, "failed to marshal config", err))
+		return core.Fail(core.E(callerConfigSave, "failed to marshal config", err))
 	}
 
 	dir := core.PathDir(path)
 	if err := m.EnsureDir(dir); err != nil {
-		return core.Fail(coreerr.E(callerConfigSave, "failed to create config directory: "+dir, err))
+		return core.Fail(core.E(callerConfigSave, "failed to create config directory: "+dir, err))
 	}
 
 	if err := m.WriteMode(path, string(out), 0600); err != nil {
-		return core.Fail(coreerr.E(callerConfigSave, "failed to write config file: "+path, err))
+		return core.Fail(core.E(callerConfigSave, "failed to write config file: "+path, err))
 	}
 
 	return core.Ok(nil)
@@ -711,7 +710,7 @@ func (c *Config) loadStoreState() core.Result {
 
 	entries, err := reader.GetAll("config")
 	if err != nil {
-		return core.Fail(coreerr.E("config.loadStoreState", "failed to read config entries from store", err))
+		return core.Fail(core.E("config.loadStoreState", "failed to read config entries from store", err))
 	}
 
 	for key, raw := range entries {

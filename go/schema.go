@@ -4,7 +4,6 @@ import (
 	"embed"
 
 	core "dappco.re/go"
-	coreerr "dappco.re/go/log"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -44,12 +43,12 @@ func validateSchema(path string, raw map[string]any) core.Result {
 
 	schemaBody, err := schemaFS.ReadFile(schemaPath)
 	if err != nil {
-		return core.Fail(coreerr.E(callerValidateSchema, "failed to read embedded schema: "+schemaPath, err))
+		return core.Fail(core.E(callerValidateSchema, "failed to read embedded schema: "+schemaPath, err))
 	}
 
 	documentResult := core.JSONMarshal(raw)
 	if !documentResult.OK {
-		return core.Fail(coreerr.E(callerValidateSchema, "failed to encode config for schema validation: "+path, resultCause(documentResult).(error)))
+		return core.Fail(core.E(callerValidateSchema, "failed to encode config for schema validation: "+path, resultCause(documentResult).(error)))
 	}
 	documentBody := documentResult.Value.([]byte)
 
@@ -58,7 +57,7 @@ func validateSchema(path string, raw map[string]any) core.Result {
 		gojsonschema.NewBytesLoader(documentBody),
 	)
 	if err != nil {
-		return core.Fail(coreerr.E(callerValidateSchema, "schema validation failed: "+path, err))
+		return core.Fail(core.E(callerValidateSchema, "schema validation failed: "+path, err))
 	}
 	if result.Valid() {
 		return core.Ok(nil)
@@ -68,7 +67,7 @@ func validateSchema(path string, raw map[string]any) core.Result {
 	for _, issue := range result.Errors() {
 		problems = append(problems, issue.String())
 	}
-	return core.Fail(coreerr.E(
+	return core.Fail(core.E(
 		callerValidateSchema,
 		"schema validation failed: "+path+": "+core.Join("; ", problems...),
 		nil,

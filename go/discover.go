@@ -3,7 +3,6 @@ package config
 import (
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
-	coreerr "dappco.re/go/log"
 )
 
 const callerDiscoverFrom = "config.DiscoverFrom"
@@ -18,7 +17,7 @@ const callerDiscoverFrom = "config.DiscoverFrom"
 func Discover(opts ...Option) core.Result {
 	r := core.Getwd()
 	if !r.OK {
-		return core.Fail(coreerr.E("config.Discover", "failed to read working directory", resultCause(r).(error)))
+		return core.Fail(core.E("config.Discover", "failed to read working directory", resultCause(r).(error)))
 	}
 	return DiscoverFrom(r.Value.(string), opts...)
 }
@@ -30,7 +29,7 @@ func Discover(opts ...Option) core.Result {
 func DiscoverFrom(start string, opts ...Option) core.Result {
 	baseResult := newConfig(false, opts...)
 	if !baseResult.OK {
-		return core.Fail(coreerr.E(callerDiscoverFrom, "failed to initialise base config", resultCause(baseResult).(error)))
+		return core.Fail(core.E(callerDiscoverFrom, "failed to initialise base config", resultCause(baseResult).(error)))
 	}
 	base := baseResult.Value.(*Config)
 	medium := base.medium
@@ -49,13 +48,13 @@ func DiscoverFrom(start string, opts ...Option) core.Result {
 		}
 		layerResult := New(layerOpts...)
 		if !layerResult.OK {
-			return core.Fail(coreerr.E(callerDiscoverFrom, "failed to load discovered config: "+p, resultCause(layerResult).(error)))
+			return core.Fail(core.E(callerDiscoverFrom, "failed to load discovered config: "+p, resultCause(layerResult).(error)))
 		}
 		layer := layerResult.Value.(*Config)
 		base.MergeFrom(layer)
 	}
 	if r := base.loadStoreState(); !r.OK {
-		return core.Fail(coreerr.E(callerDiscoverFrom, "failed to load config store state", resultCause(r).(error)))
+		return core.Fail(core.E(callerDiscoverFrom, "failed to load config store state", resultCause(r).(error)))
 	}
 
 	return core.Ok(base)

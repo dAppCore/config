@@ -3,7 +3,6 @@ package config
 import (
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
-	coreerr "dappco.re/go/log"
 )
 
 // FindProjectManifest searches upward from start for the nearest project-local
@@ -161,7 +160,7 @@ func userCorePath(parts ...string) string {
 func ResolveConfigManifest(medium coreio.Medium, start string) core.Result {
 	path := FindManifest(medium, start, FileConfig)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveConfigManifest", "no config manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveConfigManifest", "no config manifest could be detected", nil))
 	}
 	return New(WithMedium(medium), WithPath(path))
 }
@@ -181,7 +180,7 @@ func FindBuildManifest(medium coreio.Medium, start string) string {
 func ResolveBuildManifest(medium coreio.Medium, start string) core.Result {
 	path := FindBuildManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveBuildManifest", "no build manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveBuildManifest", "no build manifest could be detected", nil))
 	}
 
 	var build BuildManifest
@@ -221,7 +220,7 @@ func ResolveTestManifest(medium coreio.Medium, start string) core.Result {
 		})
 	}
 
-	return core.Fail(coreerr.E(callerResolveTestManifest, "no test command could be detected", nil))
+	return core.Fail(core.E(callerResolveTestManifest, "no test command could be detected", nil))
 }
 
 // FindReleaseManifest returns the nearest project-local .core/release.yaml.
@@ -233,7 +232,7 @@ func FindReleaseManifest(medium coreio.Medium, start string) string {
 func ResolveReleaseManifest(medium coreio.Medium, start string) core.Result {
 	path := FindReleaseManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveReleaseManifest", "no release manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveReleaseManifest", "no release manifest could be detected", nil))
 	}
 
 	var release ReleaseManifest
@@ -252,7 +251,7 @@ func FindRunManifest(medium coreio.Medium, start string) string {
 func ResolveRunManifest(medium coreio.Medium, start string) core.Result {
 	path := FindRunManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveRunManifest", "no run manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveRunManifest", "no run manifest could be detected", nil))
 	}
 
 	var run RunManifest
@@ -271,7 +270,7 @@ func FindViewManifest(medium coreio.Medium, start string) string {
 func ResolveViewManifest(medium coreio.Medium, start string) core.Result {
 	path := FindViewManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveViewManifest", "no view manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveViewManifest", "no view manifest could be detected", nil))
 	}
 
 	var view ViewManifest
@@ -290,7 +289,7 @@ func FindPackageManifest(medium coreio.Medium, start string) string {
 func ResolvePackageManifest(medium coreio.Medium, start string) core.Result {
 	path := FindPackageManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolvePackageManifest", "no package manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolvePackageManifest", "no package manifest could be detected", nil))
 	}
 
 	var pkg PackageManifest
@@ -313,7 +312,7 @@ func FindAgentManifest(medium coreio.Medium) string {
 func ResolveAgentManifest(medium coreio.Medium) core.Result {
 	path := FindAgentManifest(medium)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveAgentManifest", "no agent manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveAgentManifest", "no agent manifest could be detected", nil))
 	}
 
 	var agent AgentManifest
@@ -336,7 +335,7 @@ func FindZoneManifest(medium coreio.Medium) string {
 func ResolveZoneManifest(medium coreio.Medium) core.Result {
 	path := FindZoneManifest(medium)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveZoneManifest", "no zone manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveZoneManifest", "no zone manifest could be detected", nil))
 	}
 
 	var zone ZoneManifest
@@ -355,7 +354,7 @@ func FindWorkspaceManifest(medium coreio.Medium, start string) string {
 func ResolveWorkspaceManifest(medium coreio.Medium, start string) core.Result {
 	path := FindWorkspaceManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveWorkspaceManifest", "no workspace manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveWorkspaceManifest", "no workspace manifest could be detected", nil))
 	}
 
 	var ws WorkspaceManifest
@@ -374,7 +373,7 @@ func FindIDEManifest(medium coreio.Medium, start string) string {
 func ResolveIDEManifest(medium coreio.Medium, start string) core.Result {
 	path := FindIDEManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveIDEManifest", "no ide manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveIDEManifest", "no ide manifest could be detected", nil))
 	}
 
 	var ide IDEManifest
@@ -417,7 +416,7 @@ func FindLinuxKitManifest(medium coreio.Medium, start string) string {
 func ResolveLinuxKitManifest(medium coreio.Medium, start string) core.Result {
 	path := FindLinuxKitManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveLinuxKitManifest", "no linuxkit manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveLinuxKitManifest", "no linuxkit manifest could be detected", nil))
 	}
 
 	manifestResult := Load(medium, path)
@@ -551,7 +550,7 @@ func FindWorkspaceRegistryManifest(medium coreio.Medium, start string) string {
 func ResolveReposManifest(medium coreio.Medium, start string) core.Result {
 	path := FindReposManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolveReposManifest", "no repos manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolveReposManifest", "no repos manifest could be detected", nil))
 	}
 
 	var repos ReposManifest
@@ -577,7 +576,7 @@ func FindPHPManifest(medium coreio.Medium, start string) string {
 func ResolvePHPManifest(medium coreio.Medium, start string) core.Result {
 	path := FindPHPManifest(medium, start)
 	if path == "" {
-		return core.Fail(coreerr.E("config.ResolvePHPManifest", "no php manifest could be detected", nil))
+		return core.Fail(core.E("config.ResolvePHPManifest", "no php manifest could be detected", nil))
 	}
 
 	var php PHPManifest
