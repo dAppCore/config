@@ -335,14 +335,21 @@ func emitConfigChanges(callbacks []func(string, any), attached *core.Core, chang
 			fn(change.Key, change.Value)
 		}
 		if attached != nil {
-			_ = attached.ACTION(ConfigChanged{
+			reportConfigBroadcast(attached.ACTION(ConfigChanged{
 				Key:      change.Key,
 				Value:    change.Value,
 				Previous: change.Previous,
 				Source:   source,
-			})
+			}), source)
 		}
 	}
+}
+
+func reportConfigBroadcast(r core.Result, source string) {
+	if r.OK {
+		return
+	}
+	core.Warn("config change broadcast failed", "source", source, "err", r.Error())
 }
 
 // Get retrieves a configuration value by dot-notation key and stores it in out.
@@ -405,7 +412,7 @@ func (c *Config) Set(key string, v any) core.Result {
 		fn(key, v)
 	}
 	if attached != nil {
-		_ = attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: configChangeSourceSet})
+		reportConfigBroadcast(attached.ACTION(ConfigChanged{Key: key, Value: v, Previous: previous, Source: configChangeSourceSet}), configChangeSourceSet)
 	}
 	persistToStore(store, key, v)
 	return core.Ok(nil)
@@ -428,7 +435,7 @@ func (c *Config) Commit() core.Result {
 		return core.Fail(core.E("config.Commit", "failed to save config", resultCause(r).(error)))
 	}
 	if attached != nil {
-		_ = attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: configChangeSourceCommit})
+		reportConfigBroadcast(attached.ACTION(ConfigChanged{Key: "", Value: nil, Source: configChangeSourceCommit}), configChangeSourceCommit)
 	}
 	return core.Ok(nil)
 }

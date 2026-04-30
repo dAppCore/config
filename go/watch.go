@@ -117,7 +117,9 @@ func (c *Config) StopWatch() {
 	if !fw.stopped {
 		fw.stopped = true
 		close(fw.stop)
-		_ = fw.w.Close()
+		if r := fw.w.Close(); !r.OK {
+			core.Warn("config watcher close failed", "err", r.Error())
+		}
 	}
 	fw.mu.Unlock()
 }
@@ -149,7 +151,9 @@ func (c *Config) watchLoop(fw *fileWatcher) {
 				// Best-effort for atomic-save editors: the replacement file may
 				// not exist during the swap. There is no automatic retry loop;
 				// another fsnotify event is required to attempt Add again.
-				_ = fw.w.Add(path)
+				if r := fw.w.Add(path); !r.OK {
+					core.Warn("config watcher re-add failed", "file", path, "err", r.Error())
+				}
 			}
 			requestReload(reloadRequests)
 		case _, ok := <-fw.w.Errors():
@@ -229,12 +233,12 @@ func (c *Config) reloadAndNotify() {
 			fn(change.Key, change.Value)
 		}
 		if attached != nil {
-			_ = attached.ACTION(ConfigChanged{
+			reportConfigBroadcast(attached.ACTION(ConfigChanged{
 				Key:      change.Key,
 				Value:    change.Value,
 				Previous: change.Previous,
 				Source:   configChangeSourceFile,
-			})
+			}), configChangeSourceFile)
 		}
 	}
 }
