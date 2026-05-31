@@ -3,7 +3,7 @@ module dappco.re/go/config
 go 1.26.0
 
 require (
-	dappco.re/go v0.9.0
+	dappco.re/go v0.10.3
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/spf13/viper v1.21.0
 	github.com/xeipuuv/gojsonschema v1.2.0
