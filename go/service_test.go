@@ -843,3 +843,77 @@ func TestService_Service_Config_Ugly(t *core.T) {
 	svc.config = replacement
 	core.AssertSame(t, replacement, svc.Config())
 }
+
+// directWriterService implements ConfigStoreWriter itself so discoverStoreWriter
+// returns it via the direct type-assertion fast path.
+type directWriterService struct{}
+
+func (directWriterService) Set(string, string, string) error { return nil }
+
+// fieldWriterService exposes a ConfigStoreWriter via an exported Store field,
+// exercising discoverStoreWriter's reflection path.
+type fieldWriterService struct {
+	Store ConfigStoreWriter
+}
+
+// noStoreFieldService is a struct with no Store field — reflection finds nothing.
+type noStoreFieldService struct {
+	Other int
+}
+
+// wrongStoreFieldService has a Store field that is not a ConfigStoreWriter.
+type wrongStoreFieldService struct {
+	Store int
+}
+
+// TestService_discoverStoreWriter_Good asserts a service that directly
+// implements ConfigStoreWriter is returned via the fast path.
+func TestService_discoverStoreWriter_Good(t *core.T) {
+	c := core.New()
+	requireResultOK(t, c.RegisterService("store", directWriterService{}))
+	got := discoverStoreWriter(c)
+	core.AssertNotNil(t, got)
+}
+
+// TestService_discoverStoreWriter_FieldPath asserts the reflection path returns
+// a ConfigStoreWriter held on an exported Store field of a struct service.
+func TestService_discoverStoreWriter_FieldPath(t *core.T) {
+	c := core.New()
+	requireResultOK(t, c.RegisterService("store", &fieldWriterService{Store: directWriterService{}}))
+	got := discoverStoreWriter(c)
+	core.AssertNotNil(t, got)
+}
+
+// TestService_discoverStoreWriter_NilStoreField asserts a nil Store field yields
+// no writer rather than a non-nil interface wrapping nil.
+func TestService_discoverStoreWriter_NilStoreField(t *core.T) {
+	c := core.New()
+	requireResultOK(t, c.RegisterService("store", &fieldWriterService{Store: nil}))
+	core.AssertNil(t, discoverStoreWriter(c))
+}
+
+// TestService_discoverStoreWriter_Bad walks every dead end: nil core, no store
+// service, a struct without a Store field, and a wrong-typed Store field.
+func TestService_discoverStoreWriter_Bad(t *core.T) {
+	core.AssertNil(t, discoverStoreWriter(nil))
+
+	core.AssertNil(t, discoverStoreWriter(core.New()))
+
+	noField := core.New()
+	requireResultOK(t, noField.RegisterService("store", &noStoreFieldService{Other: 1}))
+	core.AssertNil(t, discoverStoreWriter(noField))
+
+	wrongField := core.New()
+	requireResultOK(t, wrongField.RegisterService("store", &wrongStoreFieldService{Store: 1}))
+	core.AssertNil(t, discoverStoreWriter(wrongField))
+}
+
+// TestService_discoverStoreWriter_Ugly asserts a non-struct, non-implementing
+// service value (here a bare string) returns no writer without panicking.
+func TestService_discoverStoreWriter_Ugly(t *core.T) {
+	c := core.New()
+	requireResultOK(t, c.RegisterService("store", "not-a-store"))
+	core.AssertNotPanics(t, func() {
+		core.AssertNil(t, discoverStoreWriter(c))
+	})
+}
