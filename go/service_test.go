@@ -917,3 +917,68 @@ func TestService_discoverStoreWriter_Ugly(t *core.T) {
 		core.AssertNil(t, discoverStoreWriter(c))
 	})
 }
+
+// TestService_configCommitOperation_Good asserts a commit operation against a
+// supported path persists the config.
+func TestService_configCommitOperation_Good(t *core.T) {
+	svc, m, path := axServiceFixture(t)
+	core.AssertNoError(t, resultError(svc.Config().Set(serviceTestDevEditorKey, "vim")))
+	core.AssertNoError(t, resultError(configCommitOperation(svc, svc.Config(), core.NewOptions())))
+	core.AssertTrue(t, m.Exists(path))
+}
+
+// TestService_configCommitOperation_Bad asserts the operation propagates the
+// underlying Commit failure (here an unsupported .json target).
+func TestService_configCommitOperation_Bad(t *core.T) {
+	cfg, err := configResult(New(WithMedium(coreio.NewMockMedium()), WithPath("/ax7/service/commit.json")))
+	core.RequireNoError(t, err)
+	core.AssertNoError(t, resultError(cfg.Set("key", "value")))
+
+	r := configCommitOperation(nil, cfg, core.NewOptions())
+	core.AssertFalse(t, r.OK)
+}
+
+// TestService_configLoadOperation_Good asserts the operation loads a file from
+// the path option (resolved inside .core/) into the live config.
+func TestService_configLoadOperation_Good(t *core.T) {
+	m := coreio.NewMockMedium()
+	m.Files[serviceTestConfigPath] = serviceTestConfigBody
+	m.Files["/tmp/svc/.core/override.yaml"] = serviceTestShellYAML
+
+	c := core.New()
+	svc := &Service{ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{Path: serviceTestConfigPath, Medium: m})}
+	core.RequireTrue(t, svc.OnStartup(context.Background()).OK)
+
+	r := configLoadOperation(svc, svc.Config(), core.NewOptions(core.Option{Key: optionKeyPath, Value: serviceTestOverridePath}))
+	core.AssertTrue(t, r.OK)
+
+	var shell string
+	core.AssertNoError(t, resultError(svc.Get(serviceTestDevShellKey, &shell)))
+	core.AssertEqual(t, "zsh", shell)
+}
+
+// TestService_configLoadOperation_Bad asserts a missing file surfaces as an
+// operation failure.
+func TestService_configLoadOperation_Bad(t *core.T) {
+	svc, _, _ := axServiceFixture(t)
+	r := configLoadOperation(svc, svc.Config(), core.NewOptions(core.Option{Key: optionKeyPath, Value: serviceTestOverridePath}))
+	core.AssertFalse(t, r.OK)
+}
+
+// TestService_validateServiceConfigPath_GoodBad asserts a supported extension
+// passes through and an unsupported one is rejected.
+func TestService_validateServiceConfigPath_GoodBad(t *core.T) {
+	core.AssertTrue(t, validateServiceConfigPath("/proj/.core/config.yaml").OK)
+	core.AssertFalse(t, validateServiceConfigPath("/proj/.core/config.txt").OK)
+}
+
+// TestService_resultCause_GoodBad asserts an error-valued Result returns its
+// error, while a non-error failed Result is wrapped into a fresh error.
+func TestService_resultCause_GoodBad(t *core.T) {
+	wrapped := core.NewError("boom")
+	core.AssertSame(t, wrapped, resultCause(core.Fail(wrapped)))
+
+	cause := resultCause(core.Result{Value: "not-an-error"})
+	_, ok := cause.(error)
+	core.AssertTrue(t, ok)
+}
