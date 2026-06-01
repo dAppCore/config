@@ -1601,3 +1601,27 @@ func TestResolve_FindPHPManifest_Ugly(t *core.T) {
 	got := FindPHPManifest(marked, fixture.child)
 	core.AssertEqual(t, "", got)
 }
+
+// TestResolve_normalizeUpwardStart_Good asserts a directory start is returned
+// unchanged while a file start collapses to its containing directory.
+func TestResolve_normalizeUpwardStart_Good(t *core.T) {
+	m := coreio.NewMockMedium()
+	m.Files["/proj/sub/config.yaml"] = "app:\n  name: core\n"
+
+	core.AssertEqual(t, "/proj/sub", normalizeUpwardStart(m, "/proj/sub/config.yaml"))
+	core.AssertEqual(t, "/proj/sub", normalizeUpwardStart(m, "/proj/sub"))
+}
+
+// TestResolve_normalizeUpwardStart_Bad asserts an empty start resolves to "."
+// (the current directory) so upward walks have a valid anchor.
+func TestResolve_normalizeUpwardStart_Bad(t *core.T) {
+	core.AssertEqual(t, ".", normalizeUpwardStart(coreio.NewMockMedium(), ""))
+}
+
+// TestResolve_normalizeUpwardStart_Ugly asserts a nil medium falls back to the
+// Local medium without panicking, and an unknown path is returned verbatim.
+func TestResolve_normalizeUpwardStart_Ugly(t *core.T) {
+	core.AssertNotPanics(t, func() {
+		core.AssertEqual(t, "/does/not/exist", normalizeUpwardStart(nil, "/does/not/exist"))
+	})
+}

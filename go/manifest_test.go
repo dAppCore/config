@@ -475,6 +475,31 @@ func TestManifest_BuildTarget_UnmarshalYAML_Ugly(t *core.T) {
 	core.AssertEqual(t, BuildTarget{}, target)
 }
 
+// TestManifest_manifestYAMLRoot_Good asserts a document node unwraps to its
+// first content node and a plain node is returned as-is.
+func TestManifest_manifestYAMLRoot_Good(t *core.T) {
+	inner := &yaml.Node{Kind: yaml.ScalarNode, Value: "leaf"}
+	doc := &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{inner}}
+	core.AssertSame(t, inner, manifestYAMLRoot(doc))
+	core.AssertSame(t, inner, manifestYAMLRoot(inner))
+}
+
+// TestManifest_manifestYAMLRoot_Alias asserts an alias node unwraps to its
+// anchored target.
+func TestManifest_manifestYAMLRoot_Alias(t *core.T) {
+	target := &yaml.Node{Kind: yaml.MappingNode}
+	alias := &yaml.Node{Kind: yaml.AliasNode, Alias: target}
+	core.AssertSame(t, target, manifestYAMLRoot(alias))
+}
+
+// TestManifest_manifestYAMLRoot_Ugly asserts a nil node yields a fresh empty
+// node rather than panicking.
+func TestManifest_manifestYAMLRoot_Ugly(t *core.T) {
+	got := manifestYAMLRoot(nil)
+	core.AssertNotNil(t, got)
+	core.AssertEqual(t, yaml.Kind(0), got.Kind)
+}
+
 func TestManifest_BuildManifestLDFlags_String_Good(t *core.T) {
 	flags := buildmanifestldflags{"-s", "-w"}
 	got := flags.String()

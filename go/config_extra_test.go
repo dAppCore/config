@@ -375,3 +375,45 @@ func TestConfig_decodeStoredConfigValue_Bad(t *core.T) {
 func TestConfig_decodeStoredConfigValue_Ugly(t *core.T) {
 	core.AssertEqual(t, "", decodeStoredConfigValue(""))
 }
+
+// TestConfig_flattenSettings_Good asserts nested string-keyed maps flatten to
+// dot-notation keys and slice leaves are preserved whole.
+func TestConfig_flattenSettings_Good(t *core.T) {
+	flat := flattenSettings(nil, map[string]any{
+		"app":     map[string]any{"name": "core", "port": 8080},
+		"dev":     map[string]any{"editor": "vim"},
+		"flags":   []string{"-trimpath"},
+		"targets": []any{"linux/amd64"},
+	})
+	core.AssertEqual(t, "core", flat["app.name"])
+	core.AssertEqual(t, 8080, flat["app.port"])
+	core.AssertEqual(t, "vim", flat["dev.editor"])
+	core.AssertEqual(t, []string{"-trimpath"}, flat["flags"])
+	core.AssertEqual(t, []any{"linux/amd64"}, flat["targets"])
+}
+
+// TestConfig_flattenSettings_AnyKeyMap asserts map[any]any nodes (non-string
+// keys, as some YAML decoders produce) flatten via fmt-stringified keys.
+func TestConfig_flattenSettings_AnyKeyMap(t *core.T) {
+	flat := flattenSettings(nil, map[string]any{
+		"section": map[any]any{1: "one", "two": 2},
+	})
+	core.AssertEqual(t, "one", flat["section.1"])
+	core.AssertEqual(t, 2, flat["section.two"])
+}
+
+// TestConfig_flattenSettings_Ugly asserts a top-level scalar/slice with an empty
+// prefix is dropped (no "" key) and a nil dst is allocated.
+func TestConfig_flattenSettings_Ugly(t *core.T) {
+	flat := flattenSettings(nil, map[string]any{})
+	core.AssertEmpty(t, flat)
+
+	// Top-level slices and scalars have no key prefix and so are not stored.
+	core.AssertNotPanics(t, func() {
+		dst := map[string]any{}
+		flattenInto(dst, "", []any{"x"})
+		flattenInto(dst, "", []string{"y"})
+		flattenInto(dst, "", "scalar")
+		core.AssertEmpty(t, dst)
+	})
+}
