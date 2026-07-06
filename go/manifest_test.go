@@ -475,6 +475,31 @@ func TestManifest_BuildTarget_UnmarshalYAML_Ugly(t *core.T) {
 	core.AssertEqual(t, BuildTarget{}, target)
 }
 
+// TestManifest_manifestYAMLRoot_Good asserts a document node unwraps to its
+// first content node and a plain node is returned as-is.
+func TestManifest_manifestYAMLRoot_Good(t *core.T) {
+	inner := &yaml.Node{Kind: yaml.ScalarNode, Value: "leaf"}
+	doc := &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{inner}}
+	core.AssertSame(t, inner, manifestYAMLRoot(doc))
+	core.AssertSame(t, inner, manifestYAMLRoot(inner))
+}
+
+// TestManifest_manifestYAMLRoot_Alias asserts an alias node unwraps to its
+// anchored target.
+func TestManifest_manifestYAMLRoot_Alias(t *core.T) {
+	target := &yaml.Node{Kind: yaml.MappingNode}
+	alias := &yaml.Node{Kind: yaml.AliasNode, Alias: target}
+	core.AssertSame(t, target, manifestYAMLRoot(alias))
+}
+
+// TestManifest_manifestYAMLRoot_Ugly asserts a nil node yields a fresh empty
+// node rather than panicking.
+func TestManifest_manifestYAMLRoot_Ugly(t *core.T) {
+	got := manifestYAMLRoot(nil)
+	core.AssertNotNil(t, got)
+	core.AssertEqual(t, yaml.Kind(0), got.Kind)
+}
+
 func TestManifest_BuildManifestLDFlags_String_Good(t *core.T) {
 	flags := buildmanifestldflags{"-s", "-w"}
 	got := flags.String()
@@ -1184,4 +1209,117 @@ func TestManifest_VerifyPackageManifest_Ugly(t *core.T) {
 	err := resultError(VerifyPackageManifest(&pkg))
 	core.AssertError(t, err)
 	core.AssertContains(t, err.Error(), manifestTestDecodePackageSignKeyFailed)
+}
+
+// TestManifest_buildTargetFromYAML_Good covers the two well-formed shapes:
+// the "os/arch" string shorthand and the string-keyed mapping form yaml.v3
+// produces for `- os: linux\n  arch: amd64`.
+func TestManifest_buildTargetFromYAML_Good(t *core.T) {
+	fromString := requireResultValue[BuildTarget](t, buildTargetFromYAML("linux/amd64"))
+	core.AssertEqual(t, "linux", fromString.OS)
+	core.AssertEqual(t, "amd64", fromString.Arch)
+
+	fromMap := requireResultValue[BuildTarget](t, buildTargetFromYAML(map[string]any{
+		manifestTargetOSKey: "darwin",
+		"arch":              "arm64",
+	}))
+	core.AssertEqual(t, "darwin", fromMap.OS)
+	core.AssertEqual(t, "arm64", fromMap.Arch)
+}
+
+// TestManifest_buildTargetFromYAML_AnyKeyMap covers the defensive map[any]any
+// branch (non-string-keyed mappings) routed through stringFromAnyYAMLMap.
+func TestManifest_buildTargetFromYAML_AnyKeyMap(t *core.T) {
+	target := requireResultValue[BuildTarget](t, buildTargetFromYAML(map[any]any{
+		manifestTargetOSKey: "windows",
+		"arch":              "amd64",
+	}))
+	core.AssertEqual(t, "windows", target.OS)
+	core.AssertEqual(t, "amd64", target.Arch)
+
+	// Non-string values in the any-keyed map degrade to empty, not a panic.
+	partial := requireResultValue[BuildTarget](t, buildTargetFromYAML(map[any]any{
+		manifestTargetOSKey: 42,
+		"missing":           "ignored",
+	}))
+	core.AssertEqual(t, "", partial.OS)
+	core.AssertEqual(t, "", partial.Arch)
+}
+
+// TestManifest_buildTargetFromYAML_Bad covers empty-string, nil and the
+// unsupported-type default branch.
+func TestManifest_buildTargetFromYAML_Bad(t *core.T) {
+	empty := requireResultValue[BuildTarget](t, buildTargetFromYAML(""))
+	core.AssertEqual(t, "", empty.OS)
+
+	nilTarget := requireResultValue[BuildTarget](t, buildTargetFromYAML(nil))
+	core.AssertEqual(t, "", nilTarget.OS)
+
+	err := resultError(buildTargetFromYAML(42))
+	core.AssertError(t, err)
+	core.AssertContains(t, err.Error(), "invalid target entry")
+}
+
+// TestManifest_buildTargetFromYAML_Ugly covers malformed string shorthand
+// (missing the "/" separator or an empty half).
+func TestManifest_buildTargetFromYAML_Ugly(t *core.T) {
+	for _, raw := range []string{"linuxonly", "/amd64", "linux/"} {
+		err := resultError(buildTargetFromYAML(raw))
+		core.AssertError(t, err)
+		core.AssertContains(t, err.Error(), "invalid target shorthand")
+	}
+}
+
+// TestManifest_stringFromAnyYAMLMap_Good asserts a string value at the key is
+// returned verbatim.
+func TestManifest_stringFromAnyYAMLMap_Good(t *core.T) {
+	core.AssertEqual(t, "linux", stringFromAnyYAMLMap(map[any]any{manifestTargetOSKey: "linux"}, manifestTargetOSKey))
+}
+
+// TestManifest_stringFromAnyYAMLMap_Bad asserts a missing key and a non-string
+// value both yield the empty string.
+func TestManifest_stringFromAnyYAMLMap_Bad(t *core.T) {
+	core.AssertEqual(t, "", stringFromAnyYAMLMap(map[any]any{}, manifestTargetOSKey))
+	core.AssertEqual(t, "", stringFromAnyYAMLMap(map[any]any{manifestTargetOSKey: 7}, manifestTargetOSKey))
+}
+
+// TestManifest_stringFromYAMLMap_GoodBad asserts the string-keyed helper returns
+// the value when present and a string, and empty otherwise.
+func TestManifest_stringFromYAMLMap_GoodBad(t *core.T) {
+	core.AssertEqual(t, "amd64", stringFromYAMLMap(map[string]any{"arch": "amd64"}, "arch"))
+	core.AssertEqual(t, "", stringFromYAMLMap(map[string]any{"arch": 64}, "arch"))
+	core.AssertEqual(t, "", stringFromYAMLMap(map[string]any{}, "arch"))
+}
+
+// TestManifest_buildLDFlagsFromYAML_Good covers nil, empty-string, single
+// string, []string and []any-of-strings — each a valid ldflags shape.
+func TestManifest_buildLDFlagsFromYAML_Good(t *core.T) {
+	core.AssertEqual(t, "", requireResultValue[buildmanifestldflags](t, buildLDFlagsFromYAML(nil)).String())
+	core.AssertEqual(t, "", requireResultValue[buildmanifestldflags](t, buildLDFlagsFromYAML("")).String())
+	core.AssertEqual(t, "-s -w", requireResultValue[buildmanifestldflags](t, buildLDFlagsFromYAML("-s -w")).String())
+	core.AssertEqual(t, "-s -w", requireResultValue[buildmanifestldflags](t, buildLDFlagsFromYAML([]string{"-s", "-w"})).String())
+	core.AssertEqual(t, "-s -w", requireResultValue[buildmanifestldflags](t, buildLDFlagsFromYAML([]any{"-s", "-w"})).String())
+}
+
+// TestManifest_buildLDFlagsFromYAML_Bad covers the []any non-string element, the
+// mapping form, and an unsupported scalar type — all rejected.
+func TestManifest_buildLDFlagsFromYAML_Bad(t *core.T) {
+	core.AssertContains(t, resultError(buildLDFlagsFromYAML([]any{"-s", 7})).Error(), "invalid ldflags sequence")
+	core.AssertContains(t, resultError(buildLDFlagsFromYAML(map[string]any{"k": "v"})).Error(), "unsupported ldflags mapping")
+	core.AssertContains(t, resultError(buildLDFlagsFromYAML(42)).Error(), "invalid ldflags value")
+}
+
+// TestManifest_viewVersionFromYAML_Good covers every accepted scalar form YAML
+// can decode a version into: nil, string, int, int64 and float64.
+func TestManifest_viewVersionFromYAML_Good(t *core.T) {
+	core.AssertEqual(t, ViewVersion(""), requireResultValue[ViewVersion](t, viewVersionFromYAML(nil)))
+	core.AssertEqual(t, ViewVersion("1.2.0"), requireResultValue[ViewVersion](t, viewVersionFromYAML("1.2.0")))
+	core.AssertEqual(t, ViewVersion("3"), requireResultValue[ViewVersion](t, viewVersionFromYAML(3)))
+	core.AssertEqual(t, ViewVersion("9"), requireResultValue[ViewVersion](t, viewVersionFromYAML(int64(9))))
+	core.AssertEqual(t, ViewVersion("1.5"), requireResultValue[ViewVersion](t, viewVersionFromYAML(float64(1.5))))
+}
+
+// TestManifest_viewVersionFromYAML_Bad asserts an unsupported type is rejected.
+func TestManifest_viewVersionFromYAML_Bad(t *core.T) {
+	core.AssertContains(t, resultError(viewVersionFromYAML([]string{"nope"})).Error(), "invalid view manifest version")
 }

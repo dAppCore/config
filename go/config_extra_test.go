@@ -34,6 +34,28 @@ func (s *mockConfigStore) Set(bucket, key, value string) error {
 	return nil
 }
 
+// mockConfigReaderStore implements both ConfigStoreWriter and ConfigStoreReader
+// so loadStoreState() rehydrates previously-persisted values on New().
+//
+//	store := &mockConfigReaderStore{entries: map[string]string{"app.name": "\"core\""}}
+//	cfg, _ := configResult(New(WithStore(store), WithMedium(coreio.NewMockMedium()), WithPath("/store.yaml")))
+type mockConfigReaderStore struct {
+	mockConfigStore
+	entries  map[string]string
+	getBkt   string
+	getCalls int
+	getFail  error
+}
+
+func (s *mockConfigReaderStore) GetAll(bucket string) (map[string]string, error) {
+	s.getCalls++
+	s.getBkt = bucket
+	if s.getFail != nil {
+		return nil, s.getFail
+	}
+	return s.entries, nil
+}
+
 func TestConfig_MergeFrom_Good(t *core.T) {
 	m := coreio.NewMockMedium()
 	base, err := configResult(New(WithMedium(m), WithPath("/base.yaml")))
@@ -268,4 +290,130 @@ func TestConfig_persistToStore_Ugly(t *core.T) {
 		persistToStore(store, "", "core")
 	})
 	core.AssertEqual(t, 0, store.calls)
+}
+
+// TestConfig_loadStoreState_Good asserts New() rehydrates JSON-encoded values
+// from a ConfigStoreReader so pre-Commit Set() calls survive a restart.
+func TestConfig_loadStoreState_Good(t *core.T) {
+	store := &mockConfigReaderStore{entries: map[string]string{
+		configExtraAppNameKey:     "\"core\"",
+		configExtraDevEditorKey:   "\"vim\"",
+		configExtraFeatureBetaKey: "true",
+	}}
+	m := coreio.NewMockMedium()
+
+	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
+	core.AssertNoError(t, err)
+	core.AssertEqual(t, 1, store.getCalls)
+	core.AssertEqual(t, "config", store.getBkt)
+
+	var name, editor string
+	var beta bool
+	core.AssertNoError(t, resultError(cfg.Get(configExtraAppNameKey, &name)))
+	core.AssertEqual(t, "core", name)
+	core.AssertNoError(t, resultError(cfg.Get(configExtraDevEditorKey, &editor)))
+	core.AssertEqual(t, "vim", editor)
+	core.AssertNoError(t, resultError(cfg.Get(configExtraFeatureBetaKey, &beta)))
+	core.AssertTrue(t, beta)
+}
+
+// TestConfig_loadStoreState_Bad asserts a GetAll() failure surfaces as a New()
+// error rather than silently dropping the stored state.
+func TestConfig_loadStoreState_Bad(t *core.T) {
+	store := &mockConfigReaderStore{getFail: core.NewError("store read refused")}
+	m := coreio.NewMockMedium()
+
+	_, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
+	core.AssertError(t, err)
+	core.AssertContains(t, err.Error(), "failed to load config store state")
+}
+
+// TestConfig_loadStoreState_Ugly asserts empty keys are skipped, non-JSON raw
+// values fall back to plain strings, and empty raw decodes to "".
+func TestConfig_loadStoreState_Ugly(t *core.T) {
+	store := &mockConfigReaderStore{entries: map[string]string{
+		"":                      "\"ignored\"",
+		configExtraAppNameKey:   "plain-not-json",
+		configExtraDevEditorKey: "",
+	}}
+	m := coreio.NewMockMedium()
+
+	cfg, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
+	core.AssertNoError(t, err)
+
+	var name string
+	core.AssertNoError(t, resultError(cfg.Get(configExtraAppNameKey, &name)))
+	core.AssertEqual(t, "plain-not-json", name) // non-JSON raw falls through verbatim
+}
+
+// TestConfig_loadStoreState_NoReader asserts a writer-only store leaves
+// loadStoreState() a no-op (no GetAll call, New() still succeeds).
+func TestConfig_loadStoreState_NoReader(t *core.T) {
+	store := &mockConfigStore{}
+	m := coreio.NewMockMedium()
+
+	_, err := configResult(New(WithStore(store), WithMedium(m), WithPath(configExtraStorePath)))
+	core.AssertNoError(t, err)
+	core.AssertEqual(t, 0, store.calls)
+}
+
+// TestConfig_decodeStoredConfigValue_Good asserts JSON scalars and structures
+// decode to their native Go shapes.
+func TestConfig_decodeStoredConfigValue_Good(t *core.T) {
+	core.AssertEqual(t, "core", decodeStoredConfigValue("\"core\""))
+	core.AssertEqual(t, true, decodeStoredConfigValue("true"))
+	core.AssertEqual(t, float64(42), decodeStoredConfigValue("42"))
+}
+
+// TestConfig_decodeStoredConfigValue_Bad asserts non-JSON raw input falls back
+// to the verbatim string rather than erroring.
+func TestConfig_decodeStoredConfigValue_Bad(t *core.T) {
+	core.AssertEqual(t, "not json at all", decodeStoredConfigValue("not json at all"))
+}
+
+// TestConfig_decodeStoredConfigValue_Ugly asserts the empty-string short-circuit.
+func TestConfig_decodeStoredConfigValue_Ugly(t *core.T) {
+	core.AssertEqual(t, "", decodeStoredConfigValue(""))
+}
+
+// TestConfig_flattenSettings_Good asserts nested string-keyed maps flatten to
+// dot-notation keys and slice leaves are preserved whole.
+func TestConfig_flattenSettings_Good(t *core.T) {
+	flat := flattenSettings(nil, map[string]any{
+		"app":     map[string]any{"name": "core", "port": 8080},
+		"dev":     map[string]any{"editor": "vim"},
+		"flags":   []string{"-trimpath"},
+		"targets": []any{"linux/amd64"},
+	})
+	core.AssertEqual(t, "core", flat["app.name"])
+	core.AssertEqual(t, 8080, flat["app.port"])
+	core.AssertEqual(t, "vim", flat["dev.editor"])
+	core.AssertEqual(t, []string{"-trimpath"}, flat["flags"])
+	core.AssertEqual(t, []any{"linux/amd64"}, flat["targets"])
+}
+
+// TestConfig_flattenSettings_AnyKeyMap asserts map[any]any nodes (non-string
+// keys, as some YAML decoders produce) flatten via fmt-stringified keys.
+func TestConfig_flattenSettings_AnyKeyMap(t *core.T) {
+	flat := flattenSettings(nil, map[string]any{
+		"section": map[any]any{1: "one", "two": 2},
+	})
+	core.AssertEqual(t, "one", flat["section.1"])
+	core.AssertEqual(t, 2, flat["section.two"])
+}
+
+// TestConfig_flattenSettings_Ugly asserts a top-level scalar/slice with an empty
+// prefix is dropped (no "" key) and a nil dst is allocated.
+func TestConfig_flattenSettings_Ugly(t *core.T) {
+	flat := flattenSettings(nil, map[string]any{})
+	core.AssertEmpty(t, flat)
+
+	// Top-level slices and scalars have no key prefix and so are not stored.
+	core.AssertNotPanics(t, func() {
+		dst := map[string]any{}
+		flattenInto(dst, "", []any{"x"})
+		flattenInto(dst, "", []string{"y"})
+		flattenInto(dst, "", "scalar")
+		core.AssertEmpty(t, dst)
+	})
 }
