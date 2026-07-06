@@ -3,7 +3,7 @@ module dappco.re/go/config
 go 1.26.0
 
 require (
-	dappco.re/go v0.10.4
+	dappco.re/go v0.11.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/spf13/viper v1.21.0
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -21,7 +21,7 @@ require (
 )
 
 require (
-	dappco.re/go/io v0.9.0
+	dappco.re/go/io v0.14.0
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
