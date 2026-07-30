@@ -196,3 +196,15 @@ func TestFeature_Features_Ugly(t *core.T) {
 	got := Features()
 	core.AssertEmpty(t, got)
 }
+
+// resetFeatureRegistry clears process-level feature state. Test-only helper;
+// the exported Feature/SetFeature API is the public contract. Lives in this
+// _test.go file (not feature.go) because it has no production caller — a
+// non-test file only defining it triggers `unused` under golangci-lint's
+// --tests=false lint pass.
+func resetFeatureRegistry() {
+	featureMu.Lock()
+	defer featureMu.Unlock()
+	featureDefault = &featureRegistry{values: map[string]bool{}}
+	featureSource = nil
+}

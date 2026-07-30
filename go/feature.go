@@ -139,12 +139,3 @@ func featureEnv(name string) (bool, bool) {
 	}
 	return b, true
 }
-
-// resetFeatureRegistry clears process-level feature state. Test-only helper;
-// the exported Feature/SetFeature API is the public contract.
-func resetFeatureRegistry() {
-	featureMu.Lock()
-	defer featureMu.Unlock()
-	featureDefault = &featureRegistry{values: map[string]bool{}}
-	featureSource = nil
-}

@@ -475,7 +475,7 @@ func discoverStoreWriter(c *core.Core) ConfigStoreWriter {
 	if !ref.IsValid() {
 		return nil
 	}
-	if ref.Kind() == reflect.Ptr && !ref.IsNil() {
+	if ref.Kind() == reflect.Pointer && !ref.IsNil() {
 		ref = ref.Elem()
 	}
 	if ref.Kind() != reflect.Struct {
@@ -486,7 +486,7 @@ func discoverStoreWriter(c *core.Core) ConfigStoreWriter {
 	if !field.IsValid() || !field.CanInterface() {
 		return nil
 	}
-	if (field.Kind() == reflect.Ptr || field.Kind() == reflect.Interface) && field.IsNil() {
+	if (field.Kind() == reflect.Pointer || field.Kind() == reflect.Interface) && field.IsNil() {
 		return nil
 	}
 	store, ok := field.Interface().(ConfigStoreWriter)
