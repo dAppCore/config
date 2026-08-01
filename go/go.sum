@@ -1,7 +1,7 @@
 dappco.re/go v0.11.0 h1:ag+nt9p9vP+J+GKxLu+o+pBDRADlVVWKs34zPZhXMJ4=
 dappco.re/go v0.11.0/go.mod h1:xapr7fLK4/9Pu2iSCr4qZuIuatmtx1j56zS/oPDbGyQ=
-dappco.re/go/io v0.14.0 h1:FA9JN5cMe/qTS6bf0b9AxflFTQuei1jTp8iQXqfSEBM=
-dappco.re/go/io v0.14.0/go.mod h1:01CUltzAA5sIGIgfB0xMvIfbhA7l4RfufVuvY2T/Smk=
+dappco.re/go/io v0.15.0 h1:heq9uuOs0SvLqq8QjEAmiZuCamYWGbqVaJsFwwMnkDg=
+dappco.re/go/io v0.15.0/go.mod h1:01CUltzAA5sIGIgfB0xMvIfbhA7l4RfufVuvY2T/Smk=
 forge.lthn.ai/Snider/Borg v0.3.1 h1:gfC1ZTpLoZai07oOWJiVeQ8+qJYK8A795tgVGJHbVL8=
 forge.lthn.ai/Snider/Borg v0.3.1/go.mod h1:Z7DJD0yHXsxSyM7Mjl6/g4gH1NBsIz44Bf5AFlV76Wg=
 forge.lthn.ai/Snider/Enchantrix v0.0.4 h1:biwpix/bdedfyc0iVeK15awhhJKH6TEMYOTXzHXx5TI=
