@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"crypto/ed25519"
 	"io/fs"
 	"iter"
@@ -699,7 +698,7 @@ func TestService_OnStartup_WithEnvPrefix_Good(t *core.T) {
 		}),
 	}
 
-	result := svc.OnStartup(context.Background())
+	result := svc.OnStartup(t.Context())
 	core.AssertTrue(t, result.OK)
 
 	var setting string
@@ -1181,11 +1180,7 @@ func TestConfig_Save_Ugly(t *core.T) {
 }
 
 func mapFromSeq(seq iter.Seq2[string, any]) map[string]any {
-	out := map[string]any{}
-	for key, value := range seq {
-		out[key] = value
-	}
-	return out
+	return maps.Collect(seq)
 }
 
 func keysFromSeq(seq iter.Seq2[string, any]) []string {

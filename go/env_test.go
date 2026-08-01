@@ -1,6 +1,10 @@
 package config
 
-import core "dappco.re/go"
+import (
+	"maps"
+
+	core "dappco.re/go"
+)
 
 func TestEnv_Env_Good(t *core.T) {
 	t.Setenv("CORE_CONFIG_APP_NAME", "core")
@@ -59,10 +63,7 @@ func TestEnv_normaliseEnvPrefix_Ugly(t *core.T) {
 
 func TestEnv_Env_Bad(t *core.T) {
 	t.Setenv("AX7_OTHER_NAME", "codex")
-	got := map[string]any{}
-	for key, value := range Env("AX7_CONFIG") {
-		got[key] = value
-	}
+	got := maps.Collect(Env("AX7_CONFIG"))
 	core.AssertEmpty(t, got)
 }
 

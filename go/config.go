@@ -12,6 +12,7 @@ package config
 
 import (
 	"iter"
+	"maps"
 	"slices"
 	"sync"
 
@@ -677,9 +678,7 @@ func Save(m coreio.Medium, path string, data map[string]any) core.Result {
 	}
 
 	payload := make(map[string]any, len(data)+1)
-	for key, value := range data {
-		payload[key] = value
-	}
+	maps.Copy(payload, data)
 	// Every .core YAML payload is versioned for forward compatibility.
 	payload["version"] = 1
 

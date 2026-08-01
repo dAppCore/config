@@ -3,6 +3,7 @@ package config
 import (
 	"cmp"
 	"iter"
+	"maps"
 	"slices"
 
 	core "dappco.re/go"
@@ -71,9 +72,5 @@ func Env(prefix string) iter.Seq2[string, any] {
 //
 // Deprecated: Use Env for iterative access or collect into a map manually.
 func LoadEnv(prefix string) map[string]any {
-	result := make(map[string]any)
-	for k, v := range Env(prefix) {
-		result[k] = v
-	}
-	return result
+	return maps.Collect(Env(prefix))
 }

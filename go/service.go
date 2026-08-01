@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"maps"
 	"reflect"
 
 	core "dappco.re/go"
@@ -388,11 +389,7 @@ func configPathOperation(_ *Service, cfg *Config, _ core.Options) core.Result {
 }
 
 func configValues(cfg *Config) map[string]any {
-	out := make(map[string]any)
-	for k, v := range cfg.All() {
-		out[k] = v
-	}
-	return out
+	return maps.Collect(cfg.All())
 }
 
 // Get retrieves a configuration value by key.

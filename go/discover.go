@@ -1,6 +1,8 @@
 package config
 
 import (
+	"slices"
+
 	core "dappco.re/go"
 	coreio "dappco.re/go/io"
 )
@@ -99,12 +101,7 @@ func discoverPaths(medium coreio.Medium, start string) []string {
 }
 
 func contains(list []string, value string) bool {
-	for _, s := range list {
-		if s == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, value)
 }
 
 // CoreDirs walks upward from start and returns every .core/ directory found,

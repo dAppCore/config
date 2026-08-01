@@ -49,7 +49,7 @@ func TestService_OnStartup_Good(t *core.T) {
 		}),
 	}
 
-	result := svc.OnStartup(context.Background())
+	result := svc.OnStartup(t.Context())
 	core.AssertTrue(t, result.OK)
 
 	var name string
@@ -69,7 +69,7 @@ func TestService_OnStartup_Bad(t *core.T) {
 		}),
 	}
 
-	result := svc.OnStartup(context.Background())
+	result := svc.OnStartup(t.Context())
 	core.AssertFalse(t, result.OK)
 }
 
@@ -84,21 +84,21 @@ func TestService_OnStartup_RegistersActions_Good(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	// config.get must round-trip through the action bus.
-	result := c.Action(serviceTestConfigGetAction).Run(context.Background(), core.NewOptions(core.Option{Key: "key", Value: serviceTestDevEditorKey}))
+	result := c.Action(serviceTestConfigGetAction).Run(t.Context(), core.NewOptions(core.Option{Key: "key", Value: serviceTestDevEditorKey}))
 	core.AssertTrue(t, result.OK)
 	core.AssertEqual(t, "vim", result.Value)
 
 	// config.set stores a value; config.get reads it back.
-	setResult := c.Action(serviceTestConfigSetAction).Run(context.Background(), core.NewOptions(
+	setResult := c.Action(serviceTestConfigSetAction).Run(t.Context(), core.NewOptions(
 		core.Option{Key: "key", Value: serviceTestDevShellKey},
 		core.Option{Key: "value", Value: "zsh"},
 	))
 	core.AssertTrue(t, setResult.OK)
 
-	readResult := c.Action(serviceTestConfigGetAction).Run(context.Background(), core.NewOptions(core.Option{Key: "key", Value: serviceTestDevShellKey}))
+	readResult := c.Action(serviceTestConfigGetAction).Run(t.Context(), core.NewOptions(core.Option{Key: "key", Value: serviceTestDevShellKey}))
 	core.AssertTrue(t, readResult.OK)
 	core.AssertEqual(t, "zsh", readResult.Value)
 }
@@ -114,7 +114,7 @@ func TestService_OnStartup_RegistersCommands_Good(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	core.AssertContains(t, c.Commands(), serviceTestConfigGetCommand)
 	core.AssertContains(t, c.Commands(), serviceTestConfigSetCommand)
@@ -148,7 +148,7 @@ func TestService_OnStartup_MergesProjectOverGlobal_Good(t *core.T) {
 		}),
 	}
 
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	var name string
 	core.AssertNoError(t, resultError(svc.Get(serviceTestAppNameKey, &name)))
@@ -172,7 +172,7 @@ func TestService_Config_Good(t *core.T) {
 	// Before OnStartup, Config() returns nil.
 	core.AssertNil(t, svc.Config())
 
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 	core.AssertNotNil(t, svc.Config())
 }
 
@@ -257,7 +257,7 @@ func TestService_LoadFile_RejectsUnsafePaths(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	err := resultError(svc.LoadFile(m, "../../etc/passwd"))
 	core.AssertError(t, err)
@@ -279,7 +279,7 @@ func TestService_Set_Good(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	core.AssertNoError(t, resultError(svc.Set(serviceTestDevEditorKey, "vim")))
 
@@ -307,7 +307,7 @@ func TestService_Commit_Good(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 	core.AssertNoError(t, resultError(svc.Set(serviceTestDevEditorKey, "vim")))
 
 	core.AssertNoError(t, resultError(svc.Commit()))
@@ -336,7 +336,7 @@ func TestService_LoadFile_Good(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	core.AssertNoError(t, resultError(svc.LoadFile(m, serviceTestOverridePath)))
 
@@ -364,7 +364,7 @@ func TestService_LoadFile_Ugly(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	err := resultError(svc.LoadFile(m, core.PathJoin("tmp", "svc", "config.yaml")))
 	core.AssertError(t, err)
@@ -390,7 +390,7 @@ func TestService_LoadFile_RejectsSymlinkedCore(t *core.T) {
 			Medium: coreio.Local,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	err := resultError(svc.LoadFile(coreio.Local, serviceTestOverridePath))
 	core.AssertError(t, err)
@@ -517,11 +517,11 @@ func TestService_OnShutdown_StopsWatcher_Good(t *core.T) {
 			Medium: coreio.Local,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 	core.AssertNoError(t, resultError(svc.Config().Watch()))
 	core.AssertNotNil(t, svc.Config().watcher)
 
-	result := svc.OnShutdown(context.Background())
+	result := svc.OnShutdown(t.Context())
 	core.AssertTrue(t, result.OK)
 	core.AssertNil(t, svc.Config().watcher)
 }
@@ -538,10 +538,10 @@ func TestService_Service_OnStartup_RegistersActionsAndCommands_Good(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	runAction := func(name string, opts core.Options) core.Result {
-		return c.Action(name).Run(context.Background(), opts)
+		return c.Action(name).Run(t.Context(), opts)
 	}
 	runCommand := func(name string, opts core.Options) core.Result {
 		r := c.Command(name)
@@ -600,7 +600,7 @@ func TestServiceReadCommandsRequireEntitlement(t *core.T) {
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	for _, name := range []string{serviceTestConfigGetCommand, serviceTestConfigListCommand, serviceTestConfigPathCommand} {
 		cmdResult := c.Command(name)
@@ -635,7 +635,7 @@ func TestService_Service_OnStartup_ReadActionsRequireEntitlement_Bad(t *core.T) 
 			Medium: m,
 		}),
 	}
-	core.AssertTrue(t, svc.OnStartup(context.Background()).OK)
+	core.AssertTrue(t, svc.OnStartup(t.Context()).OK)
 
 	actions := map[string]core.Options{
 		serviceTestConfigGetAction:  core.NewOptions(core.Option{Key: "key", Value: serviceTestAppNameKey}),
@@ -645,7 +645,7 @@ func TestService_Service_OnStartup_ReadActionsRequireEntitlement_Bad(t *core.T) 
 
 	for name, opts := range actions {
 		t.Run(name, func(t *core.T) {
-			res := c.Action(name).Run(context.Background(), opts)
+			res := c.Action(name).Run(t.Context(), opts)
 			core.AssertFalse(t, res.OK)
 			core.AssertContains(t, res.Value.(error).Error(), "not entitled")
 		})
@@ -659,7 +659,7 @@ func axServiceFixture(t *core.T) (*Service, *coreio.MockMedium, string) {
 	m.Files[path] = serviceTestConfigBody
 	c := core.New()
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{Path: path, Medium: m})}
-	core.RequireTrue(t, svc.OnStartup(context.Background()).OK)
+	core.RequireTrue(t, svc.OnStartup(t.Context()).OK)
 	return svc, m, path
 }
 
@@ -689,7 +689,7 @@ func TestService_Service_OnStartup_LoadsConfig_Good(t *core.T) {
 	path := "/ax7/service/config.yaml"
 	m.Files[path] = serviceTestConfigBody
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{Path: path, Medium: m})}
-	core.RequireTrue(t, svc.OnStartup(context.Background()).OK)
+	core.RequireTrue(t, svc.OnStartup(t.Context()).OK)
 	var got string
 	err := resultError(svc.Get(serviceTestAppNameKey, &got))
 	core.AssertNoError(t, err)
@@ -700,36 +700,36 @@ func TestService_Service_OnStartup_Bad(t *core.T) {
 	m := coreio.NewMockMedium()
 	m.Files["/ax7/bad.yaml"] = "app: [broken"
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{Path: "/ax7/bad.yaml", Medium: m})}
-	result := svc.OnStartup(context.Background())
+	result := svc.OnStartup(t.Context())
 	core.AssertFalse(t, result.OK)
 }
 
 func TestService_Service_OnStartup_Ugly(t *core.T) {
 	m := coreio.NewMockMedium()
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{Path: "/ax7/empty.yaml", Medium: m})}
-	result := svc.OnStartup(context.Background())
+	result := svc.OnStartup(t.Context())
 	core.AssertTrue(t, result.OK)
 	core.AssertNotNil(t, svc.Config())
 }
 
 func TestService_Service_OnShutdown_Good(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
-	result := svc.OnShutdown(context.Background())
+	result := svc.OnShutdown(t.Context())
 	core.AssertTrue(t, result.OK)
 	core.AssertNotNil(t, svc.Config())
 }
 
 func TestService_Service_OnShutdown_Bad(t *core.T) {
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(core.New(), ServiceOptions{})}
-	result := svc.OnShutdown(context.Background())
+	result := svc.OnShutdown(t.Context())
 	core.AssertTrue(t, result.OK)
 	core.AssertNil(t, svc.Config())
 }
 
 func TestService_Service_OnShutdown_Ugly(t *core.T) {
 	svc, _, _ := axServiceFixture(t)
-	first := svc.OnShutdown(context.Background())
-	second := svc.OnShutdown(context.Background())
+	first := svc.OnShutdown(t.Context())
+	second := svc.OnShutdown(t.Context())
 	core.AssertTrue(t, first.OK)
 	core.AssertTrue(t, second.OK)
 }
@@ -947,7 +947,7 @@ func TestService_configLoadOperation_Good(t *core.T) {
 
 	c := core.New()
 	svc := &Service{ServiceRuntime: core.NewServiceRuntime(c, ServiceOptions{Path: serviceTestConfigPath, Medium: m})}
-	core.RequireTrue(t, svc.OnStartup(context.Background()).OK)
+	core.RequireTrue(t, svc.OnStartup(t.Context()).OK)
 
 	r := configLoadOperation(svc, svc.Config(), core.NewOptions(core.Option{Key: optionKeyPath, Value: serviceTestOverridePath}))
 	core.AssertTrue(t, r.OK)
