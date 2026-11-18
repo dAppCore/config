@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"syscall"
 
-	core "dappco.re/go"
-	coreio "dappco.re/go/io"
+	core "github.com/dappcore/go"
+	coreio "github.com/dappcore/go-io/go"
 	"gopkg.in/yaml.v3"
 )
 
@@ -43,7 +43,7 @@ func examplePackageManifest() PackageManifest {
 	return PackageManifest{
 		Code:        "go-config",
 		Name:        "Config",
-		Module:      "dappco.re/go/config",
+		Module:      "github.com/dappcore/config/go",
 		Version:     "1.0.0",
 		Description: "Layered configuration",
 		Licence:     "EUPL-1.2",

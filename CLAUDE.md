@@ -25,7 +25,7 @@ core/config/
 └── other non-Go/cross-language assets
 ```
 
-The Go module path remains `dappco.re/go/config`; only repository layout changed.
+The Go module path remains `github.com/dappcore/config/go`; only repository layout changed.
 
 ## Go Resolution Modes
 
@@ -93,8 +93,8 @@ This prevents environment variables from leaking into saved config files. When i
 
 ## Dependencies
 
-- `dappco.re/go/core/io` — `Medium` interface for storage
-- `dappco.re/go/core/log` — `coreerr.E()` error helper
-- `dappco.re/go/core` — `core.Core`, `core.Startable`, `core.ServiceRuntime`, primitives
+- `github.com/dappcore/go-io/go` — `Medium` interface for storage
+- `github.com/dappcore/go-log/go` — `coreerr.E()` error helper
+- `github.com/dappcore/go` — `core.Core`, `core.Startable`, `core.ServiceRuntime`, primitives
 - `github.com/spf13/viper` — configuration engine
 - `github.com/stretchr/testify` — test assertions

@@ -5,12 +5,12 @@ description: Layered configuration management for the Core framework with file, 
 
 # config
 
-`dappco.re/go/core/config` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
+`github.com/dappcore/config/go` provides layered configuration management for applications built on the Core framework. It resolves values through a priority chain -- defaults, file, environment variables, and explicit `Set()` calls -- so that the same codebase works identically across local development, CI, and production without code changes.
 
 ## Module Path
 
 ```
-dappco.re/go/core/config
+github.com/dappcore/config/go
 ```
 
 Requires **Go 1.26+**.
@@ -24,7 +24,7 @@ package main
 
 import (
     "fmt"
-    config "dappco.re/go/core/config"
+    config "github.com/dappcore/config/go"
 )
 
 func main() {
@@ -48,8 +48,8 @@ func main() {
 
 ```go
 import (
-    config "dappco.re/go/core/config"
-    "dappco.re/go/core"
+    config "github.com/dappcore/config/go"
+    "github.com/dappcore/go"
 )
 
 app, _ := core.New(
@@ -78,9 +78,9 @@ app, _ := core.New(
 
 | Module                            | Role                                    |
 |-----------------------------------|-----------------------------------------|
-| `dappco.re/go/core`              | Core framework (`core.Core`, `ServiceRuntime`, primitives) |
-| `dappco.re/go/core/io`           | Storage abstraction (`Medium` for reading/writing files)   |
-| `dappco.re/go/core/log`          | Contextual error helper (`E()`)                            |
+| `github.com/dappcore/go`              | Core framework (`core.Core`, `ServiceRuntime`, primitives) |
+| `github.com/dappcore/go-io/go`           | Storage abstraction (`Medium` for reading/writing files)   |
+| `github.com/dappcore/go-log/go`          | Contextual error helper (`E()`)                            |
 | `github.com/spf13/viper`         | Underlying configuration engine         |
 | `gopkg.in/yaml.v3`               | YAML serialisation for `Commit()`       |
 

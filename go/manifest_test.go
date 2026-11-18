@@ -2,12 +2,12 @@ package config
 
 import (
 	"crypto/ed25519"
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 	"encoding/base64"
 	"encoding/hex"
 	"runtime"
 
-	coreio "dappco.re/go/io"
+	coreio "github.com/dappcore/go-io/go"
 	"gopkg.in/yaml.v3"
 )
 
@@ -932,7 +932,7 @@ func axManifestPackage() PackageManifest {
 	return PackageManifest{
 		Code:        "go-config",
 		Name:        "Core Config",
-		Module:      "dappco.re/go/config",
+		Module:      "github.com/dappcore/config/go",
 		Version:     "0.9.0",
 		Description: "config package",
 		Licence:     manifestTestEUPL,

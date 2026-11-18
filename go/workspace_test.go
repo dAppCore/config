@@ -1,8 +1,8 @@
 package config
 
-import core "dappco.re/go"
+import core "github.com/dappcore/go"
 
-import coreio "dappco.re/go/io"
+import coreio "github.com/dappcore/go-io/go"
 
 func TestWorkspace_FindWorkspaceRoot_Good(t *core.T) {
 	m := coreio.NewMockMedium()

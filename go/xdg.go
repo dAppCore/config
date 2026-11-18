@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"syscall"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 // XDGPaths resolves platform-aware directories following the XDG Base Directory

@@ -1,6 +1,6 @@
 package config
 
-import core "dappco.re/go"
+import core "github.com/dappcore/go"
 
 func TestSchema_validateSchema_Good(t *core.T) {
 	raw := map[string]any{

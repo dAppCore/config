@@ -3,7 +3,7 @@ package config
 import (
 	"embed"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 	"github.com/xeipuuv/gojsonschema"
 )
 
