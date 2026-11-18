@@ -165,7 +165,7 @@ All public methods on `Config` and `Service` are safe for concurrent use. A `syn
 
 ## The Medium Abstraction
 
-File operations go through `io.Medium` (from `dappco.re/go/core/io`), not `os` directly. This means:
+File operations go through `io.Medium` (from `github.com/dappcore/go-io/go`), not `os` directly. This means:
 
 - **Tests** use `io.NewMockMedium()` -- an in-memory filesystem with a `Files` map
 - **Production** uses `io.Local` -- the real local filesystem

@@ -12,11 +12,11 @@
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=dappcore_config)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=code_smells)](https://sonarcloud.io/dashboard?id=dappcore_config)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=dappcore_config&metric=ncloc)](https://sonarcloud.io/dashboard?id=dappcore_config)
-[![Go Reference](https://pkg.go.dev/badge/dappco.re/go/config.svg)](https://pkg.go.dev/dappco.re/go/config)
+[![Go Reference](https://pkg.go.dev/badge/github.com/dappcore/config/go.svg)](https://pkg.go.dev/github.com/dappcore/config/go)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](https://eupl.eu/1.2/en/)
 
 
-`dappco.re/go/config` is the Core configuration module. It gives Core services
+`github.com/dappcore/config/go` is the Core configuration module. It gives Core services
 and command-line tools a single way to resolve configuration from defaults,
 project `.core/` files, user-global files, environment variables, and explicit
 runtime writes.
@@ -29,7 +29,7 @@ the YAML file.
 
 ## Main Capabilities
 
-- Load and save YAML configuration through the `dappco.re/go/io` medium
+- Load and save YAML configuration through the `github.com/dappcore/go-io/go` medium
   abstraction.
 - Discover `.core/config.yaml` files by walking up from a project directory.
 - Resolve typed Core manifests such as `build.yaml`, `test.yaml`,
@@ -46,9 +46,9 @@ the YAML file.
 package main
 
 import (
-    core "dappco.re/go"
-    config "dappco.re/go/config"
-    coreio "dappco.re/go/io"
+    core "github.com/dappcore/go"
+    config "github.com/dappcore/config/go"
+    coreio "github.com/dappcore/go-io/go"
 )
 
 func main() {

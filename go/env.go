@@ -6,7 +6,7 @@ import (
 	"maps"
 	"slices"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 func normaliseEnvPrefix(prefix string) string {

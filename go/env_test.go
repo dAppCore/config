@@ -3,7 +3,7 @@ package config
 import (
 	"maps"
 
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 )
 
 func TestEnv_Env_Good(t *core.T) {

@@ -1,10 +1,10 @@
 package config
 
 import (
-	core "dappco.re/go"
+	core "github.com/dappcore/go"
 	"runtime"
 
-	coreio "dappco.re/go/io"
+	coreio "github.com/dappcore/go-io/go"
 )
 
 func TestConclave_ForConclave_Good(t *core.T) {
