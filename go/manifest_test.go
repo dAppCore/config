@@ -2,13 +2,13 @@ package config
 
 import (
 	"crypto/ed25519"
-	core "github.com/dappcore/go"
 	"encoding/base64"
 	"encoding/hex"
+	core "github.com/dappcore/go"
 	"runtime"
 
 	coreio "github.com/dappcore/go-io/go"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 const (

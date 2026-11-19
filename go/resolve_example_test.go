@@ -3,7 +3,7 @@ package config
 import (
 	core "github.com/dappcore/go"
 	coreio "github.com/dappcore/go-io/go"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func exampleResolveMedium() (*coreio.MockMedium, string, func()) {
