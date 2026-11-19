@@ -19,7 +19,7 @@ import (
 	core "github.com/dappcore/go"
 	coreio "github.com/dappcore/go-io/go"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 type envkeyreplacer struct{}
